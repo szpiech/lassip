@@ -1,0 +1,6 @@
+*.o
+*~
+*.log
+test.*
+sample.*
+.DS_Store
