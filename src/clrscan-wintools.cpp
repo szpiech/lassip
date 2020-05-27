@@ -1,4 +1,4 @@
-#include "grail-wintools.h"
+#include "clrscan-wintools.h"
 
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
@@ -19,7 +19,13 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 		for (int i = 0; i < numSnps; i += WINSTEP){
 			pair_t* snps = new pair_t;
 			snps->start = i;
-			snps->end = (i+WINSIZE-1 >= numSnps) ? numSnps - 1 : i+WINSIZE-1;
+			if (i+WINSIZE-1 >= numSnps){
+				delete snps;
+				return windows;
+			}
+			else{
+				snps->end = i+WINSIZE-1;
+			}
 			snps->winStart = mapData->physicalPos[i];
 			windows->push_back(snps);
 		}
@@ -42,18 +48,19 @@ void calc_stats(void *order) {
 	param_t *params = p->params;
 	vector< pair_t* > *windows = p->windows;
 	int WINSIZE = params->getIntFlag(ARG_WINSIZE);
-	double **results = p->results;
+	map<string,double **> *results = p->results;
 	int id = p->id;
-	int numStats = p->numStats;
+	//int numStats = p->numStats;
+	int K = p->params->getIntFlag(ARG_K);
 	string *names = p->names;
 	//vector<int> PARTITIONS = params->getIntListFlag(ARG_PARTITION);
-	bool USE_BP = p->USE_BP;
+	//bool USE_BP = p->USE_BP;
 
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	//array_t *sfs, *partition_sfs;
-	HaplotypeFrequencySpectrum *hfs, *partition_hfs, *pik_hfs;
-	pair_t *snps, *partition_snps;
+	HaplotypeFrequencySpectrum *hfs;//, *partition_hfs, *pik_hfs;
+	pair_t *snps;//, *partition_snps;
 
 
 	/*
@@ -71,170 +78,89 @@ void calc_stats(void *order) {
 	for (int i = id; i < windows->size(); i += numThreads) {
 		snps = windows->at(i);
 		string popName;
-		int s = 0;
+
 		for (int p = 0; p < popData->npops; p++){
 			popName = popData->popOrder[p];
-			calc_Q(hapDataByPop, popName, snps);
-		}
-		for (int p = 0; p < popData->npops; p++){
-			popName = popData->popOrder[p];
-			if (i == 0) (*names) += "alpha_" + popName + "\t";
-			//calc alphas
-			results[i][s] = calc_alpha(hapDataByPop, popName, snps);
-			s++;
-			if (i == 0) (*names) += "pi_" + popName;
-			if (p != popData->npops-1) (*names) += "\t";
-			//cals pis
-			results[i][s] = calc_pi(hapDataByPop, popName, snps);
-			s++;
-			
-		}
-		//if (NEED_SFS) sfs = sfs_window(freqData, snps, SFS_SUB);
-
-		//int s = 0;
-		//int s_pi = MISSING; //note storage location of pi if it exists
-		//useful for calculating Taj's D or F&W's H
-		//int s_S = MISSING;
-		/*
-		for (int j = 0; j < NOPTS; j++) {
-			if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
-				if (i == 0) (*names) += "pi ";
-				results[i][s] = pi_from_sfs(sfs);
-				s_pi = s;
-				s++;
+			//cerr << popName << endl;
+			hfs = hfs_window(hapDataByPop->at(popName), snps);
+			double tot = 0;
+			for (int s = 0; s < K; s++){
+				if(s < hfs->numUniq) tot+=double(hfs->sortedCount[s]);
 			}
-			else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
-				pik_hfs = hfs_window(hapData, snps);
-				for (int k = 0; k < PIK_CHOICE.size(); k++) {
-					if (i == 0) (*names) += "pi" + int2str(PIK_CHOICE[k]) + " ";
-					results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k]);
-					s++;
+			//cerr << tot << endl;
+			for (int s = 0; s < K; s++){
+				if (i == 0 && p == 0){
+					stringstream ss;
+					ss << s+1;
+					(*names) += "hfs_" + ss.str(); 
+					if (s != K-1) (*names) += "\t";
 				}
+				double **x = results->at(popName);
+				if(s < hfs->numUniq) x[i][s] = double(hfs->sortedCount[s])/tot;
+				else x[i][s] = 0;
 			}
-			else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
-				if (i == 0) (*names) += "S ";
-				results[i][s] = segsites(sfs);
-				s_S = s;
-				s++;
-			}
-			else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0) {
-				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
-				for (int w = 0; w < ehh_windows->size(); w++) {
-					if (i == 0) (*names) += "ehh_" + int2str(EHH_WINS[w]) + " ";
-					hfs = hfs_window(hapData, ehh_windows->at(w));
-					results[i][s] = ehh_from_hfs(hfs);
-					s++;
-					releaseHaplotypeFrequencySpectrum(hfs);
-				}
-				releaseAllWindows(ehh_windows);
-			}
-			else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0) {
-				vector< pair_t* > *ehh_windows = getEHHWindows(snps->start, snps->winStart, WINSIZE, EHH_WINS, mapData, USE_BP);
-				for (int w = 0; w < ehh_windows->size(); w++) {
-					hfs = hfs_window(hapData, ehh_windows->at(w));
-					for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-						if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + int2str(EHH_WINS[w]) + " ";
-						results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
-						s++;
-					}
-					releaseHaplotypeFrequencySpectrum(hfs);
-				}
-				releaseAllWindows(ehh_windows);
-			}
-			else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-				if (i == 0) (*names) += "D ";
-				if (s_pi >= 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], results[i][s_S]);
-				else if (s_pi < 0 && s_S >= 0) results[i][s] = tajimaD_from_sfs(sfs, s_pi, results[i][s_S]);
-				else if (s_pi >= 0 && s_S < 0) results[i][s] = tajimaD_from_sfs(sfs, results[i][s_pi], s_S);
-				else results[i][s] = tajimaD_from_sfs(sfs);
-				s++;
-			}
-			else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
-				if (i == 0) (*names) += "H ";
-				if (s_pi >= 0) results[i][s] = fayWuH_from_sfs(sfs, results[i][s_pi]);
-				else results[i][s] = fayWuH_from_sfs(sfs);
-				s++;
-			}
+			releaseHaplotypeFrequencySpectrum(hfs);
 		}
-		*/
-		//releaseArray(sfs);
-		/*
-		if (DO_PARTITION) {
-			char part[2];
-			part[0] = 'A';
-			part[1] = '\0';
-			vector< pair_t* > *partition_windows = getPartitionWindows(snps->start, snps->winStart, PARTITIONS, mapData, USE_BP);
-			for (int p = 0; p < partition_windows->size(); p++) {
-				int s_pi0 = MISSING;
-				int s_S0 = MISSING;
-				string partStr(part);
-				partition_snps = partition_windows->at(p);
-				if (NEED_SFS) partition_sfs = sfs_window(freqData, partition_snps, SFS_SUB);
-
-				for (int j = 0; j < NOPTS; j++) {
-					if (STATS[j].compare(ARG_PI) == 0 && params->getBoolFlag(ARG_PI)) {
-						if (i == 0) (*names) += "pi_" + partStr + " ";
-						results[i][s] = pi_from_sfs(partition_sfs);
-						s_pi0 = s;
-						s++;
-					}
-					else if (STATS[j].compare(ARG_PIK) == 0 && PIK_CHOICE[0] != 0) {
-						pair_t *shifted_snps = new pair_t;
-						shifted_snps->start = partition_snps->start - snps->start;
-						shifted_snps->end = partition_snps->end - snps->start;
-						for (int k = 0; k < PIK_CHOICE.size(); k++) {
-							if (i == 0) (*names) += "pi" +  int2str(PIK_CHOICE[k]) + "_" + partStr + " ";
-							results[i][s] = pi_k2(pik_hfs, PIK_CHOICE[k], shifted_snps);
-							s++;
-						}
-						delete shifted_snps;
-					}
-					else if (STATS[j].compare(ARG_SEGSITES) == 0 && params->getBoolFlag(ARG_SEGSITES)) {
-						if (i == 0) (*names) += "S_" + partStr + " ";
-						results[i][s] = segsites(partition_sfs);
-						s_S0 = s;
-						s++;
-					}
-					else if (STATS[j].compare(ARG_TAJ_D) == 0 && params->getBoolFlag(ARG_TAJ_D)) {
-						if (i == 0) (*names) += "D_" + partStr + " ";
-						if (s_pi0 >= 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], results[i][s_S0]);
-						else if (s_pi0 < 0 && s_S0 >= 0) results[i][s] = tajimaD_from_sfs(partition_sfs, s_pi0, results[i][s_S0]);
-						else if (s_pi0 >= 0 && s_S0 < 0) results[i][s] = tajimaD_from_sfs(partition_sfs, results[i][s_pi0], s_S0);
-						else results[i][s] = tajimaD_from_sfs(partition_sfs);
-						s++;
-					}
-					else if (STATS[j].compare(ARG_FAY_WU_H) == 0 && params->getBoolFlag(ARG_FAY_WU_H)) {
-						if (i == 0) (*names) += "H_" + partStr + " ";
-						if (s_pi0 >= 0) results[i][s] = fayWuH_from_sfs(partition_sfs, results[i][s_pi0]);
-						else results[i][s] = fayWuH_from_sfs(partition_sfs);
-						s++;
-					}
-					else if (STATS[j].compare(ARG_EHH) == 0 && EHH_WINS[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
-						if (i == 0) (*names) += "ehh_" + partStr + " ";
-						hfs = hfs_window(hapData, partition_snps);
-						results[i][s] = ehh_from_hfs(hfs);
-						s++;
-						releaseHaplotypeFrequencySpectrum(hfs);
-					}
-					else if (STATS[j].compare(ARG_EHHK) == 0 && EHHK_CHOICES[0] != 0 && params->getBoolFlag(ARG_EHH_PART)) {
-
-						hfs = hfs_window(hapData, partition_snps);
-						for (int k = 0; k < EHHK_CHOICES.size(); k++) {
-							if (i == 0) (*names) += "ehh" + int2str(EHHK_CHOICES[k]) + "_" + partStr + " ";
-							results[i][s] = ehhk_from_hfs(hfs, EHHK_CHOICES[k]);
-							s++;
-						}
-						releaseHaplotypeFrequencySpectrum(hfs);
-
-					}
-				}
-				part[0]++;
-				releaseArray(partition_sfs);
-			}
-		}
-		releaseHaplotypeFrequencySpectrum(pik_hfs);
-		*/
+		
 	}
+	return;
+}
+
+
+void calc_stats2(void *order) {
+	work_order2_t *p = (work_order2_t *)order;
+	vector<SpectrumData *> *specDataByChr = p->specDataByChr;
+	param_t *params = p->params;
+	SpectrumData *avgSpec = p->avgSpec;
+	SpectrumData *specData;
+    vector<LASSIResults *> *resultsByChr = p->resultsByChr;
+    LASSIResults *results;
+	int id = p->id;
+	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
+	int numThreads = params->getIntFlag(ARG_THREADS);
+	
+	double **f = calcF(LASSI_CHOICE,avgSpec->K);
+	//Cycle over all windows and calculate stats
+	for (int c = 0; c < specDataByChr->size(); c++){
+		specData = specDataByChr->at(c);
+		results = resultsByChr->at(c);
+		for (int i = id; i < specDataByChr->at(c)->nwins; i += numThreads) {
+			calcMandT(results, specData, avgSpec, f, i);
+		}
+	}
+	for(int i = 0; i < avgSpec->K; i++) delete [] f[i];
+	delete [] f;
+
+/*
+	for (int i = id; i < windows->size(); i += numThreads) {
+		snps = windows->at(i);
+		string popName;
+
+		for (int p = 0; p < popData->npops; p++){
+			popName = popData->popOrder[p];
+			//cerr << popName << endl;
+			hfs = hfs_window(hapDataByPop->at(popName), snps);
+			double tot = 0;
+			for (int s = 0; s < K; s++){
+				if(s < hfs->numUniq) tot+=double(hfs->sortedCount[s]);
+			}
+			//cerr << tot << endl;
+			for (int s = 0; s < K; s++){
+				if (i == 0 && p == 0){
+					stringstream ss;
+					ss << s+1;
+					(*names) += "hfs_" + ss.str(); 
+					if (s != K-1) (*names) += "\t";
+				}
+				double **x = results->at(popName);
+				if(s < hfs->numUniq) x[i][s] = double(hfs->sortedCount[s])/tot;
+				else x[i][s] = 0;
+			}
+			releaseHaplotypeFrequencySpectrum(hfs);
+		}
+		
+	}
+	*/
 	return;
 }
 

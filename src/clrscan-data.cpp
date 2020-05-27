@@ -1,4 +1,4 @@
-/* grail -- a program to calculate EHH-based scans for positive selection in genomes
+/* clrscan -- a program to calculate EHH-based scans for positive selection in genomes
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -15,7 +15,127 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
-#include "grail-data.h"
+#include "clrscan-data.h"
+
+LASSIResults *initResults(int nwins){
+    LASSIResults *data = new LASSIResults;
+    data->m = new int[nwins];
+    data->nwins = nwins;
+    data->T = new double[nwins];
+    for(int i = 0; i < nwins; i++){
+        data->m[i] = 0;
+        data->T[i] = 0;
+    }
+    return data;
+}
+
+vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr){
+    vector<LASSIResults *> *dataByChr = new vector<LASSIResults *>;
+    LASSIResults *data;
+    for(int i = 0; i < specDataByChr->size(); i++){
+        data = initResults(specDataByChr->at(i)->nwins);
+        dataByChr->push_back(data);
+    }
+    return dataByChr;
+}
+
+void releaseResults(LASSIResults *data){
+    if (data == NULL) return;
+    if (data->m != NULL) delete [] data->m;
+    if (data->T != NULL) delete [] data->T;
+    return;
+}
+
+SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr){
+    int K = specDataByChr->at(0)->K;
+    unsigned int nwins = 0;
+    SpectrumData *avgSpec = initSpecData(1,K);
+    for (int i = 0; i < specDataByChr->size(); i++) nwins += specDataByChr->at(i)->nwins;
+    for (int i = 0; i < specDataByChr->size(); i++){
+        for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
+            for (int j = 0; j < K; j++){
+                avgSpec->freq[0][j] += specDataByChr->at(i)->freq[w][j]/nwins;
+            }
+        }
+    }
+    return avgSpec;
+}
+
+vector<SpectrumData *> *readSpecData(vector<string> filenames){
+    vector<SpectrumData *> *specDataByChr = new vector<SpectrumData *>;
+    SpectrumData *specData;
+    int K = 0;
+    for (int i = 0; i < filenames.size(); i++){
+      specData = readSpecData(filenames[i]);
+      cerr << "Read " << filenames[i] << endl;
+      if (i > 0 && K != specData->K){
+        cerr << "ERROR: K's don't match.\n";
+        throw 0;
+      }
+      K = specData->K;
+      specDataByChr->push_back(specData);
+    }
+    return specDataByChr;
+}
+
+SpectrumData *readSpecData(string filename){
+    igzstream fin;
+    stringstream ss;
+    string junk;
+    unsigned int nwins;
+    int K;
+    fin.open(filename.c_str());
+    if (fin.fail()) {
+        cerr << "ERROR: Failed to open " << filename << " for writing.\n";
+        throw 0;
+    }
+    getline(fin,junk);
+    ss.str(junk);
+    ss >> junk >> nwins >> junk >> K;
+    ss.clear();
+    SpectrumData *data = initSpecData(nwins,K);
+    getline(fin,junk);
+    for(int w = 0; w < nwins; w++){
+        getline(fin,junk);
+        ss.str(junk);
+        for(int i = 0; i < 5; i++) ss >> data->info[w][i];
+        for(int i = 0; i < K; i++) ss >> data->freq[w][i];
+        ss.clear();
+    }
+    fin.close();
+    return data;
+}
+SpectrumData *initSpecData(int nwins, int K){
+    SpectrumData *data = new SpectrumData;
+    data->K = K;
+    data->nwins = nwins;
+    data->freq = new double*[nwins];
+    data->info = new unsigned int*[nwins];
+
+    for (int j = 0; j < nwins; j++){
+        data->freq[j] = new double[K];
+        for (int i = 0; i < K; i++) data->freq[j][i] = 0;
+        data->info[j] = new unsigned int[5];
+        for (int i = 0; i < 5; i++) data->info[j][i] = 0;
+    }
+    return data;
+}
+
+void releaseSpecData(SpectrumData *data){
+    if (data == NULL) return;
+    for (int j = 0; j < data->nwins; j++){
+        if(data->freq[j] != NULL){
+            delete [] data->freq[j];
+        }
+        if(data->info[j] != NULL){
+            delete [] data->info[j];
+        }
+    }
+    if (data->freq != NULL) delete [] data->freq;
+    if (data->info != NULL) delete [] data->info;
+    return;
+}
+
 
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum(){
     HaplotypeFrequencySpectrum *hfs = new HaplotypeFrequencySpectrum;
@@ -381,7 +501,7 @@ MapData *initMapData(int nloci)
     data->nloci = nloci;
     data->locusName = new string[nloci];
     data->physicalPos = new unsigned int[nloci];
-    data->alleles = new vector<char>[nloci];
+    //data->alleles = new vector<char>[nloci];
     //data->geneticPos = new double[nloci];
 
     for (int locus = 0; locus < nloci; locus++)
@@ -400,7 +520,7 @@ void releaseMapData(MapData *data)
     data->nloci = -9;
     delete [] data->locusName;
     delete [] data->physicalPos;
-    delete [] data->alleles;
+    //delete [] data->alleles;
     //delete [] data->geneticPos;
     delete data;
     data = NULL;
@@ -817,7 +937,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     cerr << "Loading " << nload << "/" << nhaps << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
 
     MapData *mapData = initMapData(nloci);
-    mapData->g = nhaps;
+    //mapData->g = nhaps;
     map<string,int> pop2indIndex;
     map<string, HaplotypeData* > * dataByPop = new map<string, HaplotypeData* >;
     for (int i = 0; i < popData->npops; i++){
@@ -878,10 +998,10 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
 
                 string p = popData->ind2pop[inds[field]];
                 int f = pop2indIndex[p];
-                if(dataByPop->at(p)->freq->count[locus].count(allele1) == 0) dataByPop->at(p)->freq->count[locus][allele1] = 1;
-                else dataByPop->at(p)->freq->count[locus][allele1]++;
-                if(dataByPop->at(p)->freq->count[locus].count(allele2) == 0) dataByPop->at(p)->freq->count[locus][allele2] = 1;
-                else dataByPop->at(p)->freq->count[locus][allele2]++;
+                //if(dataByPop->at(p)->freq->count[locus].count(allele1) == 0) dataByPop->at(p)->freq->count[locus][allele1] = 1;
+                //else dataByPop->at(p)->freq->count[locus][allele1]++;
+                //if(dataByPop->at(p)->freq->count[locus].count(allele2) == 0) dataByPop->at(p)->freq->count[locus][allele2] = 1;
+                //else dataByPop->at(p)->freq->count[locus][allele2]++;
                 //if(allele1 == MISSING_ALLELE) dataByPop->at(p)->freq->nmissing[locus]++;
                 //if(allele2 == MISSING_ALLELE) dataByPop->at(p)->freq->nmissing[locus]++;
                 //if (allele1 == VCF_MISSING) dataByPop->at(p)->data[2 * f][locus] = MISSING_ALLELE;
@@ -910,6 +1030,7 @@ void extractAlleleStrs(string gt, string &string1, string &string2){
     return;
 }
 
+/*
 void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData){
     map< string, HaplotypeData* >::iterator it;
     string popName;
@@ -939,7 +1060,7 @@ void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popDat
         }
     }
 }
-
+*/
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap)
 {
     if (nhaps < 1 || nloci < 1)
@@ -964,7 +1085,7 @@ HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool do
 
     if (domap) data->map = initMapData(nloci);
     data->freq = initFreqData(nhaps, nloci);
-    data->Q = NULL;
+    //data->Q = NULL;
 
     return data;
 }

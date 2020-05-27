@@ -1,4 +1,4 @@
-/* grail -- a program to calculate window-based diversity statistics
+/* clrscan -- a program to calculate window-based diversity statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -15,61 +15,131 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
-#include "grail-winstats.h"
+#include "clrscan-winstats.h"
 
-void calc_Q(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps){
-   HaplotypeData *hapData = hapDataByPop->at(popName);
-   MapData *mapData = hapData->map;
-   FreqData *freqData = hapData->freq;
-   char a;
-   int sampleSize;
-   int alleleCount;
-   //for each locus
-   for (int locus = snps->start; locus <= snps->end; locus++){
-      //for each allele
-      sampleSize = freqData->nhaps - freqData->count[locus][MISSING_ALLELE];
-      for (int i = 0; i < mapData->alleles[locus].size(); i++){
-         alleleCount = freqData->count[locus][mapData->alleles[locus][i]];
-         hapData->Q[locus][mapData->alleles[locus][i]] = nCk(sampleSize-alleleCount,mapData->g)/nCk(sampleSize,mapData->g);
-      }
-   }
-}
+void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){
+   double nullLikelihood = calcLASSINullLikelihood(specData,avgSpec,w);
+   cerr << "null: " << nullLikelihood << endl;
+   int K = avgSpec->K;
+   double U = avgSpec->freq[0][K-1];
 
-double calc_alpha(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps){
-   HaplotypeData *hapData = hapDataByPop->at(popName);
-   MapData *mapData = hapData->map;
-   FreqData *freqData = hapData->freq;
-   double meanAlpha = 0;
-   double n = numSitesInDataWin(snps);
-   //mean over loci
-   for (int locus = snps->start; locus <= snps->end; locus++){
-      for (int i = 0; i < mapData->alleles[locus].size(); i++){
-         meanAlpha += 1-hapData->Q[locus][mapData->alleles[locus][i]];
-      }
-   }
-   meanAlpha /= n;
-   return meanAlpha;
-}
-
-double calc_pi(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps){
-   HaplotypeData *hapData = hapDataByPop->at(popName);
-   MapData *mapData = hapData->map;
-   FreqData *freqData = hapData->freq;
-   double meanPi = 0;
-   double n = numSitesInDataWin(snps);
-   //mean over loci
-   for (int locus = snps->start; locus <= snps->end; locus++){
-      double pi = 0;
-      for (int i = 0; i < mapData->alleles[locus].size(); i++){
-         pi = 1-hapData->Q[locus][mapData->alleles[locus][i]];
-         for (int j = 0; j < mapData->alleles[locus].size(); j++){
-            if(i != j) pi *= hapData->Q[locus][mapData->alleles[locus][j]];
+   int maxM = -1;
+   double maxE = -1;
+   double maxAltLikelihood = -99999999;
+   double altLikelihood = -99999999;
+   double epsStep = 1.0/(100.0*double(K));
+   for (int m = 1; m <= K; m++){
+      for (double e = epsStep; e <= U; e += epsStep){
+         altLikelihood = calcLASSIAltLikelihood(specData, avgSpec, f, U, m, e, w);
+         //cerr << "m=" << m << " e=" << e << " alt: "<< altLikelihood << endl;
+         if(altLikelihood > maxAltLikelihood){
+            maxAltLikelihood = altLikelihood;
+            maxM = m;
+            maxE = e;
          }
-         meanPi += pi;
       }
    }
-   meanPi /= n;
-   return meanPi;
+
+   results->m[w] = maxM;
+   results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
+   return;
+}
+
+double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w){
+   double res = 0;
+   for (int i = 0; i < avgSpec->K; i++){
+      res += double(specData->info[w][4])*specData->freq[w][i]*log(avgSpec->freq[0][i]);
+   }
+   return res;
+}
+
+double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w){
+   int K = avgSpec->K;
+   if(m == K) return calcLASSINullLikelihood(specData,avgSpec,w);
+
+   double *q = new double[K];
+   
+   for(int i = m+1; i <= K; i++){
+      if(m == K-1) q[i-1] = e;
+      else q[i-1] = U - double(i-m-1.0)/double(K-m-1.0) * (U - e);
+   }
+   for(int i = 1; i <= m; i++){
+      q[i-1] = 0;
+      for(int j = m+1; j <= K; j++) q[i-1] += avgSpec->freq[0][j-1] - q[j-1];
+      q[i-1] *= f[m-1][i-1];
+      q[i-1] += avgSpec->freq[0][i-1];
+   }
+
+   double res = 0;
+   for (int i = 0; i < avgSpec->K; i++){
+      res += double(specData->info[w][4])*specData->freq[w][i]*log(q[i]);
+   }
+   delete [] q;
+   return res;
+}
+
+
+double **calcF(int type, int K){
+   double **f = new double*[K];
+   
+   for(int i = 0; i < K; i++) f[i] = new double[i+1];
+   
+   double sum = 0;
+   if(type == 1){
+      for(int i = 0; i < K; i++){
+         sum = 0;
+         for(int j = 0; j < i+1; j++){
+            f[i][j] = 1.0 / double(i+1);
+            sum += f[i][j];
+         }
+         for(int j = 0; j < i+1; j++) f[i][j] /= sum;
+      } 
+   }
+   else if (type == 2){
+      for(int i = 0; i < K; i++){
+         sum = 0;
+         for(int j = 0; j < i+1; j++){
+            f[i][j] = 1.0 / double(j+1);
+            sum += f[i][j];
+         }
+         for(int j = 0; j < i+1; j++) f[i][j] /= sum;
+      } 
+   }
+   else if (type == 3){
+      for(int i = 0; i < K; i++){
+         sum = 0;
+         for(int j = 0; j < i+1; j++){
+            f[i][j] = 1.0 / ( double(j+1) * double(j+1) );
+            sum += f[i][j];
+         }
+         for(int j = 0; j < i+1; j++) f[i][j] /= sum;
+      } 
+   }
+   else if (type == 4){
+      for(int i = 0; i < K; i++){
+         sum = 0;
+         for(int j = 0; j < i+1; j++){
+            f[i][j] = 1.0 / exp(double(j+1));
+            sum += f[i][j];
+         }
+         for(int j = 0; j < i+1; j++) f[i][j] /= sum;
+      } 
+   }
+   else if (type == 5){
+      for(int i = 0; i < K; i++){
+         sum = 0;
+         for(int j = 0; j < i+1; j++){
+            f[i][j] = 1.0 / exp(double(j+1) * double(j+1));
+            sum += f[i][j];
+         }
+         for(int j = 0; j < i+1; j++) f[i][j] /= sum;
+      } 
+   }
+   else{
+      cerr << "ERROR: Invalid scaling choice.\n";
+      throw 0;
+   }
+   return f;
 }
 
 /*
@@ -427,6 +497,7 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
             haplotype += hapData->data[hap][site];
          }
       }
+      //cerr << haplotype << endl;
       if (!skip){
          if (hfs->hap2count.count(haplotype) == 0) {
             hfs->hap2count[haplotype] = 1;
@@ -449,12 +520,13 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    int i = 0;
    for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++, i++) {
       sortedCount[i] = it->second;//unsorted
-      hfs->count2hap.insert(pair<int, string>(it->second, it->first));
+      //hfs->count2hap.insert(pair<int, string>(it->second, it->first));
    }
 
    qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);//sorted but with possible duplicates
-   hfs->sortedCount = uniqInt(sortedCount, hfs->numUniq, hfs->size);//remove duplicates
-   delete [] sortedCount;
+   //hfs->sortedCount = uniqInt(sortedCount, hfs->numUniq, hfs->size);//remove duplicates
+   hfs->sortedCount = sortedCount;
+   //delete [] sortedCount;
 
    return hfs;
 }

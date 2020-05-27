@@ -1,4 +1,4 @@
-/* grail -- a program to calculate window-based diversity statistics
+/* clrscan -- a program to calculate window-based diversity statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -16,10 +16,10 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#ifndef __GRAIL_WINSTATS_H__
-#define __GRAIL_WINSTATS_H__
+#ifndef __CLRSCAN_WINSTATS_H__
+#define __CLRSCAN_WINSTATS_H__
 
-#include "grail-data.h"
+#include "clrscan-data.h"
 #include <map>
 #include <vector>
 #include <cstdlib>
@@ -30,13 +30,16 @@ using namespace std;
 
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
-
+double **calcF(int type, int K);
+void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
+double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);
+double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
 //double subsample_sfs(array_t *sfs, int H, int j);
 //array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
-void calc_Q(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
-double calc_alpha(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
-double calc_pi(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
+//void calc_Q(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
+//double calc_alpha(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
+//double calc_pi(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
 //double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
 //double pi_from_sfs(array_t *sfs);
 //double pi_k(HaplotypeFrequencySpectrum *hfs, int k);

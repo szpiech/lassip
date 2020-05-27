@@ -1,5 +1,5 @@
-#ifndef __GRAIL_CLI_H__
-#define __GRAIL_CLI_H__
+#ifndef __CLRSCAN_CLI_H__
+#define __CLRSCAN_CLI_H__
 
 const string VERSION = "0.0.1";
 
@@ -10,10 +10,10 @@ const int DEFAULT_THREADS = 1;
 const string HELP_THREADS = "The number of threads to spawn during computations.";
 
 // I/O flags
-const string ARG_FILENAME_TPED = "--tped";
-const string DEFAULT_FILENAME_TPED = "__hapfile1";
-const string HELP_FILENAME_TPED = "A TPED file containing haplotype and map data.\n\
-\tVariants should be coded 0/1";
+//const string ARG_FILENAME_TPED = "--tped";
+//const string DEFAULT_FILENAME_TPED = "__hapfile1";
+//const string HELP_FILENAME_TPED = "A TPED file containing haplotype and map data.\n\
+//\tVariants should be coded 0/1";
 
 const string ARG_FILENAME_POP1_VCF = "--vcf";
 const string DEFAULT_FILENAME_POP1_VCF = "__vcffile1";
@@ -24,6 +24,9 @@ const string ARG_FILENAME_POPFILE = "--pop";
 const string DEFAULT_FILENAME_POPFILE = "__popfile1";
 const string HELP_FILENAME_POPFILE = "A file containing <ind ID> <pop ID>.";
 
+const string ARG_FILENAME_SPECFILES = "--spectra";
+const string DEFAULT_FILENAME_SPECFILES = "__specfile1";
+const string HELP_FILENAME_SPECFILES = "A list of spectra files for finalization.";
 
 /*
 const string ARG_FILENAME_MAP = "--map";
@@ -36,6 +39,7 @@ const string DEFAULT_OUTFILE = "outfile";
 const string HELP_OUTFILE = "The basename for all output files.";
 
 // Window control flags
+/*
 const string ARG_BP = "--bp";
 const bool DEFAULT_BP = false;
 const string HELP_BP = "Use bps for window sizes.";
@@ -43,10 +47,11 @@ const string HELP_BP = "Use bps for window sizes.";
 const string ARG_SITES = "--sites";
 const bool DEFAULT_SITES = false;
 const string HELP_SITES = "Use sites for window sizes.";
+*/
 
 const string ARG_WINSIZE = "--winsize";
 const int DEFAULT_WINSIZE = 0;
-const string HELP_WINSIZE = "The window size within which to calculate diversity statistics.";
+const string HELP_WINSIZE = "The window size within which to calculate statistics.";
 
 const string ARG_WINSTEP = "--winstep";
 const int DEFAULT_WINSTEP = 0;
@@ -64,6 +69,22 @@ const string HELP_PARTITION = "Partition the sliding window into non-overlapping
 const int MAX_PARTITION = 20;
 */
 // Statistics flags
+const string ARG_LASSI = "--lassi";
+const bool DEFAULT_LASSI = false;
+const string HELP_LASSI = "Set this flag to use the LASSI method.";
+
+const string ARG_LASSI_CHOICE = "--lassi-choice";
+const int DEFAULT_LASSI_CHOICE = 4;
+const string HELP_LASSI_CHOICE = "Set this flag to change the way LASSI\n\
+\tdistributes mass across sweeping haplotype classes. Take an integer in {1..5}.";
+
+const string ARG_SFINDER = "--sweepfinder";
+const bool DEFAULT_SFINDER = false;
+const string HELP_SFINDER = "Set this flag to use the SweepFinder method.";
+
+const string ARG_SFINDER2 = "--sweepfinder2";
+const bool DEFAULT_SFINDER2 = false;
+const string HELP_SFINDER2 = "Set this flag to use the SweepFinder2 method.";
 /*
 const string ARG_PI = "--pi";
 const bool DEFAULT_PI = false;
@@ -102,6 +123,17 @@ const bool DEFAULT_FAY_WU_H = false;
 const string HELP_FAY_WU_H = "Set this flag to calculate Fay and Wu's H.";
 */
 // Other flags
+const string ARG_INIT = "--initial";
+const bool DEFAULT_INIT = false;
+const string HELP_INIT = "Initial computations.";
+
+const string ARG_K = "--k";
+const int DEFAULT_K = 10;
+const string HELP_K = "Top K haplotypes for LASSI computations.";
+
+const string ARG_FINALIZE = "--finalize";
+const bool DEFAULT_FINALIZE = false;
+const string HELP_FINALIZE = "Finalize computations.";
 /*
 const string ARG_EHH_PART = "--ehh-part";
 const bool DEFAULT_EHH_PART = false;

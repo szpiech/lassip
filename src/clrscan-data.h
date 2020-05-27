@@ -1,4 +1,4 @@
-/* grail -- a program to calculate EHH-based scans for positive selection in genomes
+/* clrscan -- a program to calculate EHH-based scans for positive selection in genomes
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -16,8 +16,8 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#ifndef __GRAIL_DATA_H__
-#define __GRAIL_DATA_H__
+#ifndef __CLRSCAN_DATA_H__
+#define __CLRSCAN_DATA_H__
 #include <string>
 #include <iostream>
 #include <fstream>
@@ -41,8 +41,8 @@ struct MapData
   string *locusName;
   int nloci;
   string chr;
-  vector<char> *alleles;
-  int g;
+  //vector<char> *alleles;
+  //int g;
 };
 
 struct FreqData
@@ -56,7 +56,7 @@ struct FreqData
 
 struct HaplotypeData
 {
-  map<char, double> *Q;
+  //map<char, double> *Q;
   char **data;
   int nhaps;
   int nloci;
@@ -83,7 +83,7 @@ struct PopData
 
 struct HaplotypeFrequencySpectrum {
   map<string,int> hap2count;
-  multimap<int,string> count2hap;
+  //multimap<int,string> count2hap;
   int *sortedCount;
   int size;
   int numUniq;
@@ -95,6 +95,32 @@ struct pair_t //guess it's a triplet...
   int end;
   int winStart;
 };
+
+struct SpectrumData {
+  double **freq;
+  int nwins;
+  int K;
+  unsigned int **info;
+};
+
+struct LASSIResults {
+  int *m;
+  double *T;
+  int nwins;
+};
+
+
+LASSIResults *initResults(int nwins);
+vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr);
+void releaseResults(LASSIResults *data);
+
+SpectrumData *initSpecData(int nwins, int K);
+void releaseSpecData(SpectrumData *data);
+
+SpectrumData *readSpecData(string filename);
+vector<SpectrumData *> *readSpecData(vector<string> filenames);
+SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr);
+
 map<string,char> storeMap();
 
 void extractAlleleStrs(string gt, string &string1, string &string2);
@@ -139,7 +165,7 @@ HaplotypeData *readHaplotypeDataVCF(string filename);
 
 //vector< HaplotypeData* > *readHaplotypeDataTPED(string filename, PopData *data);
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data);
-void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
+//void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace
