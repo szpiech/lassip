@@ -86,7 +86,7 @@ struct HaplotypeFrequencySpectrum {
   //multimap<int,string> count2hap;
   int *sortedCount;
   int size;
-  int numUniq;
+  int numClasses;
 };
 
 struct pair_t //guess it's a triplet...
@@ -101,6 +101,7 @@ struct SpectrumData {
   int nwins;
   int K;
   unsigned int **info;
+  unsigned int *nhaps;
 };
 
 struct LASSIResults {
@@ -109,21 +110,43 @@ struct LASSIResults {
   int nwins;
 };
 
+struct LASSIInitialResults{
+  vector< pair_t* > *windows;
+  map<string,double ** > *data;
+  map<string,string> *names;
+};
+
+
+
+vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP = false);
+void releaseAllWindows(vector< pair_t* > *windows);
+
+LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, 
+                                int WINSIZE, int WINSTEP, int K);
+void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, MapData *mapData,
+                              PopData *popData, int K);
+
+void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
+                            map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 
 LASSIResults *initResults(int nwins);
 vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr);
+map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
+
 void releaseResults(LASSIResults *data);
 
-SpectrumData *initSpecData(int nwins, int K);
+SpectrumData *initSpecData(int nwins, int K, bool doinfo = true);
 void releaseSpecData(SpectrumData *data);
 
-SpectrumData *readSpecData(string filename);
-vector<SpectrumData *> *readSpecData(vector<string> filenames);
+map<string, SpectrumData *> *readSpecData(string filename);
+map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames);
+
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr);
+map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 
-map<string,char> storeMap();
+//map<string,char> storeMap();
 
-void extractAlleleStrs(string gt, string &string1, string &string2);
+//void extractAlleleStrs(string gt, string &string1, string &string2);
 //void codeAlleles(string string1, string string2, char &allele1, char &allele2);
 
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();
@@ -135,6 +158,7 @@ void releaseArray(array_t* data);
 PopData *initPopData();
 void releasePopData(PopData *data);
 PopData *readPopData(string filename);
+void checkK(PopData *data, double K);
 
 //allocates the arrays and populates them with -9 or "--" depending on type
 MapData *initMapData(int nhaps, int nloci);
@@ -164,7 +188,7 @@ void releaseHapData(HaplotypeData *data);
 HaplotypeData *readHaplotypeDataVCF(string filename);
 
 //vector< HaplotypeData* > *readHaplotypeDataTPED(string filename, PopData *data);
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data);
+map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED);
 //void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
 
 //counts the number of "fields" in a string

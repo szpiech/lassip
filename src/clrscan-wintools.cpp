@@ -1,61 +1,18 @@
 #include "clrscan-wintools.h"
 
 
-vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
-	vector< pair_t* > *windows = new vector< pair_t* >;
-	int numSnps = mapData->nloci;
-	if (USE_BP){
-		int endOfData = mapData->physicalPos[numSnps - 1];	
-		int snpIndexStart = 0;
 
-		for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {	
-			//Find SNP index boundaries for the whole window
-			pair_t *snps = findInclusiveSNPIndicies(snpIndexStart, currWinStart, WINSIZE, mapData);
-			windows->push_back(snps);
-			snpIndexStart = snps->start;
-		}
-	}
-	else{//USE_SITES
-		for (int i = 0; i < numSnps; i += WINSTEP){
-			pair_t* snps = new pair_t;
-			snps->start = i;
-			if (i+WINSIZE-1 >= numSnps){
-				delete snps;
-				return windows;
-			}
-			else{
-				snps->end = i+WINSIZE-1;
-			}
-			snps->winStart = mapData->physicalPos[i];
-			windows->push_back(snps);
-		}
-	}
-	return windows;
-}
-
-void releaseAllWindows(vector< pair_t* > *windows) {
-	for (int i = 0; i < windows->size(); i++) delete windows->at(i);
-	delete windows;
-	return;
-}
-
-void calc_stats(void *order) {
-	work_order_t *p = (work_order_t *)order;
+void calc_LASSI_stats(void *order) {
+	LASSI_work_order_t *p = (LASSI_work_order_t *)order;
 	map< string, HaplotypeData* > *hapDataByPop = p->hapDataByPop;
-	//MapData *mapData = p->mapData;
-	//FreqData *freqData = p->freqData;
 	PopData *popData = p->popData;
 	param_t *params = p->params;
-	vector< pair_t* > *windows = p->windows;
+	vector< pair_t* > *windows = p->results->windows;
 	int WINSIZE = params->getIntFlag(ARG_WINSIZE);
-	map<string,double **> *results = p->results;
+	map<string,double **> *results = p->results->data;
 	int id = p->id;
-	//int numStats = p->numStats;
 	int K = p->params->getIntFlag(ARG_K);
-	string *names = p->names;
-	//vector<int> PARTITIONS = params->getIntListFlag(ARG_PARTITION);
-	//bool USE_BP = p->USE_BP;
-
+	map<string,string> *names = p->results->names;
 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	//array_t *sfs, *partition_sfs;
@@ -74,31 +31,29 @@ void calc_stats(void *order) {
 	}
 	*/
 	//Cycle over all windows and calculate stats
-
-	for (int i = id; i < windows->size(); i += numThreads) {
-		snps = windows->at(i);
-		string popName;
-
-		for (int p = 0; p < popData->npops; p++){
-			popName = popData->popOrder[p];
-			//cerr << popName << endl;
+	string popName;
+	for (int p = 0; p < popData->npops; p++){
+		popName = popData->popOrder[p];
+		for (int i = id; i < windows->size(); i += numThreads) {
+			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps);
+			double **x = results->at(popName);
 			double tot = 0;
 			for (int s = 0; s < K; s++){
-				if(s < hfs->numUniq) tot+=double(hfs->sortedCount[s]);
+				if(s < hfs->numClasses) tot+=double(hfs->sortedCount[s]);
 			}
 			//cerr << tot << endl;
 			for (int s = 0; s < K; s++){
-				if (i == 0 && p == 0){
+				if (i == 0){
 					stringstream ss;
 					ss << s+1;
-					(*names) += "hfs_" + ss.str(); 
-					if (s != K-1) (*names) += "\t";
+					names->at(popName) += popName + "_hfs_" + ss.str(); 
+					if (s != K-1) names->at(popName) += "\t";
 				}
-				double **x = results->at(popName);
-				if(s < hfs->numUniq) x[i][s] = double(hfs->sortedCount[s])/tot;
+				if(s < hfs->numClasses) x[i][s] = double(hfs->sortedCount[s])/tot;
 				else x[i][s] = 0;
 			}
+			x[i][K] = hfs->size;
 			releaseHaplotypeFrequencySpectrum(hfs);
 		}
 		
@@ -107,28 +62,51 @@ void calc_stats(void *order) {
 }
 
 
-void calc_stats2(void *order) {
-	work_order2_t *p = (work_order2_t *)order;
-	vector<SpectrumData *> *specDataByChr = p->specDataByChr;
-	param_t *params = p->params;
-	SpectrumData *avgSpec = p->avgSpec;
-	SpectrumData *specData;
-    vector<LASSIResults *> *resultsByChr = p->resultsByChr;
-    LASSIResults *results;
+void calc_LASSI_stats2(void *order) {
+	LASSI_work_order2_t *p = (LASSI_work_order2_t *)order;
+
+	map<string, vector<SpectrumData *>* > *specDataByPopByChr = p->specDataByPopByChr;
+    map<string, SpectrumData* > *avgSpecByPop = p->avgSpecByPop;
+    map<string, vector<LASSIResults *>* > *resultsByPopByChr = p->resultsByPopByChr;
+	param_t *params = p->params;    
 	int id = p->id;
 	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	
-	double **f = calcF(LASSI_CHOICE,avgSpec->K);
-	//Cycle over all windows and calculate stats
-	for (int c = 0; c < specDataByChr->size(); c++){
-		specData = specDataByChr->at(c);
-		results = resultsByChr->at(c);
-		for (int i = id; i < specDataByChr->at(c)->nwins; i += numThreads) {
-			calcMandT(results, specData, avgSpec, f, i);
+	int K = avgSpecByPop->begin()->second->K;
+	double **f = calcF(LASSI_CHOICE,K);
+	
+	vector<LASSIResults *> *resultsByChr;
+	LASSIResults *results;
+	vector<SpectrumData *> *specDataByChr;
+	SpectrumData *specData;
+	SpectrumData *avgSpec;
+	string popName;
+
+	map<string, vector<SpectrumData *>* >::iterator it;
+	for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+		popName = it->first;
+		specDataByChr = it->second;
+		resultsByChr = resultsByPopByChr->at(popName);
+		avgSpec = avgSpecByPop->at(popName);
+		for (int c = 0; c < specDataByChr->size(); c++){
+			specData = specDataByChr->at(c);
+			results = resultsByChr->at(c);
+			for (int i = id; i < specDataByChr->at(c)->nwins; i += numThreads) {
+				calcMandT(results, specData, avgSpec, f, i);
+				if(results->m[i] <= 0){
+					cerr << popName << " " << c;
+					for(int k = 0; k < 4; k++) cerr << " " << specData->info[i][k];
+					cerr << " " << specData->nhaps[i];
+					for(int k = 0; k < K; k++) cerr << " " << specData->freq[i][k];
+					for(int k = 0; k < K; k++) cerr << " " << avgSpec->freq[i][k];
+					cerr << endl;
+				}
+			}
 		}
 	}
-	for(int i = 0; i < avgSpec->K; i++) delete [] f[i];
+
+	for(int i = 0; i < K; i++) delete [] f[i];
 	delete [] f;
 
 /*
@@ -142,7 +120,7 @@ void calc_stats2(void *order) {
 			hfs = hfs_window(hapDataByPop->at(popName), snps);
 			double tot = 0;
 			for (int s = 0; s < K; s++){
-				if(s < hfs->numUniq) tot+=double(hfs->sortedCount[s]);
+				if(s < hfs->numClasses) tot+=double(hfs->sortedCount[s]);
 			}
 			//cerr << tot << endl;
 			for (int s = 0; s < K; s++){
@@ -153,7 +131,7 @@ void calc_stats2(void *order) {
 					if (s != K-1) (*names) += "\t";
 				}
 				double **x = results->at(popName);
-				if(s < hfs->numUniq) x[i][s] = double(hfs->sortedCount[s])/tot;
+				if(s < hfs->numClasses) x[i][s] = double(hfs->sortedCount[s])/tot;
 				else x[i][s] = 0;
 			}
 			releaseHaplotypeFrequencySpectrum(hfs);

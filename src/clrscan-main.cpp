@@ -64,7 +64,9 @@ int main(int argc, char *argv[])
   // Other flags
   params.addFlag(ARG_INIT, DEFAULT_INIT, "", HELP_INIT);
   params.addFlag(ARG_K, DEFAULT_K, "", HELP_K);
-  params.addFlag(ARG_FINALIZE, DEFAULT_FINALIZE, "", HELP_FINALIZE);
+  params.addFlag(ARG_FINALIZE, DEFAULT_FINALIZE, "", HELP_FINALIZE);  
+  params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
+
   //params.addFlag(ARG_EHH_PART, DEFAULT_EHH_PART, "", HELP_EHH_PART);
   //params.addFlag(ARG_NO_SFS_SUB, DEFAULT_NO_SFS_SUB, "", HELP_NO_SFS_SUB);
   //params.addFlag(ARG_PMAP, DEFAULT_PMAP, "", HELP_PMAP);
@@ -116,6 +118,7 @@ int main(int argc, char *argv[])
   bool INIT = params.getBoolFlag(ARG_INIT);
   int K = params.getIntFlag(ARG_K);
   bool FINALIZE = params.getBoolFlag(ARG_FINALIZE);
+  bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   //bool EHH_PART = params.getBoolFlag(ARG_EHH_PART);
   //bool PMAP = params.getBoolFlag(ARG_PMAP);
   //bool SFS_SUB = !(params.getBoolFlag(ARG_NO_SFS_SUB));
@@ -204,129 +207,75 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  
-
   string ending;
-  if(LASSI) ending = ".lassi.";
-
-  vector<string> outfiles; 
+  if(LASSI){
+    if(PHASED) ending = ".hap.lassi.";
+    if(!PHASED) ending = ".mlg.lassi.";
+  }
+ 
   if(INIT){
+    PopData *popData = readPopData(popFilename);
 
-    PopData *popData;
-    popData = readPopData(popFilename);
-    for (int i = 0; i < popData->popOrder.size(); i++){
-      outfiles.push_back(outfileBase + ending + popData->popOrder[i] + ".clrscan.spectra.gz");
-    }
-    
-    // Load VCF data
-    map< string, HaplotypeData* > *hapDataByPop;
-    hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData); 
-    MapData *mapData;
-    mapData = hapDataByPop->at(popData->popOrder[0])->map;  
+    if(LASSI){
+      if(PHASED) checkK(popData,double(K)/2.0);
+      else if(!PHASED) checkK(popData,double(K));
 
-    vector< pair_t* > *windows = findAllWindows(mapData, WINSIZE, WINSTEP);
+      string outfile = outfileBase + ending + "clrscan.spectra.gz";
+      map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED); 
 
-    cerr << "Calculating haplotype frequency spectra in " << windows->size() << " windows.\n";
-
-    string names = "";
-
-    map<string,double ** > results;
-    for(int j = 0;j < popData->popOrder.size(); j++){
-      double ** x = new double*[windows->size()];
-      for (int i = 0; i < windows->size(); i++) x[i] = new double[K];
-      results[popData->popOrder[j]] = x;
-    }
-
-    work_order_t *order;
-    pthread_t *peer = new pthread_t[numThreads];
-    int prev_index = 0;
-    for (int i = 0; i < numThreads; i++){
-      order = new work_order_t;
-      order->id = i;
-      //order->numStats = numStats;
-      order->hapDataByPop = hapDataByPop;
-      //order->mapData = mapData;
-      //order->freqData = freqData;
-      order->popData = popData;
-      //order->flog = &flog;
-      //order->bar = &pbar;
-      order->params = &params;
-      order->results = &results;
-      order->windows = windows;
-      order->names = &names;
-      //order->USE_BP = USE_BP;
-      pthread_create(&(peer[i]),
-                     NULL,
-                     (void *(*)(void *))calc_stats,
-                     (void *)order);
-    }
-
-    for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
-
-    delete [] peer;
-    cerr << "Done.\n";
-    
-    ogzstream fout;
-
-    for (int i = 0; i < outfiles.size(); i++){
-      string popName = popData->popOrder[i];
-      fout.open(outfiles[i].c_str());
-      if (fout.fail()) {
-        cerr << "ERROR: Failed to open " << outfiles[i] << " for writing.\n";
-        return 1;
+      LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K);
+      LASSI_work_order_t *order;
+      pthread_t *peer = new pthread_t[numThreads];
+      int prev_index = 0;
+      for (int i = 0; i < numThreads; i++){
+        order = new LASSI_work_order_t;
+        order->id = i;
+        order->hapDataByPop = hapDataByPop;
+        order->popData = popData;
+        order->params = &params;
+        order->results = results;
+        pthread_create(&(peer[i]),
+                       NULL,
+                       (void *(*)(void *))calc_LASSI_stats,
+                       (void *)order);
       }
-      fout << "#wins " << windows->size() << " K " << K << endl;
-      fout << "chr\tstart\tend\tnSNPs\tnhaps\t" << names << endl;
-      for (int w = 0; w < windows->size(); w++) {
-        int st = windows->at(w)->start;
-        int en = windows->at(w)->end;
-        fout << mapData->chr << "\t" 
-          << mapData->physicalPos[st] << "\t" 
-          << mapData->physicalPos[en] << "\t" 
-          << windows->at(w)->end - windows->at(w)->start + 1 << "\t"
-          << popData->pop2inds[popName].size()*2;
-        for (int s = 0; s < K; s++) {
-          double **x = results.at(popName);
-          fout << "\t" << x[w][s];
-        }
-        fout << endl;
-      }
-      fout.close();
+      for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
+      delete [] peer;
+      cerr << "Done.\n";
+      writeLASSIInitialResults(outfile, results, hapDataByPop->at(popData->popOrder[0])->map, popData, K);
     }
   }
   else{//finalize
     string outfile = outfileBase + ending + "clrscan.out.gz";
-    vector<SpectrumData *> *specDataByChr = readSpecData(spectraFiles);
-    
-    SpectrumData *avgSpec = averageSpec(specDataByChr);
-    for (int i = 0; i < avgSpec->K; i++) cerr << avgSpec->freq[0][i] << " ";
-    cerr << endl;
 
-    vector<LASSIResults *> *resultsByChr = initResults(specDataByChr);
+    map<string, vector<SpectrumData *>* > *specDataByPopByChr = readSpecData(spectraFiles);
+    map<string, SpectrumData* > *avgSpecByPop = averageSpec(specDataByPopByChr);
+    map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr);
 
-    work_order2_t *order;
+    LASSI_work_order2_t *order;
     pthread_t *peer = new pthread_t[numThreads];
     int prev_index = 0;
     for (int i = 0; i < numThreads; i++){
-      order = new work_order2_t;
+      order = new LASSI_work_order2_t;
       order->id = i;
-      order->specDataByChr = specDataByChr;
-      order->avgSpec = avgSpec;
-      order->resultsByChr = resultsByChr;
+      order->specDataByPopByChr = specDataByPopByChr;
+      order->avgSpecByPop = avgSpecByPop;
+      order->resultsByPopByChr = resultsByPopByChr;
       order->params = &params;
 
       pthread_create(&(peer[i]),
                      NULL,
-                     (void *(*)(void *))calc_stats2,
+                     (void *(*)(void *))calc_LASSI_stats2,
                      (void *)order);
     }
 
     for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
 
     delete [] peer;
-
     cerr << "Done.\n";
 
+    writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
+  /*
     ogzstream fout;
     fout.open(outfile.c_str());
     if (fout.fail()) {
@@ -342,7 +291,7 @@ int main(int argc, char *argv[])
         fout << results->m[w] << "\t" << results->T[w] << "\n";
       }
     }
-
+  */
   }
 
   return 0;

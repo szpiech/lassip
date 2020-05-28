@@ -19,7 +19,7 @@
 
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){
    double nullLikelihood = calcLASSINullLikelihood(specData,avgSpec,w);
-   cerr << "null: " << nullLikelihood << endl;
+   //cerr << "null: " << nullLikelihood << endl;
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
 
@@ -48,7 +48,7 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w){
    double res = 0;
    for (int i = 0; i < avgSpec->K; i++){
-      res += double(specData->info[w][4])*specData->freq[w][i]*log(avgSpec->freq[0][i]);
+      res += double(specData->nhaps[w])*specData->freq[w][i]*log(avgSpec->freq[0][i]);
    }
    return res;
 }
@@ -58,7 +58,7 @@ double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, dou
    if(m == K) return calcLASSINullLikelihood(specData,avgSpec,w);
 
    double *q = new double[K];
-   
+
    for(int i = m+1; i <= K; i++){
       if(m == K-1) q[i-1] = e;
       else q[i-1] = U - double(i-m-1.0)/double(K-m-1.0) * (U - e);
@@ -72,7 +72,7 @@ double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, dou
 
    double res = 0;
    for (int i = 0; i < avgSpec->K; i++){
-      res += double(specData->info[w][4])*specData->freq[w][i]*log(q[i]);
+      res += double(specData->nhaps[w])*specData->freq[w][i]*log(q[i]);
    }
    delete [] q;
    return res;
@@ -515,16 +515,17 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
 
    //Populate count2hap and sortedCounts
    int *sortedCount = new int[hfs->hap2count.size()]; //could contain duplicates
-   hfs->numUniq = hfs->hap2count.size();
+   hfs->numClasses = hfs->hap2count.size();
    map<string, int>::iterator it;
    int i = 0;
    for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++, i++) {
       sortedCount[i] = it->second;//unsorted
+      hfs->size += it->second;
       //hfs->count2hap.insert(pair<int, string>(it->second, it->first));
    }
 
    qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);//sorted but with possible duplicates
-   //hfs->sortedCount = uniqInt(sortedCount, hfs->numUniq, hfs->size);//remove duplicates
+   //hfs->sortedCount = uniqInt(sortedCount, hfs->numClasses, hfs->size);//remove duplicates
    hfs->sortedCount = sortedCount;
    //delete [] sortedCount;
 

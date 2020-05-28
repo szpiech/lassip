@@ -69,6 +69,7 @@ const string HELP_PARTITION = "Partition the sliding window into non-overlapping
 const int MAX_PARTITION = 20;
 */
 // Statistics flags
+
 const string ARG_LASSI = "--lassi";
 const bool DEFAULT_LASSI = false;
 const string HELP_LASSI = "Set this flag to use the LASSI method.";
@@ -85,6 +86,8 @@ const string HELP_SFINDER = "Set this flag to use the SweepFinder method.";
 const string ARG_SFINDER2 = "--sweepfinder2";
 const bool DEFAULT_SFINDER2 = false;
 const string HELP_SFINDER2 = "Set this flag to use the SweepFinder2 method.";
+
+
 /*
 const string ARG_PI = "--pi";
 const bool DEFAULT_PI = false;
@@ -134,6 +137,11 @@ const string HELP_K = "Top K haplotypes for LASSI computations.";
 const string ARG_FINALIZE = "--finalize";
 const bool DEFAULT_FINALIZE = false;
 const string HELP_FINALIZE = "Finalize computations.";
+
+const string ARG_UNPHASED = "--unphased";
+const bool DEFAULT_UNPHASED = false;
+const string HELP_UNPHASED = "Set this flag to indicate data are unphased.";
+
 /*
 const string ARG_EHH_PART = "--ehh-part";
 const bool DEFAULT_EHH_PART = false;

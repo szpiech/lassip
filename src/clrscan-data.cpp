@@ -16,6 +16,148 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 #include "clrscan-data.h"
+#include "clrscan-wintools.h"
+
+vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
+    vector< pair_t* > *windows = new vector< pair_t* >;
+    int numSnps = mapData->nloci;
+    if (USE_BP){
+        int endOfData = mapData->physicalPos[numSnps - 1];  
+        int snpIndexStart = 0;
+
+        for (int currWinStart = 0; currWinStart < endOfData; currWinStart += WINSTEP/*, currWinEnd += WINSTEP*/) {  
+            //Find SNP index boundaries for the whole window
+            pair_t *snps = findInclusiveSNPIndicies(snpIndexStart, currWinStart, WINSIZE, mapData);
+            windows->push_back(snps);
+            snpIndexStart = snps->start;
+        }
+    }
+    else{//USE_SITES
+        for (int i = 0; i < numSnps; i += WINSTEP){
+            pair_t* snps = new pair_t;
+            snps->start = i;
+            if (i+WINSIZE-1 >= numSnps){
+                delete snps;
+                return windows;
+            }
+            else{
+                snps->end = i+WINSIZE-1;
+            }
+            snps->winStart = mapData->physicalPos[i];
+            windows->push_back(snps);
+        }
+    }
+    return windows;
+}
+
+void releaseAllWindows(vector< pair_t* > *windows) {
+    for (int i = 0; i < windows->size(); i++) delete windows->at(i);
+    delete windows;
+    return;
+}
+
+void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr, map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+    ogzstream fout;
+    fout.open(outfile.c_str());
+    if (fout.fail()) {
+      cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+      throw 1;
+    }
+
+    int nchr = 0;
+    vector<int> nwins;
+    map<string, vector<LASSIResults *>* >::iterator it;
+    fout << "chr\tstart\tend\tnSNPs";
+    for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
+        nchr = it->second->size();
+        fout << "\t" << it->first << "_nhaps\t" 
+            << it->first << "_m\t"
+            << it->first << "_T";
+    }
+    fout << endl;
+
+    for(int c = 0; c < nchr; c++) nwins.push_back(resultsByPopByChr->begin()->second->at(c)->nwins);
+
+    SpectrumData *specData;
+    LASSIResults *results;
+    unsigned int **info;
+    unsigned int *nhaps;
+    
+    for(int c = 0; c < nchr; c++){
+        for(int w = 0; w < nwins[c]; w++){
+            info = specDataByPopByChr->begin()->second->at(c)->info;
+            for(int i = 0; i < 4; i++){
+                fout << info[w][i];
+                if(i<3) fout << "\t";
+            }
+            for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
+                nhaps = specDataByPopByChr->at(it->first)->at(c)->nhaps;
+                results = it->second->at(c);
+                fout << "\t" << nhaps[w] << "\t" << results->m[w] << "\t" << results->T[w];
+            }
+            fout << endl;
+        }
+    }
+    return;
+}
+
+void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, MapData *mapData, PopData *popData, int K){
+    ogzstream fout;
+
+    fout.open(outfile.c_str());
+    if (fout.fail()) {
+      cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+      throw 1;
+    }
+
+    fout << "#wins " << results->windows->size() << " K " << K << " npop " << popData->popOrder.size();
+    for(int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
+    fout << endl;
+    fout << "chr\tstart\tend\tnSNPs";
+    for(int p = 0; p < popData->popOrder.size(); p++){
+      fout << "\t" << popData->popOrder[p] << "_nhaps\t" << results->names->at(popData->popOrder[p]);
+    }
+    fout << endl;
+    
+    for (int w = 0; w < results->windows->size(); w++) {
+      int st = results->windows->at(w)->start;
+      int en = results->windows->at(w)->end;
+      fout << mapData->chr << "\t" 
+        << mapData->physicalPos[st] << "\t" 
+        << mapData->physicalPos[en] << "\t" 
+        << results->windows->at(w)->end - results->windows->at(w)->start + 1;
+      for(int p = 0; p < popData->popOrder.size(); p++){
+        string popName = popData->popOrder[p];
+        double **x = results->data->at(popName);
+        fout << "\t" << x[w][K];
+        for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
+      }
+      fout << endl;
+    }
+    fout.close();
+    return;
+}
+
+
+LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K){
+    MapData *mapData = hapDataByPop->at(popData->popOrder[0])->map;
+
+    LASSIInitialResults *results = new LASSIInitialResults;
+
+    results->windows = findAllWindows(mapData, WINSIZE, WINSTEP);
+    cerr << "Calculating haplotype frequency spectra in " << results->windows->size() << " windows.\n";
+    
+    results->names = new map<string,string>;
+    results->data = new map<string,double ** >;
+
+    for(int j = 0;j < popData->popOrder.size(); j++){
+      double ** x = new double*[results->windows->size()];
+      for (int i = 0; i < results->windows->size(); i++) x[i] = new double[K+1];
+      results->data->operator[](popData->popOrder[j]) = x;
+      results->names->operator[](popData->popOrder[j]) = "";
+    }
+    return results;
+}
 
 LASSIResults *initResults(int nwins){
     LASSIResults *data = new LASSIResults;
@@ -27,6 +169,15 @@ LASSIResults *initResults(int nwins){
         data->T[i] = 0;
     }
     return data;
+}
+
+map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+    map<string, vector<LASSIResults *>* > *resultsByPopByChr = new map<string, vector<LASSIResults *>* >;
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        resultsByPopByChr->operator[](it->first) = initResults(it->second);
+    }
+    return resultsByPopByChr;
 }
 
 vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr){
@@ -46,6 +197,17 @@ void releaseResults(LASSIResults *data){
     return;
 }
 
+//need for each pop
+map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+    map<string, SpectrumData* > *avgSpecByPop = new map<string, SpectrumData* >;
+
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        avgSpecByPop->operator[](it->first) = averageSpec(it->second);
+    }
+    return avgSpecByPop;
+}
+
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr){
     int K = specDataByChr->at(0)->K;
     unsigned int nwins = 0;
@@ -61,29 +223,52 @@ SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr){
     return avgSpec;
 }
 
-vector<SpectrumData *> *readSpecData(vector<string> filenames){
-    vector<SpectrumData *> *specDataByChr = new vector<SpectrumData *>;
-    SpectrumData *specData;
-    int K = 0;
-    for (int i = 0; i < filenames.size(); i++){
-      specData = readSpecData(filenames[i]);
-      cerr << "Read " << filenames[i] << endl;
-      if (i > 0 && K != specData->K){
-        cerr << "ERROR: K's don't match.\n";
-        throw 0;
-      }
-      K = specData->K;
-      specDataByChr->push_back(specData);
+map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
+
+    map<string, vector<SpectrumData *>* > *specDataByPopByChr = new map<string, vector<SpectrumData *>* >;
+    map<string, SpectrumData *> *specDataByPop = readSpecData(filenames[0]);
+    int K = specDataByPop->begin()->second->K;
+    int npops = specDataByPop->size();
+    cerr << "Read " << filenames[0] << " with " << npops << " pops and K = " << K << endl;
+
+    map<string, SpectrumData *>::iterator it;
+    for(it = specDataByPop->begin(); it != specDataByPop->end(); it++){
+        specDataByPopByChr->operator[](it->first) = new vector<SpectrumData *>;
+        specDataByPopByChr->at(it->first)->push_back(it->second);
     }
-    return specDataByChr;
+    
+    for (int i = 1; i < filenames.size(); i++){
+        specDataByPop = readSpecData(filenames[i]);
+
+        cerr << "Read " << filenames[i] << " with " << specDataByPop->size() 
+            << " pops and K = " << specDataByPop->begin()->second->K << endl;
+      
+        if (K != specDataByPop->begin()->second->K || npops != specDataByPop->size()){
+            cerr << "ERROR: K's don't match.\n";
+            throw 0;
+        }
+      
+        K = specDataByPop->begin()->second->K;
+
+        for(it = specDataByPop->begin(); it != specDataByPop->end(); it++){
+            if(specDataByPopByChr->count(it->first) == 0){
+                cerr << "ERROR: Not all files have the same set of populations.\n";
+                throw 0;
+            }
+            specDataByPopByChr->at(it->first)->push_back(it->second);
+        }
+    }
+    return specDataByPopByChr;
 }
 
-SpectrumData *readSpecData(string filename){
+map<string, SpectrumData *> *readSpecData(string filename){
     igzstream fin;
     stringstream ss;
     string junk;
     unsigned int nwins;
-    int K;
+    int K, npop;
+    vector<string> popNames;
+
     fin.open(filename.c_str());
     if (fin.fail()) {
         cerr << "ERROR: Failed to open " << filename << " for writing.\n";
@@ -91,32 +276,56 @@ SpectrumData *readSpecData(string filename){
     }
     getline(fin,junk);
     ss.str(junk);
-    ss >> junk >> nwins >> junk >> K;
+    ss >> junk >> nwins >> junk >> K >> junk >> npop;
+    for(int i = 0; i < npop; i++){
+        ss >> junk;
+        popNames.push_back(junk);
+    }
     ss.clear();
-    SpectrumData *data = initSpecData(nwins,K);
+
+    map<string, SpectrumData *> *specDataByPop = new map<string, SpectrumData *>;
+    SpectrumData *data;
+    unsigned int **info = new unsigned int*[nwins];
+    for(int p = 0; p < npop; p++){
+        data = initSpecData(nwins,K,false);
+        data->info = info;
+        specDataByPop->operator[](popNames[p]) = data;
+    }
+    
     getline(fin,junk);
     for(int w = 0; w < nwins; w++){
+        info[w] = new unsigned int[4];
         getline(fin,junk);
         ss.str(junk);
-        for(int i = 0; i < 5; i++) ss >> data->info[w][i];
-        for(int i = 0; i < K; i++) ss >> data->freq[w][i];
+        for(int i = 0; i < 4; i++) ss >> info[w][i];
+        for(int p = 0; p < npop; p++){
+            data = specDataByPop->at(popNames[p]);
+            ss >> data->nhaps[w];
+            for(int i = 0; i < K; i++) ss >> data->freq[w][i];
+        }
         ss.clear();
     }
+
     fin.close();
-    return data;
+    return specDataByPop;
 }
-SpectrumData *initSpecData(int nwins, int K){
+
+SpectrumData *initSpecData(int nwins, int K, bool doinfo){
     SpectrumData *data = new SpectrumData;
     data->K = K;
     data->nwins = nwins;
     data->freq = new double*[nwins];
-    data->info = new unsigned int*[nwins];
+    if(doinfo) data->info = new unsigned int*[nwins];
+    else data->info = NULL;
+    data->nhaps = new unsigned int[nwins];
 
     for (int j = 0; j < nwins; j++){
         data->freq[j] = new double[K];
         for (int i = 0; i < K; i++) data->freq[j][i] = 0;
-        data->info[j] = new unsigned int[5];
-        for (int i = 0; i < 5; i++) data->info[j][i] = 0;
+        if(doinfo){
+            data->info[j] = new unsigned int[4];
+            for (int i = 0; i < 4; i++) data->info[j][i] = 0;
+        }
     }
     return data;
 }
@@ -141,7 +350,7 @@ HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum(){
     HaplotypeFrequencySpectrum *hfs = new HaplotypeFrequencySpectrum;
     hfs->sortedCount = NULL;
     hfs->size = 0;
-    hfs->numUniq = 0;
+    hfs->numClasses = 0;
     return hfs;
 }
 
@@ -190,6 +399,7 @@ void releasePopData(PopData *data){
     delete data;
 }
 
+
 PopData *readPopData(string filename){
     igzstream fin;
     cerr << "Opening " << filename << "...\n";
@@ -229,9 +439,21 @@ PopData *readPopData(string filename){
         ss.clear();
     }
     fin.close();
+
     return popData;
 }
 
+void checkK(PopData *popData, double K){
+    bool ERROR = false;
+    for(int p = 0; p < popData->popOrder.size(); p++){
+      if(popData->pop2inds[popData->popOrder[p]].size() < K){
+        cerr << "ERROR: K is greater than total number of haplotypes in " << popData->popOrder[p] << ".\n";
+        ERROR = true;
+      }
+    }
+    if(ERROR) throw 1;
+    return;
+}
 
 FreqData *initFreqData(int nhaps, int nloci) {
     FreqData *freqData = new FreqData;
@@ -876,7 +1098,7 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
     return data;
 }
 
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData){
+map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData, bool PHASED){
     igzstream fin;
     cerr << "Opening " << filename << "...\n";
     fin.open(filename.c_str());
@@ -930,11 +1152,17 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         throw 0;
     }
 
-    int nhaps = (current_nhaps - numMapCols) * 2;
+    int nhaps;
+    if(PHASED) nhaps = (current_nhaps - numMapCols) * 2;
+    if(!PHASED) nhaps = (current_nhaps - numMapCols);
     int nfields = (current_nhaps - numMapCols);
     int nload = 0;
-    for (int i = 0; i < popData->npops; i++) nload += (popData->pop2inds[popData->popOrder[i]].size()) * 2;
-    cerr << "Loading " << nload << "/" << nhaps << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
+    for (int i = 0; i < popData->npops; i++) nload += (popData->pop2inds[popData->popOrder[i]].size());
+    if(PHASED) nload *= 2;
+    cerr << "Loading " << nload << "/" << nhaps << " ";
+    if(PHASED) cerr << "phased";
+    else if (!PHASED) cerr << "unphased"; 
+    cerr << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
 
     MapData *mapData = initMapData(nloci);
     //mapData->g = nhaps;
@@ -942,7 +1170,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     map<string, HaplotypeData* > * dataByPop = new map<string, HaplotypeData* >;
     for (int i = 0; i < popData->npops; i++){
         string popName = popData->popOrder[i];
-        nhaps = (popData->pop2inds[popName].size()) * 2;
+        if(PHASED) nhaps = (popData->pop2inds[popName].size()) * 2;
+        if(!PHASED) nhaps = (popData->pop2inds[popName].size());
         dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,false);
         dataByPop->at(popName)->map = mapData;
         pop2indIndex[popName] = 0;
@@ -972,7 +1201,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         }
     }
 
-    map<string,char> storeAs = storeMap();
+    //map<string,char> storeAs = storeMap();
 
     for (int locus = 0; locus < nloci; locus++)
     {
@@ -986,15 +1215,18 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         for (int field = 0; field < nfields; field++)
         {
             fin >> junk;
+            allele1 = junk[0];
+            allele2 = junk[2];
             if (popData->ind2pop.count(inds[field]) != 0){
-                extractAlleleStrs(junk,alleleStr1,alleleStr2);
-                if(storeAs.count(alleleStr1) == 0 || storeAs.count(alleleStr2) == 0){
-                    cerr << "ERROR: " << alleleStr1 << " or " << alleleStr2 << " not a valid allele coding.\n";
-                    cerr << "\tNumbers 0-61 and the missing code . are valid allele codings.\n";
+                //extractAlleleStrs(junk,alleleStr1,alleleStr2);
+                //if(storeAs.count(alleleStr1) == 0 || storeAs.count(alleleStr2) == 0){
+                if((allele1 != '1' && allele1 != '0' && allele1 != MISSING_ALLELE) || 
+                    (allele2 != '1' && allele2 != '0' && allele2 != MISSING_ALLELE)){
+                    cerr << "ERROR: Alleles must be coded 0/1/. only.\n";
                     throw 0;
                 }
-                allele1 = storeAs[alleleStr1];
-                allele2 = storeAs[alleleStr2];
+                //allele1 = storeAs[alleleStr1];
+                //allele2 = storeAs[alleleStr2];
 
                 string p = popData->ind2pop[inds[field]];
                 int f = pop2indIndex[p];
@@ -1004,10 +1236,25 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                 //else dataByPop->at(p)->freq->count[locus][allele2]++;
                 //if(allele1 == MISSING_ALLELE) dataByPop->at(p)->freq->nmissing[locus]++;
                 //if(allele2 == MISSING_ALLELE) dataByPop->at(p)->freq->nmissing[locus]++;
-                //if (allele1 == VCF_MISSING) dataByPop->at(p)->data[2 * f][locus] = MISSING_ALLELE;
-                /*else*/ dataByPop->at(p)->data[2 * f][locus] = allele1;
-                //if (allele2 == VCF_MISSING) dataByPop->at(p)->data[2 * f + 1][locus] = MISSING_ALLELE;
-                /*else*/ dataByPop->at(p)->data[2 * f + 1][locus] = allele2;
+                if(PHASED){
+                    if (allele1 == VCF_MISSING) dataByPop->at(p)->data[2 * f][locus] = MISSING_ALLELE;
+                    else dataByPop->at(p)->data[2 * f][locus] = allele1;
+                    if (allele2 == VCF_MISSING) dataByPop->at(p)->data[2 * f + 1][locus] = MISSING_ALLELE;
+                    else dataByPop->at(p)->data[2 * f + 1][locus] = allele2;
+                }
+                else if (!PHASED){
+                    if(allele1 == '1'){
+                        if(allele2 == '1') dataByPop->at(p)->data[f][locus] = '2';
+                        else if(allele2 == '0') dataByPop->at(p)->data[f][locus] = '1';
+                        else if(allele2 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
+                    }
+                    else if (allele1 == '0'){
+                        if(allele2 == '1') dataByPop->at(p)->data[f][locus] = '1';
+                        else if(allele2 == '0') dataByPop->at(p)->data[f][locus] = '0';
+                        else if(allele2 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
+                    }
+                    else if (allele1 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
+                }
                 pop2indIndex[p]++;
             }
         }
@@ -1018,6 +1265,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     return dataByPop;
 }
 
+/*
 void extractAlleleStrs(string gt, string &string1, string &string2){
     size_t loc = gt.find('/');
     if (loc == string::npos) loc = gt.find('|');
@@ -1029,7 +1277,7 @@ void extractAlleleStrs(string gt, string &string1, string &string2){
     string2 = gt.substr(loc+1,string::npos);
     return;
 }
-
+*/
 /*
 void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData){
     map< string, HaplotypeData* >::iterator it;
@@ -1132,7 +1380,7 @@ int countFields(const string &str)
     }
     return numFields;
 }
-
+/*
 map<string,char> storeMap(){
     map<string,char> x;
     x["0"] = '0';
@@ -1200,4 +1448,4 @@ map<string,char> storeMap(){
     x["."] = MISSING_ALLELE;
     return x;
 }
-
+*/

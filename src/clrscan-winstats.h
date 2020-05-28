@@ -28,6 +28,7 @@
 
 using namespace std;
 
+
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
 double **calcF(int type, int K);
