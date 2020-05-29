@@ -102,19 +102,30 @@ struct SpectrumData {
   int K;
   unsigned int **info;
   unsigned int *nhaps;
+  unsigned int *uhaps;
+  double *h12;
+  double *h2h1;
+  bool HAPSTATS;
+  bool PHASED;
 };
 
 struct LASSIResults {
   int *m;
   double *T;
+  double *h12;
+  double *h2h1;
   int nwins;
+  bool HAPSTATS;
 };
 
 struct LASSIInitialResults{
   vector< pair_t* > *windows;
   map<string,double ** > *data;
   map<string,string> *names;
+  map<string,double *> *h12;
+  map<string,double *> *h2h1;
 };
+
 
 
 
@@ -122,20 +133,20 @@ vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bo
 void releaseAllWindows(vector< pair_t* > *windows);
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, 
-                                int WINSIZE, int WINSTEP, int K);
+                                int WINSIZE, int WINSTEP, int K, bool HAPSTATS);
 void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, MapData *mapData,
-                              PopData *popData, int K);
+                              PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED);
 
 void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
                             map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 
-LASSIResults *initResults(int nwins);
+LASSIResults *initResults(int nwins, bool HAPSTATS);
 vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr);
 map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 
 void releaseResults(LASSIResults *data);
 
-SpectrumData *initSpecData(int nwins, int K, bool doinfo = true);
+SpectrumData *initSpecData(int nwins, int K, bool doinfo = true, bool HAPSTATS = true);
 void releaseSpecData(SpectrumData *data);
 
 map<string, SpectrumData *> *readSpecData(string filename);
@@ -161,7 +172,7 @@ PopData *readPopData(string filename);
 void checkK(PopData *data, double K);
 
 //allocates the arrays and populates them with -9 or "--" depending on type
-MapData *initMapData(int nhaps, int nloci);
+MapData *initMapData(int nloci);
 void releaseMapData(MapData *data);
 
 //allocates the arrays and populates them with MISSING

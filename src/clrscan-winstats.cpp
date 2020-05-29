@@ -17,6 +17,46 @@
 */
 #include "clrscan-winstats.h"
 
+double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
+   double tot = hfs->size;
+   int *c = hfs->sortedCount;
+   if(PHASED){
+      if(hfs->numClasses == 1){
+         return (double(c[0])/tot)*(double(c[0])/tot);
+      }
+      else if(hfs->numClasses == 2){
+         return ((double(c[0])/tot)+(double(c[1])/tot))*((double(c[0])/tot)+(double(c[1])/tot));
+      }
+      else if(hfs->numClasses > 2){
+         double res = ((double(c[0])/tot)+(double(c[1])/tot))*((double(c[0])/tot)+(double(c[1])/tot));
+         for(int i = 2; i < hfs->numClasses; i++){
+            res += (double(c[i])/tot)*(double(c[i])/tot);
+         }
+         return res;
+      }
+   }
+   else{
+      if(hfs->numClasses == 1){
+         return (double(c[0])/tot)*(double(c[0])/tot);
+      }
+      else if(hfs->numClasses == 2){
+         return ((double(c[0])/tot)+(double(c[1])/tot))*((double(c[0])/tot)+(double(c[1])/tot));
+      }
+      else if(hfs->numClasses == 3){
+         return ((double(c[0])/tot)+(double(c[1])/tot)+(double(c[2])/tot))*((double(c[0])/tot)+(double(c[1])/tot)+(double(c[2])/tot));
+      }
+      else if(hfs->numClasses > 3){
+         double res = ((double(c[0])/tot)+(double(c[1])/tot)+(double(c[2])/tot))*((double(c[0])/tot)+(double(c[1])/tot)+(double(c[2])/tot));
+         for(int i = 3; i < hfs->numClasses; i++){
+            res += (c[i]/tot)*(c[i]/tot);
+         }
+         return res;
+      }
+   }
+   
+   return -1;
+}
+
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){
    double nullLikelihood = calcLASSINullLikelihood(specData,avgSpec,w);
    //cerr << "null: " << nullLikelihood << endl;
@@ -31,7 +71,6 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
    for (int m = 1; m <= K; m++){
       for (double e = epsStep; e <= U; e += epsStep){
          altLikelihood = calcLASSIAltLikelihood(specData, avgSpec, f, U, m, e, w);
-         //cerr << "m=" << m << " e=" << e << " alt: "<< altLikelihood << endl;
          if(altLikelihood > maxAltLikelihood){
             maxAltLikelihood = altLikelihood;
             maxM = m;

@@ -31,6 +31,7 @@ using namespace std;
 
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
+double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED);
 double **calcF(int type, int K);
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);
