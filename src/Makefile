@@ -1,4 +1,4 @@
-# Makefile for clrscan
+# Makefile for lassip
 
 #debugging
 #G++FLAG = -g -Wall -Werror
@@ -31,22 +31,22 @@ L_PATH = ../lib/osx
 #For static linking of norm program to gsl libs
 LINK_OPTS = $(L_PATH)/libgsl.a $(L_PATH)/libgslcblas.a
 
-all : clrscan
+all : lassip
 
-clrscan : clrscan-main.o clrscan-data.o binom.o param_t.o gzstream.o clrscan-winstats.o clrscan-wintools.o
-	$(CC) $(G++FLAG) -o clrscan clrscan-main.o clrscan-data.o binom.o param_t.o gzstream.o clrscan-winstats.o clrscan-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
+lassip : lassip-main.o lassip-data.o binom.o param_t.o gzstream.o lassip-winstats.o lassip-wintools.o
+	$(CC) $(G++FLAG) -o lassip lassip-main.o lassip-data.o binom.o param_t.o gzstream.o lassip-winstats.o lassip-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
 
-clrscan-main.o : clrscan-main.cpp
-	$(CC) $(G++FLAG) -c clrscan-main.cpp $(I_PATH)
+lassip-main.o : lassip-main.cpp
+	$(CC) $(G++FLAG) -c lassip-main.cpp $(I_PATH)
 
-clrscan-data.o : clrscan-data.cpp
-	$(CC) $(G++FLAG) -c clrscan-data.cpp $(I_PATH)
+lassip-data.o : lassip-data.cpp
+	$(CC) $(G++FLAG) -c lassip-data.cpp $(I_PATH)
 
-clrscan-winstats.o : clrscan-winstats.cpp
-	$(CC) $(G++FLAG) -c clrscan-winstats.cpp $(I_PATH)
+lassip-winstats.o : lassip-winstats.cpp
+	$(CC) $(G++FLAG) -c lassip-winstats.cpp $(I_PATH)
 
-clrscan-wintools.o : clrscan-wintools.cpp
-	$(CC) $(G++FLAG) -c clrscan-wintools.cpp $(I_PATH)
+lassip-wintools.o : lassip-wintools.cpp
+	$(CC) $(G++FLAG) -c lassip-wintools.cpp $(I_PATH)
 
 binom.o : binom.cpp
 	$(CC) $(G++FLAG) -c binom.cpp

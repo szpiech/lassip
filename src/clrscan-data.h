@@ -1,4 +1,4 @@
-/* clrscan -- a program to calculate EHH-based scans for positive selection in genomes
+/* lassip -- a program to calculate haplotype frequency spectrum statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -16,8 +16,8 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#ifndef __CLRSCAN_DATA_H__
-#define __CLRSCAN_DATA_H__
+#ifndef __LASSIP_DATA_H__
+#define __LASSIP_DATA_H__
 #include <string>
 #include <iostream>
 #include <fstream>

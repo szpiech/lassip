@@ -1,4 +1,4 @@
-/* clrscan -- a program to calculate window-based diversity statistics
+/* lassip -- a program to calculate haplotype frequency spectrum statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -19,16 +19,16 @@
 #include <fstream>
 #include <string>
 #include "param_t.h"
-#include "clrscan-wintools.h"
-#include "clrscan-winstats.h"
-#include "clrscan-data.h"
-#include "clrscan-cli.h"
+#include "lassip-wintools.h"
+#include "lassip-winstats.h"
+#include "lassip-data.h"
+#include "lassip-cli.h"
 
 using namespace std;
 
 int main(int argc, char *argv[])
 {
-  cerr << "clrscan v" + VERSION + "\n";
+  cerr << "lassip v" + VERSION + "\n";
   param_t params;
   params.setPreamble(PREAMBLE);
 
@@ -174,8 +174,8 @@ int main(int argc, char *argv[])
     if(!PHASED) ending = ".mlg.";
 
     string outfile;
-    if(LASSI) outfile = outfileBase + ending + "clrscan.spectra.gz";
-    if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "clrscan.hapstats.gz";
+    if(LASSI) outfile = outfileBase + ending + "lassip.spectra.gz";
+    if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "lassip.hapstats.gz";
 
     map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED); 
 
@@ -234,7 +234,7 @@ int main(int argc, char *argv[])
     else{
       ending = ".mlg.";
     }
-    string outfile = outfileBase + ending + "clrscan.out.gz";
+    string outfile = outfileBase + ending + "lassip.out.gz";
     writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
   
   }

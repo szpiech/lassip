@@ -1,4 +1,4 @@
-/* clrscan -- a program to calculate EHH-based scans for positive selection in genomes
+/* lassip -- a program to calculate haploytpe frequency spetrum statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -15,8 +15,8 @@
    along with this program; if not, write to the Free Software Foundation,
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
-#include "clrscan-data.h"
-#include "clrscan-wintools.h"
+#include "lassip-data.h"
+#include "lassip-wintools.h"
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
     vector< pair_t* > *windows = new vector< pair_t* >;

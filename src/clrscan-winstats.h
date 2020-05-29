@@ -1,4 +1,4 @@
-/* clrscan -- a program to calculate window-based diversity statistics
+/* lassip -- a program to calculate haplotype frequency spectrum statistics
    Copyright (C) 2020  Zachary A Szpiech
 
    This program is free software; you can redistribute it and/or modify
@@ -16,10 +16,10 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#ifndef __CLRSCAN_WINSTATS_H__
-#define __CLRSCAN_WINSTATS_H__
+#ifndef __LASSIP_WINSTATS_H__
+#define __LASSIP_WINSTATS_H__
 
-#include "clrscan-data.h"
+#include "lassip-data.h"
 #include <map>
 #include <vector>
 #include <cstdlib>
