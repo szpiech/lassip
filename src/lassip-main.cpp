@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
   bool VCF = (vcfFilename.compare(DEFAULT_FILENAME_POP1_VCF) == 0) ? false : true;
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
   string popFilename = params.getStringFlag(ARG_FILENAME_POPFILE);
-  bool POP = (vcfFilename.compare(DEFAULT_FILENAME_POPFILE) == 0) ? false : true;
+  bool POP = (popFilename.compare(DEFAULT_FILENAME_POPFILE) == 0) ? false : true;
   vector<string> spectraFiles = params.getStringListFlag(ARG_FILENAME_SPECFILES);
   
   // Window control
@@ -170,12 +170,12 @@ int main(int argc, char *argv[])
     if(PHASED) checkK(popData,double(K)/2.0);
     else if(!PHASED) checkK(popData,double(K));
 
-    if(PHASED) ending = ".hap.";
-    if(!PHASED) ending = ".mlg.";
+    if(PHASED) ending = ".lassip.hap.";
+    if(!PHASED) ending = ".lassip.mlg.";
 
     string outfile;
-    if(LASSI) outfile = outfileBase + ending + "lassip.spectra.gz";
-    if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "lassip.hapstats.gz";
+    if(LASSI) outfile = outfileBase + ending + "spectra.gz";
+    if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
 
     map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED); 
 
@@ -229,12 +229,12 @@ int main(int argc, char *argv[])
     delete [] peer;
     cerr << "Done.\n";
     if(specDataByPopByChr->begin()->second->at(0)->PHASED){
-      ending = ".hap.";
+      ending = ".lassip.hap.";
     }
     else{
-      ending = ".mlg.";
+      ending = ".lassip.mlg.";
     }
-    string outfile = outfileBase + ending + "lassip.out.gz";
+    string outfile = outfileBase + ending + "out.gz";
     writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
   
   }
