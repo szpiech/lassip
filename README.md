@@ -1,2 +1,1 @@
-# clrscan
-Composite Likelihood Ratio Scans for Selection
+# LASSI Plus - a program to calculate haplotype frequency spectrum statistics
