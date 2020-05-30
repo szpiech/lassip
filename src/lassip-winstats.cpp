@@ -79,6 +79,10 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
       }
    }
 
+   //m == K is identical to the neutral background
+   //so set the number of sweeping haplotypes to 0
+   if(maxM == K) maxM = 0;
+
    results->m[w] = maxM;
    results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
    return;
