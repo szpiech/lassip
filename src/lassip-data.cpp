@@ -80,7 +80,8 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     fout << "chr\tstart\tend\tnSNPs";
     for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
         nchr = it->second->size();
-        fout << "\t" << it->first << "_nhaps\t";
+        fout << "\t" << it->first << "_nhaps";
+        fout << "\t" << it->first << "_uhaps\t";
         if(HAPSTATS){
             fout << it->first << "_" << h12 << "\t" 
                 << it->first << "_" << h2h1 << "\t";
@@ -96,6 +97,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     LASSIResults *results;
     unsigned int **info;
     unsigned int *nhaps;
+    unsigned int *uhaps;
     
     for(int c = 0; c < nchr; c++){
         for(int w = 0; w < nwins[c]; w++){
@@ -106,8 +108,10 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
             }
             for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
                 nhaps = specDataByPopByChr->at(it->first)->at(c)->nhaps;
+                uhaps = specDataByPopByChr->at(it->first)->at(c)->uhaps;
                 results = it->second->at(c);
                 fout << "\t" << nhaps[w] << "\t";
+                fout << uhaps[w] << "\t";
                 if(HAPSTATS){
                     fout << results->h12[w] << "\t"
                         << results->h2h1[w] << "\t";
