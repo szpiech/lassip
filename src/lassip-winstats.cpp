@@ -57,6 +57,16 @@ double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
    return -1;
 }
 
+double calcH2H1(HaplotypeFrequencySpectrum *hfs){
+   double tot = hfs->size;
+   double first = (double(c[0])/tot)*(double(c[0])/tot);
+   double res = first;
+   for(int i = 1; i < hfs->numClasses; i++){
+      res += (double(c[i])/tot)*(double(c[i])/tot);
+   }
+   return (res-first)/res;
+}
+
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){
    double nullLikelihood = calcLASSINullLikelihood(specData,avgSpec,w);
    //cerr << "null: " << nullLikelihood << endl;

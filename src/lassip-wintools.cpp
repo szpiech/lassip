@@ -71,7 +71,8 @@ void calc_LASSI_stats(void *order) {
 			x[i][K+1] = hfs->hap2count.size();
 			if(HAPSTATS){
 				h12[i] = calcH12(hfs, PHASED);
-				h2h1[i] = x[i][1]/x[i][0];
+				//h2h1[i] = x[i][1]/x[i][0];
+				h2h1[i] = calcH2H1(hfs);
 			}
 			releaseHaplotypeFrequencySpectrum(hfs);
 		}
