@@ -32,7 +32,7 @@ using namespace std;
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
 double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED);
-double calcH2H1(HaplotypeFrequencySpectrum *hfs, bool PHASED);
+double calcH2H1(HaplotypeFrequencySpectrum *hfs);
 double **calcF(int type, int K);
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);

@@ -58,6 +58,7 @@ double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
 }
 
 double calcH2H1(HaplotypeFrequencySpectrum *hfs){
+   int *c = hfs->sortedCount;
    double tot = hfs->size;
    double first = (double(c[0])/tot)*(double(c[0])/tot);
    double res = first;
