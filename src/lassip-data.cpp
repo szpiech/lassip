@@ -18,6 +18,73 @@
 #include "lassip-data.h"
 #include "lassip-wintools.h"
 
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL){
+    if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
+        int nOriginalLoci = 0;
+        int totHaps = 0;
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            totHaps += hapDataByPop->at(popData->popOrder[p])->nhaps;
+            if(p == 0) nOriginalLoci = hapDataByPop->at(popData->popOrder[p])->nloci;
+        }
+        int *count = new int[nOriginalLoci];
+        int *nmissing = new int[nOriginalLoci];
+        for(int i = 0; i < nOriginalLoci; i++){
+            count[i] = 0;
+            nmissing[i] = 0;
+        }
+
+        cerr << totHaps << " " << nOriginalLoci << endl;
+
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            cerr << popName << endl;
+            for(int l = 0; l < hapData->nloci; l++){
+                for(int h = 0; h < hapData->nhaps; h++){
+                    count[l] += (hapData->data[l][h] == '1') ? 1 : 0;
+                    nmissing[l] += (hapData->data[l][h] == MISSING_ALLELE) ? 1 : 0;
+                }
+            }
+        }
+        int keepLoci = 0;
+        for(int i = 0; i < nOriginalLoci; i++){
+            if(count[i] > 0 && count[i] < totHaps - nmissing[i]) keepLoci++;
+        }
+
+        cerr << nOriginalLoci - keepLoci << " marked for filtering.\n";
+
+        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
+            int l0 = 0;
+            for(int l = 0; l < hapData->nloci; l++){
+                if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
+                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
+                    for(int h = 0; h < hapData->nhaps; h++){
+                        newHapDataByPop->at(popName)->data[l0][h] = hapData->data[l][h];
+                    }
+                    l0++;
+                }
+            }
+            releaseHapData(hapData);
+        }
+
+        delete [] count;
+        delete [] nmissing;
+        delete hapDataByPop;
+        return newHapDataByPop;
+
+    }
+    else{//FILTER_LEVEL == 2, filter sites monomorphic within pops
+
+    }
+}
+
+
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
     vector< pair_t* > *windows = new vector< pair_t* >;
     int numSnps = mapData->nloci;
@@ -124,77 +191,140 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     return;
 }
 
-void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, MapData *mapData, PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED){
+void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED, int FILTER_LEVEL){
+    string ending, outfile;
     ogzstream fout;
-
-    fout.open(outfile.c_str());
-    if (fout.fail()) {
-      cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
-      throw 1;
-    }
-
+    if(PHASED) ending = ".lassip.hap.";
+    if(!PHASED) ending = ".lassip.mlg.";
     string h12 = "h12";
     string h2h1 = "h2h1";
     if(!PHASED){
         h12 = "g123";
         h2h1 = "g2g1";
-    } 
+    }    
 
-    if (LASSI){
-        fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << results->windows->size() << " K " << K << " npop " << popData->popOrder.size();
-        for(int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
+    if(FILTER_LEVEL < 2){
+        if(LASSI) outfile = outfileBase + ending + "spectra.gz";
+        if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
+
+        fout.open(outfile.c_str());
+        if (fout.fail()) {
+            cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+            throw 1;
+        }
+        
+        vector< pair_t* > *windows = results->windows->begin()->second;
+        MapData *mapData = hapDataByPop->begin()->second->map;
+
+        if (LASSI){
+            fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << popData->popOrder.size();
+            for(int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
+            fout << endl;
+        }
+        fout << "chr\tstart\tend\tnSNPs";
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            fout << "\t" << popData->popOrder[p] << "_nhaps\t" << popData->popOrder[p] << "_uhaps\t";
+            if(HAPSTATS) fout << popData->popOrder[p] << "_" << h12 << "\t" << popData->popOrder[p] << "_" << h2h1 << "\t";
+            if(LASSI) fout << results->names->at(popData->popOrder[p]);
+        }
         fout << endl;
-    }
-    fout << "chr\tstart\tend\tnSNPs";
-    for(int p = 0; p < popData->popOrder.size(); p++){
-        fout << "\t" << popData->popOrder[p] << "_nhaps\t" << popData->popOrder[p] << "_uhaps\t";
-        if(HAPSTATS) fout << popData->popOrder[p] << "_" << h12 << "\t" << popData->popOrder[p] << "_" << h2h1 << "\t";
-        if(LASSI) fout << results->names->at(popData->popOrder[p]);
-    }
-    fout << endl;
     
 
-    for (int w = 0; w < results->windows->size(); w++) {
-      int st = results->windows->at(w)->start;
-      int en = results->windows->at(w)->end;
-      fout << mapData->chr << "\t" 
-        << mapData->physicalPos[st] << "\t" 
-        << mapData->physicalPos[en] << "\t" 
-        << results->windows->at(w)->end - results->windows->at(w)->start + 1;
-      for(int p = 0; p < popData->popOrder.size(); p++){
-        string popName = popData->popOrder[p];
-        double **x = results->data->at(popName);
-        double *h12;
-        double *h2h1;
-        if(HAPSTATS){
-            h12 = results->h12->at(popName);
-            h2h1 = results->h2h1->at(popName);
+        for (int w = 0; w < windows->size(); w++) {
+            int st = windows->at(w)->start;
+            int en = windows->at(w)->end;
+            fout << mapData->chr << "\t" 
+                << mapData->physicalPos[st] << "\t" 
+                << mapData->physicalPos[en] << "\t" 
+                << windows->at(w)->end - windows->at(w)->start + 1;
+            for(int p = 0; p < popData->popOrder.size(); p++){
+                string popName = popData->popOrder[p];
+                double **x = results->data->at(popName);
+                double *h12;
+                double *h2h1;
+                if(HAPSTATS){
+                    h12 = results->h12->at(popName);
+                    h2h1 = results->h2h1->at(popName);
+                }
+                fout << "\t" << x[w][K];
+                fout << "\t" << x[w][K+1];
+                if(HAPSTATS){
+                    fout << "\t" << h12[w];
+                    fout << "\t" << h2h1[w];
+                }
+                if(LASSI){
+                    for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
+                }       
+            }
+            fout << endl;
         }
-        fout << "\t" << x[w][K];
-        fout << "\t" << x[w][K+1];
-        if(HAPSTATS){
-            fout << "\t" << h12[w];
-            fout << "\t" << h2h1[w];
-        }
-        if(LASSI){
-            for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
-        }
-      }
-      fout << endl;
+        fout.close();
     }
-    fout.close();
+    else{
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            MapData *mapData = hapDataByPop->at(popName)->map;
+            vector< pair_t* > *windows = results->windows->at(popName);
+
+            if(LASSI) outfile = outfileBase + "." + popName + ending + "spectra.gz";
+            if(!LASSI && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
+
+            fout.open(outfile.c_str());
+            if (fout.fail()) {
+                cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+                throw 1;
+            }
+
+            if (LASSI){
+                fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << 1;
+                fout << " " << popName;
+                fout << endl;
+            }
+        
+            fout << "chr\tstart\tend\tnSNPs";
+            fout << "\t" << popName << "_nhaps\t" << popName << "_uhaps\t";
+            if(HAPSTATS) fout << popName << "_" << h12 << "\t" << popName << "_" << h2h1 << "\t";
+            if(LASSI) fout << results->names->at(popName);
+            fout << endl;
+
+            for (int w = 0; w < windows->size(); w++) {
+                int st = windows->at(w)->start;
+                int en = windows->at(w)->end;
+                fout << mapData->chr << "\t" 
+                    << mapData->physicalPos[st] << "\t" 
+                    << mapData->physicalPos[en] << "\t" 
+                    << windows->at(w)->end - windows->at(w)->start + 1;
+                double **x = results->data->at(popName);
+                double *h12;
+                double *h2h1;
+                if(HAPSTATS){
+                    h12 = results->h12->at(popName);
+                    h2h1 = results->h2h1->at(popName);
+                }
+                fout << "\t" << x[w][K];
+                fout << "\t" << x[w][K+1];
+                if(HAPSTATS){
+                    fout << "\t" << h12[w];
+                    fout << "\t" << h2h1[w];
+                }
+                if(LASSI){
+                    for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
+                }       
+                fout << endl;
+            }
+            fout.close();
+            fout.clear();
+        }
+    }
     return;
 }
 
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K, bool HAPSTATS){
-    MapData *mapData = hapDataByPop->at(popData->popOrder[0])->map;
+    
 
     LASSIInitialResults *results = new LASSIInitialResults;
-
-    results->windows = findAllWindows(mapData, WINSIZE, WINSTEP);
-    cerr << "Calculating haplotype frequency spectra in " << results->windows->size() << " windows.\n";
-    
+    results->windows = new map<string,vector< pair_t* > *>;
     results->names = new map<string,string>;
     results->data = new map<string,double ** >;
     if(HAPSTATS){
@@ -203,23 +333,30 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
     }
 
     for(int j = 0;j < popData->popOrder.size(); j++){
-        double ** x = new double*[results->windows->size()];
+        string popName = popData->popOrder[j];
+        MapData *mapData = hapDataByPop->at(popName)->map;
+
+        results->windows->operator[](popName) = findAllWindows(mapData, WINSIZE, WINSTEP);
+        cerr << "Calculating haplotype frequency spectra in " << results->windows->at(popName)->size() << " windows ";
+        cerr << "in pop " << popName << ".\n";
+
+        double ** x = new double*[results->windows->at(popName)->size()];
         double *h12;
         double *h2h1;
 
         if(HAPSTATS){
-            h12 = new double[results->windows->size()];
-            h2h1 = new double[results->windows->size()];
+            h12 = new double[results->windows->at(popName)->size()];
+            h2h1 = new double[results->windows->at(popName)->size()];
         }
 
-        for (int i = 0; i < results->windows->size(); i++) x[i] = new double[K+2];
+        for (int i = 0; i < results->windows->at(popName)->size(); i++) x[i] = new double[K+2];
 
-        results->data->operator[](popData->popOrder[j]) = x;
-        results->names->operator[](popData->popOrder[j]) = "";
+        results->data->operator[](popName) = x;
+        results->names->operator[](popName) = "";
 
         if(HAPSTATS){
-            results->h12->operator[](popData->popOrder[j]) = h12;
-            results->h2h1->operator[](popData->popOrder[j]) = h2h1;
+            results->h12->operator[](popName) = h12;
+            results->h2h1->operator[](popName) = h2h1;
         }
     }
     return results;
@@ -1274,7 +1411,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     else if (!PHASED) cerr << "unphased"; 
     cerr << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
 
-    MapData *mapData = initMapData(nloci);
+    //MapData *mapData = initMapData(nloci);
+    //MapData *mapData;
     //mapData->g = nhaps;
     map<string,int> pop2indIndex;
     map<string, HaplotypeData* > * dataByPop = new map<string, HaplotypeData* >;
@@ -1282,8 +1420,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         string popName = popData->popOrder[i];
         if(PHASED) nhaps = (popData->pop2inds[popName].size()) * 2;
         if(!PHASED) nhaps = (popData->pop2inds[popName].size());
-        dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,false);
-        dataByPop->at(popName)->map = mapData;
+        dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,true);
+        //dataByPop->at(popName)->map = mapData;
         pop2indIndex[popName] = 0;
     }
 
@@ -1297,12 +1435,17 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
 
     for (int locus = 0; locus < nloci; locus++)
     {
-        for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
+        //for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
 
         fin >> chr >> pos >> name >> ref >> alt >> qual >> filter >> info >> format;
-        if (locus == 0) mapData->chr = chr;
-        mapData->locusName[locus] = name;
-        mapData->physicalPos[locus] = pos;
+        for (int i = 0; i < popData->npops; i++){
+            string popName = popData->popOrder[i];
+            pop2indIndex[popName] = 0;
+            if (locus == 0) dataByPop->at(popName)->map->chr = chr;
+            dataByPop->at(popName)->map->locusName[locus] = name;
+            dataByPop->at(popName)->map->physicalPos[locus] = pos;
+        }
+
         //cerr << mapData->physicalPos[locus] << " ";
         for (int field = 0; field < nfields; field++)
         {
@@ -1596,7 +1739,7 @@ HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool do
     }
 
     if (domap) data->map = initMapData(nloci);
-    data->freq = initFreqData(nhaps, nloci);
+    //data->freq = initFreqData(nhaps, nloci);
     //data->Q = NULL;
 
     return data;
@@ -1613,11 +1756,12 @@ void releaseHapData(HaplotypeData *data)
     delete [] data->data;
 
     if(data->map != NULL) releaseMapData(data->map);
-    if(data->freq != NULL) releaseFreqData(data->freq);
+    //if(data->freq != NULL) releaseFreqData(data->freq);
     data->map = NULL;
     data->data = NULL;
     data->nhaps = -9;
     data->nloci = -9;
+    delete data;
     data = NULL;
     return;
 }

@@ -24,7 +24,7 @@ void calc_LASSI_stats(void *order) {
 	map< string, HaplotypeData* > *hapDataByPop = p->hapDataByPop;
 	PopData *popData = p->popData;
 	param_t *params = p->params;
-	vector< pair_t* > *windows = p->results->windows;
+	
 	int WINSIZE = params->getIntFlag(ARG_WINSIZE);
 	map<string,double **> *results = p->results->data;
 	map<string,double *> *h12ByPop = p->results->h12;
@@ -40,8 +40,10 @@ void calc_LASSI_stats(void *order) {
 	pair_t *snps;
 
 	string popName;
-	for (int p = 0; p < popData->npops; p++){
-		popName = popData->popOrder[p];
+	for (int pop = 0; pop < popData->npops; pop++){
+		popName = popData->popOrder[pop];
+		vector< pair_t* > *windows = p->results->windows->at(popName);
+
 		for (int i = id; i < windows->size(); i += numThreads) {
 			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps);

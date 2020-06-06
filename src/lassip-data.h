@@ -61,7 +61,7 @@ struct HaplotypeData
   int nhaps;
   int nloci;
   MapData *map;
-  FreqData *freq;
+  //FreqData *freq;
 };
 
 struct array_t
@@ -119,7 +119,7 @@ struct LASSIResults {
 };
 
 struct LASSIInitialResults{
-  vector< pair_t* > *windows;
+  map<string,vector< pair_t* > *> *windows;
   map<string,double ** > *data;
   map<string,string> *names;
   map<string,double *> *h12;
@@ -134,8 +134,8 @@ void releaseAllWindows(vector< pair_t* > *windows);
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, 
                                 int WINSIZE, int WINSTEP, int K, bool HAPSTATS);
-void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, MapData *mapData,
-                              PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED);
+void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop,
+                              PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED, int FILTER_LEVEL);
 
 void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
                             map<string, vector<SpectrumData *>* > *specDataByPopByChr);
@@ -201,6 +201,8 @@ HaplotypeData *readHaplotypeDataVCF(string filename);
 //vector< HaplotypeData* > *readHaplotypeDataTPED(string filename, PopData *data);
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED);
 //void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL);
+
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace

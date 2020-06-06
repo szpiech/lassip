@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_K, DEFAULT_K, "", HELP_K);
   //params.addFlag(ARG_FINALIZE, DEFAULT_FINALIZE, "", HELP_FINALIZE);  
   params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
+  params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "", HELP_FILTER_LEVEL);
 
   
   try {
@@ -83,10 +84,9 @@ int main(int argc, char *argv[])
   bool HAPSTATS = params.getBoolFlag(ARG_HAPSTATS);
 
   // Other flags
-  
   int K = params.getIntFlag(ARG_K);
-  
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
+  int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -122,6 +122,11 @@ int main(int argc, char *argv[])
 
     if (WINSTEP < 1) {
       cerr << "ERROR: Window step size needs to be greater than 0.\n";
+      ERROR = true;
+    }
+
+    if(FILTER_LEVEL != 0 && FILTER_LEVEL != 1 && FILTER_LEVEL != 2){
+      cerr << "ERROR: Filter level must be 0, 1, or 2.\n";
       ERROR = true;
     }
 
@@ -170,14 +175,11 @@ int main(int argc, char *argv[])
     if(PHASED) checkK(popData,double(K)/2.0);
     else if(!PHASED) checkK(popData,double(K));
 
-    if(PHASED) ending = ".lassip.hap.";
-    if(!PHASED) ending = ".lassip.mlg.";
+    map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED);
 
-    string outfile;
-    if(LASSI) outfile = outfileBase + ending + "spectra.gz";
-    if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
-
-    map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED); 
+    if(FILTER_LEVEL > 0){
+      hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL);
+    } 
 
     LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS);
     LASSI_work_order_t *order;
@@ -198,7 +200,7 @@ int main(int argc, char *argv[])
     for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
     delete [] peer;
     cerr << "Done.\n";
-    writeLASSIInitialResults(outfile, results, hapDataByPop->at(popData->popOrder[0])->map, popData, K, LASSI, HAPSTATS, PHASED);
+    writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, LASSI, HAPSTATS, PHASED, FILTER_LEVEL);
   }
   else{//finalize
     

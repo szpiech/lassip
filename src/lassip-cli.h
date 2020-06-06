@@ -81,6 +81,10 @@ const string ARG_K = "--k";
 const int DEFAULT_K = 10;
 const string HELP_K = "Top K haplotypes for LASSI computations.";
 
+const string ARG_FILTER_LEVEL = "--filter-level";
+const int DEFAULT_FILTER_LEVEL = 0;
+const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
+
 /*
 const string ARG_FINALIZE = "--finalize";
 const bool DEFAULT_FINALIZE = false;
