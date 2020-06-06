@@ -45,11 +45,15 @@ or
 
 Depending on whether --hapstats was set when the *.spectra.gz files were generated. The final 4/6 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. m gives the inferred number of sweeping haplotypes, and T gives the CLR test statistic (Harris and DeGiorgio 2020).
 
+If --filter-level 2 is given, loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.0.0
+lassip v1.0.1
 
 ----------Command Line Arguments----------
+
+--filter-level <int>: Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.
+	Default: 0
 
 --hapstats <bool>: Set this flag to calculate haplotype statistics.
 	Default: false

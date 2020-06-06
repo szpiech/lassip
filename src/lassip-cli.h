@@ -19,7 +19,7 @@
 #ifndef __LASSIP_CLI_H__
 #define __LASSIP_CLI_H__
 
-const string VERSION = "1.0.0";
+const string VERSION = "1.0.1";
 
 const string PREAMBLE = "";
 

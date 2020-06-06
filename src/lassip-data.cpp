@@ -33,16 +33,13 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             nmissing[i] = 0;
         }
 
-        cerr << totHaps << " " << nOriginalLoci << endl;
-
         for(int p = 0; p < popData->popOrder.size(); p++){
             string popName = popData->popOrder[p];
             HaplotypeData *hapData = hapDataByPop->at(popName);
-            cerr << popName << endl;
             for(int l = 0; l < hapData->nloci; l++){
                 for(int h = 0; h < hapData->nhaps; h++){
-                    count[l] += (hapData->data[l][h] == '1') ? 1 : 0;
-                    nmissing[l] += (hapData->data[l][h] == MISSING_ALLELE) ? 1 : 0;
+                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
                 }
             }
         }
@@ -51,7 +48,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             if(count[i] > 0 && count[i] < totHaps - nmissing[i]) keepLoci++;
         }
 
-        cerr << nOriginalLoci - keepLoci << " marked for filtering.\n";
+        cerr << "Filtering " << nOriginalLoci - keepLoci << " loci.\n";
 
         map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
 
@@ -65,7 +62,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
                     newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
                     newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
-                        newHapDataByPop->at(popName)->data[l0][h] = hapData->data[l][h];
+                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
                     }
                     l0++;
                 }
@@ -80,6 +77,53 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
 
     }
     else{//FILTER_LEVEL == 2, filter sites monomorphic within pops
+        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+
+        for(int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            
+            int nOriginalLoci = hapDataByPop->at(popName)->nloci;
+            int totHaps = hapDataByPop->at(popName)->nhaps;
+
+            int *count = new int[nOriginalLoci];
+            int *nmissing = new int[nOriginalLoci];
+            for(int i = 0; i < nOriginalLoci; i++){
+                count[i] = 0;
+                nmissing[i] = 0;
+            }
+
+            for(int l = 0; l < hapData->nloci; l++){
+                for(int h = 0; h < hapData->nhaps; h++){
+                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
+                }
+            }
+            
+            int keepLoci = 0;
+            for(int i = 0; i < nOriginalLoci; i++){
+                if(count[i] > 0 && count[i] < totHaps - nmissing[i]) keepLoci++;
+            }
+
+            cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
+            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
+            int l0 = 0;
+            for(int l = 0; l < hapData->nloci; l++){
+                if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
+                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
+                    for(int h = 0; h < hapData->nhaps; h++){
+                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
+                    }
+                    l0++;
+                }
+            }
+            releaseHapData(hapData);
+            delete [] count;
+            delete [] nmissing;
+        }
+        delete hapDataByPop;
+        return newHapDataByPop;
 
     }
 }
