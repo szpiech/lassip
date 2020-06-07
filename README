@@ -106,4 +106,6 @@ lassip v1.0.2
 	1 - filter all loci that are monomorphic in the samples selected for analysis
 	2 - filter monomorphic loci on a population by population basis
 
+	Also fixed error in computation of H2/H1 and G2/G1.
+
 26MAY2020 - Initial release v1.0.0
