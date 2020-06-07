@@ -175,7 +175,7 @@ int main(int argc, char *argv[])
     if(PHASED) checkK(popData,double(K)/2.0);
     else if(!PHASED) checkK(popData,double(K));
 
-    map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED);
+    map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED, (FILTER_LEVEL < 2));
 
     if(FILTER_LEVEL > 0){
       hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL);

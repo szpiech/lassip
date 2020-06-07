@@ -51,22 +51,34 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         cerr << "Filtering " << nOriginalLoci - keepLoci << " loci.\n";
 
         map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+        MapData *oldMapData = hapDataByPop->begin()->second->map;
+        MapData *newMapData = initMapData(keepLoci);
+        int l0 = 0;
+        for(int l = 0; l < oldMapData->nloci; l++){
+            if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+                newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
+                newMapData->locusName[l0] = oldMapData->locusName[l];
+                l0++;
+            }
+        }
+
+        releaseMapData(oldMapData);
 
         for(int p = 0; p < popData->popOrder.size(); p++){
             string popName = popData->popOrder[p];
             HaplotypeData *hapData = hapDataByPop->at(popName);
-            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
-            int l0 = 0;
+            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
+            l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
                 if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
-                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
-                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
                         newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
                     }
                     l0++;
                 }
             }
+            newHapDataByPop->at(popName)->map = newMapData;
+            hapData->map = NULL;
             releaseHapData(hapData);
         }
 
@@ -1389,7 +1401,7 @@ HaplotypeData *readHaplotypeDataVCF(string filename)
 }
 
 
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData, bool PHASED){
+map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData, bool PHASED, bool SHARED_MAP){
     igzstream fin;
     cerr << "Opening " << filename << "...\n";
     fin.open(filename.c_str());
@@ -1455,17 +1467,23 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     else if (!PHASED) cerr << "unphased"; 
     cerr << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
 
-    //MapData *mapData = initMapData(nloci);
-    //MapData *mapData;
-    //mapData->g = nhaps;
+    
+    MapData *mapData;
+    if(SHARED_MAP) mapData = initMapData(nloci);
+
     map<string,int> pop2indIndex;
     map<string, HaplotypeData* > * dataByPop = new map<string, HaplotypeData* >;
     for (int i = 0; i < popData->npops; i++){
         string popName = popData->popOrder[i];
         if(PHASED) nhaps = (popData->pop2inds[popName].size()) * 2;
         if(!PHASED) nhaps = (popData->pop2inds[popName].size());
-        dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,true);
-        //dataByPop->at(popName)->map = mapData;
+        if(SHARED_MAP){
+            dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,false);
+            dataByPop->at(popName)->map = mapData;
+        }
+        else{
+            dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,true);
+        }
         pop2indIndex[popName] = 0;
     }
 
@@ -1482,14 +1500,21 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         //for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
 
         fin >> chr >> pos >> name >> ref >> alt >> qual >> filter >> info >> format;
-        for (int i = 0; i < popData->npops; i++){
-            string popName = popData->popOrder[i];
-            pop2indIndex[popName] = 0;
-            if (locus == 0) dataByPop->at(popName)->map->chr = chr;
-            dataByPop->at(popName)->map->locusName[locus] = name;
-            dataByPop->at(popName)->map->physicalPos[locus] = pos;
+        if(SHARED_MAP){
+            for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
+            if (locus == 0) mapData->chr = chr;
+            mapData->locusName[locus] = name;
+            mapData->physicalPos[locus] = pos;
         }
-
+        else{
+            for (int i = 0; i < popData->npops; i++){
+                string popName = popData->popOrder[i];
+                pop2indIndex[popName] = 0;
+                if (locus == 0) dataByPop->at(popName)->map->chr = chr;
+                dataByPop->at(popName)->map->locusName[locus] = name;
+                dataByPop->at(popName)->map->physicalPos[locus] = pos;
+            }
+        }
         //cerr << mapData->physicalPos[locus] << " ";
         for (int field = 0; field < nfields; field++)
         {

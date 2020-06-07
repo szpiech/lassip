@@ -199,7 +199,7 @@ void releaseHapData(HaplotypeData *data);
 HaplotypeData *readHaplotypeDataVCF(string filename);
 
 //vector< HaplotypeData* > *readHaplotypeDataTPED(string filename, PopData *data);
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED);
+map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED, bool SHARED_MAP);
 //void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL);
 
