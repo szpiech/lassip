@@ -9,7 +9,7 @@ G123: Harris et al. (2018) Genetics 210:1419-1452.
 G2/G1: Harris et al. (2018) Genetics 210:1419-1452.
 Number of Unique Haplotypes at Locus
 
-lassip accepts VCF files, either phased (default, "hap" output files) or unphased (set --unphased, "mlg" output files), with or without missing data. lassip expectes one vcf file per contig, provided one at a time. You must provide a population file that specifies population IDs for each individual ID you wish to analyse. Only IDs listed in the population file will be analyzed, and if multiple populations are present, all statistics will be computed on a per-population basis.
+lassip accepts VCF files, either phased (default, "hap" output files) or unphased (set --unphased, "mlg" output files), with or without missing data. lassip expects one vcf file per contig, provided one at a time. You must provide a population file that specifies population IDs for each individual ID you wish to analyse. Only IDs listed in the population file will be analyzed, and if multiple populations are present, all statistics will be computed on a per-population basis.
 
 Use --hapstats to compute H/G stats in sliding windows along the genome, whether or not data are phased determines whether H or G statistics are used. 
 
@@ -48,7 +48,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given, loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.0.1
+lassip v1.0.2
 
 ----------Command Line Arguments----------
 
@@ -96,3 +96,14 @@ lassip v1.0.1
 --winstep <int>: The sliding window step size.
 	Default: 0
 
+
+***CHANGE LOG***
+
+07JUN2020 - v1.0.2 Memory improvements for filter levels < 2.
+
+06JUN2020 - v1.0.1 Options for filtering monomorphic loci with --filter-level
+	0 - no filtering
+	1 - filter all loci that are monomorphic in the samples selected for analysis
+	2 - filter monomorphic loci on a population by population basis
+
+26MAY2020 - Initial release v1.0.0
