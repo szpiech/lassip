@@ -45,9 +45,11 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_WINSTEP, DEFAULT_WINSTEP, "", HELP_WINSTEP);
   
   // Statistics flags
+  params.addFlag(ARG_CALC_SPEC, DEFAULT_CALC_SPEC, "", HELP_CALC_SPEC);
   params.addFlag(ARG_LASSI, DEFAULT_LASSI, "", HELP_LASSI);
   params.addFlag(ARG_LASSI_CHOICE, DEFAULT_LASSI_CHOICE, "", HELP_LASSI_CHOICE);
   params.addFlag(ARG_HAPSTATS, DEFAULT_HAPSTATS, "", HELP_HAPSTATS);
+  params.addFlag(ARG_SALTI, DEFAULT_SALTI, "", HELP_SALTI);
   
   // Other flags
   //params.addFlag(ARG_INIT, DEFAULT_INIT, "", HELP_INIT);
@@ -55,7 +57,7 @@ int main(int argc, char *argv[])
   //params.addFlag(ARG_FINALIZE, DEFAULT_FINALIZE, "", HELP_FINALIZE);  
   params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
   params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "", HELP_FILTER_LEVEL);
-
+  params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
   
   try {
     params.parseCommandLine(argc, argv);
@@ -82,11 +84,14 @@ int main(int argc, char *argv[])
   bool LASSI = params.getBoolFlag(ARG_LASSI);
   int LASSI_CHOICE = params.getIntFlag(ARG_LASSI_CHOICE);
   bool HAPSTATS = params.getBoolFlag(ARG_HAPSTATS);
+  bool SALTI = params.getBoolFlag(ARG_SALTI);
+  bool CALC_SPEC = params.getBoolFlag(ARG_CALC_SPEC);
 
   // Other flags
   int K = params.getIntFlag(ARG_K);
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
+  string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -130,6 +135,21 @@ int main(int argc, char *argv[])
       ERROR = true;
     }
 
+    if(DIST_TYPE.compare("bp") != 0 &&
+      //DIST_TYPE.compare("cm") != 0 &&
+      DIST_TYPE.compare("ns") != 0 &&
+      DIST_TYPE.compare("nw") != 0){
+      cerr << "ERROR: Must choose bp, cm, ns, or nw for distance measure.\n";
+      ERROR = true;
+    }
+    if (!CALC_SPEC && !HAPSTATS){
+      cerr << "ERROR: Must use --calc-spec or --hapstats.\n";
+      ERROR = true;
+    }    
+    if (CALC_SPEC && K < 1){
+      cerr << "ERROR: K must be >= 1.\n";
+      ERROR = true;
+    }
   }
 
   if(FINALIZE){
@@ -141,26 +161,17 @@ int main(int argc, char *argv[])
       cerr << "ERROR: --lassi-choice must be an integer in {1..5}.\n";
       ERROR = true;
     }
-  }
-
-  if (!LASSI && !HAPSTATS){
-    cerr << "ERROR: Must use --lassi, --hapstats, or both.\n";
-    ERROR = true;
-  }
-
-  if (LASSI){
-    if(K < 1){
-      cerr << "ERROR: K must be >= 1.\n";
+  
+    if (!LASSI && !SALTI){
+      cerr << "ERROR: Must use --lassi xor --salti for analyzing haplotype spectra.\n";
+      ERROR = true;
+    }
+    if(LASSI && SALTI){
+      cerr << "ERROR: Must choose only one of --lassi or --salti for analyzing haplotype spectra.\n";
       ERROR = true;
     }
   }
-  
-/*
-  if (TPED && VCF) {
-    cerr << "ERROR: Must provide a TPED or VCF not both.\n";
-    ERROR = true;
-  }
-*/
+
   if (ERROR) {
     return 1;
   }
@@ -181,10 +192,10 @@ int main(int argc, char *argv[])
       hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL);
     } 
 
-    LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS);
+    LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
     LASSI_work_order_t *order;
     pthread_t *peer = new pthread_t[numThreads];
-    int prev_index = 0;
+    
     for (int i = 0; i < numThreads; i++){
       order = new LASSI_work_order_t;
       order->id = i;
@@ -200,36 +211,76 @@ int main(int argc, char *argv[])
     for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
     delete [] peer;
     cerr << "Done.\n";
-    writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, LASSI, HAPSTATS, PHASED, FILTER_LEVEL);
+    writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);
   }
   else{//finalize
     
 
     map<string, vector<SpectrumData *>* > *specDataByPopByChr = readSpecData(spectraFiles);
     map<string, SpectrumData* > *avgSpecByPop = averageSpec(specDataByPopByChr);
-    map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr);
+    map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
-    LASSI_work_order2_t *order;
-    pthread_t *peer = new pthread_t[numThreads];
-    int prev_index = 0;
-    for (int i = 0; i < numThreads; i++){
-      order = new LASSI_work_order2_t;
-      order->id = i;
-      order->specDataByPopByChr = specDataByPopByChr;
-      order->avgSpecByPop = avgSpecByPop;
-      order->resultsByPopByChr = resultsByPopByChr;
-      order->params = &params;
+    if(LASSI){
+      LASSI_work_order2_t *order;
+      pthread_t *peer = new pthread_t[numThreads];
+    
+      for (int i = 0; i < numThreads; i++){
+        order = new LASSI_work_order2_t;
+        order->id = i;
+        order->specDataByPopByChr = specDataByPopByChr;
+        order->avgSpecByPop = avgSpecByPop;
+        order->resultsByPopByChr = resultsByPopByChr;
+        order->params = &params;
 
-      pthread_create(&(peer[i]),
-                     NULL,
-                     (void *(*)(void *))calc_LASSI_stats2,
-                     (void *)order);
+        pthread_create(&(peer[i]),
+                        NULL,
+                       (void *(*)(void *))calc_LASSI_stats2,
+                       (void *)order);      
+      }
+
+      for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
+      delete [] peer;
+      cerr << "Done.\n";
+    }
+    else if (SALTI){
+      map<string, vector<SpectrumData *>* >::iterator it;
+      //pop
+      for (it = specDataByPopByChr->begin(); it != specDataByPopByChr->begin(); it++){
+        string popName = it->first;
+        SpectrumData *avgSpec = avgSpecByPop->at(popName);
+        vector<SpectrumData *> *specDataByChr = specDataByPopByChr->at(popName);
+        vector<LASSIResults *> *resultsByChr = resultsByPopByChr->at(popName);
+        //chr
+        for(int c = 0; c < specDataByChr->size(); c++){
+          SALTI_work_order_t *order;
+          pthread_t *peer = new pthread_t[numThreads];
+          int nwins = specDataByChr->at(c)->nwins;
+          K = specDataByChr->at(c)->K;
+          double U = avgSpec->freq[0][K-1];
+          double ****q = initQ(nwins,K,U);
+          for (int i = 0; i < numThreads; i++){
+            order = new SALTI_work_order_t;
+            order->id = i;
+            order->specData = specDataByChr->at(c);
+            order->avgSpec = avgSpec;
+            order->results = resultsByChr->at(c);
+            order->params = &params;
+            order->q = q;
+
+            pthread_create(&(peer[i]),
+                            NULL,
+                           (void *(*)(void *))calc_SALTI_stats1,
+                           (void *)order);      
+          }
+
+          for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
+          delete [] peer;
+          cerr << "Done.\n";
+        }
+      }
     }
 
-    for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
 
-    delete [] peer;
-    cerr << "Done.\n";
     if(specDataByPopByChr->begin()->second->at(0)->PHASED){
       ending = ".lassip.hap.";
     }
@@ -237,7 +288,7 @@ int main(int argc, char *argv[])
       ending = ".lassip.mlg.";
     }
     string outfile = outfileBase + ending + "out.gz";
-    writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
+    //writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
   
   }
 

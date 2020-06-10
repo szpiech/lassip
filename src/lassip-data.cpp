@@ -18,6 +18,32 @@
 #include "lassip-data.h"
 #include "lassip-wintools.h"
 
+double ****initQ(int nwins,int K, double U){
+    double ****q = new double***[nwins];
+    int nEps = int(U*100.0*K);
+    for(int w = 0; w < nwins; w++){
+        q[w] = new double **[nEps];
+        for(int e = 0; e < nEps; e++){
+            q[w][e] = new double *[K-1];
+            for(int m = 0; m < K-1; m++) q[w][e][m] = new double[K];
+        }
+    }
+    return q;
+}
+
+void releaseQ(double ****q, int nwins,int K, double U){
+    int nEps = int(U*100.0*K);
+    for(int w = 0; w < nwins; w++){
+        for(int e = 0; e < nEps; e++){
+            for(int m = 0; m < K-1; m++) delete [] q[w][e][m];
+            delete [] q[w][e];
+        }
+        delete [] q[w];
+    }
+    delete [] q;
+    return;
+}
+
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL){
     if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
         int nOriginalLoci = 0;
@@ -200,7 +226,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     int nchr = 0;
     vector<int> nwins;
     map<string, vector<LASSIResults *>* >::iterator it;
-    fout << "chr\tstart\tend\tnSNPs";
+    fout << "chr\tstart\tend\tnSNPs\tpos";
     for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
         nchr = it->second->size();
         fout << "\t" << it->first << "_nhaps";
@@ -221,14 +247,14 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     unsigned int **info;
     unsigned int *nhaps;
     unsigned int *uhaps;
+    double *dist;
     
     for(int c = 0; c < nchr; c++){
         for(int w = 0; w < nwins[c]; w++){
             info = specDataByPopByChr->begin()->second->at(c)->info;
-            for(int i = 0; i < 4; i++){
-                fout << info[w][i];
-                if(i<3) fout << "\t";
-            }
+            dist = specDataByPopByChr->begin()->second->at(c)->dist;
+            for(int i = 0; i < 4; i++) fout << info[w][i] << "\t";
+            fout << setprecision(10) << dist[w] << setprecision(6);
             for(it = resultsByPopByChr->begin(); it != resultsByPopByChr->end(); it++){
                 nhaps = specDataByPopByChr->at(it->first)->at(c)->nhaps;
                 uhaps = specDataByPopByChr->at(it->first)->at(c)->uhaps;
@@ -247,7 +273,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     return;
 }
 
-void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED, int FILTER_LEVEL){
+void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE){
     string ending, outfile;
     ogzstream fout;
     if(PHASED) ending = ".lassip.hap.";
@@ -259,9 +285,17 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
         h2h1 = "g2g1";
     }    
 
+    string distStr;
+    if(DIST_TYPE.compare("bp") == 0) distStr = "ppos";
+    else if (DIST_TYPE.compare("gm") == 0) distStr = "gpos";
+    else if (DIST_TYPE.compare("ns") == 0) distStr = "siteNum";
+    else if (DIST_TYPE.compare("nw") == 0) distStr = "winNum";
+
+    //bool SPECFILE = LASSI || SALTI;
+
     if(FILTER_LEVEL < 2){
-        if(LASSI) outfile = outfileBase + ending + "spectra.gz";
-        if(!LASSI && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
+        if(SPECFILE) outfile = outfileBase + ending + "spectra.gz";
+        if(!SPECFILE && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
 
         fout.open(outfile.c_str());
         if (fout.fail()) {
@@ -272,27 +306,31 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
         vector< pair_t* > *windows = results->windows->begin()->second;
         MapData *mapData = hapDataByPop->begin()->second->map;
 
-        if (LASSI){
+        if (SPECFILE){
             fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << popData->popOrder.size();
             for(int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
             fout << endl;
         }
-        fout << "chr\tstart\tend\tnSNPs";
+        fout << "chr\tstart\tend\tnSNPs\t" << distStr;
         for(int p = 0; p < popData->popOrder.size(); p++){
             fout << "\t" << popData->popOrder[p] << "_nhaps\t" << popData->popOrder[p] << "_uhaps\t";
             if(HAPSTATS) fout << popData->popOrder[p] << "_" << h12 << "\t" << popData->popOrder[p] << "_" << h2h1 << "\t";
-            if(LASSI) fout << results->names->at(popData->popOrder[p]);
+            if(SPECFILE) fout << results->names->at(popData->popOrder[p]);
         }
         fout << endl;
     
-
+        double *dist = results->dist->begin()->second;
+        
         for (int w = 0; w < windows->size(); w++) {
             int st = windows->at(w)->start;
             int en = windows->at(w)->end;
             fout << mapData->chr << "\t" 
                 << mapData->physicalPos[st] << "\t" 
-                << mapData->physicalPos[en] << "\t" 
-                << windows->at(w)->end - windows->at(w)->start + 1;
+                << mapData->physicalPos[en] << "\t"
+                << windows->at(w)->end - windows->at(w)->start + 1 << "\t"
+                << setprecision(10) 
+                << dist[w]
+                << setprecision(6);
             for(int p = 0; p < popData->popOrder.size(); p++){
                 string popName = popData->popOrder[p];
                 double **x = results->data->at(popName);
@@ -308,7 +346,7 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
                     fout << "\t" << h12[w];
                     fout << "\t" << h2h1[w];
                 }
-                if(LASSI){
+                if(SPECFILE){
                     for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
                 }       
             }
@@ -322,8 +360,8 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             MapData *mapData = hapDataByPop->at(popName)->map;
             vector< pair_t* > *windows = results->windows->at(popName);
 
-            if(LASSI) outfile = outfileBase + "." + popName + ending + "spectra.gz";
-            if(!LASSI && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
+            if(SPECFILE) outfile = outfileBase + "." + popName + ending + "spectra.gz";
+            if(!SPECFILE && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
 
             fout.open(outfile.c_str());
             if (fout.fail()) {
@@ -331,39 +369,44 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
                 throw 1;
             }
 
-            if (LASSI){
+            if (SPECFILE){
                 fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << 1;
                 fout << " " << popName;
                 fout << endl;
             }
         
-            fout << "chr\tstart\tend\tnSNPs";
+            fout << "chr\tstart\tend\tnSNPs\t" << distStr;
             fout << "\t" << popName << "_nhaps\t" << popName << "_uhaps\t";
             if(HAPSTATS) fout << popName << "_" << h12 << "\t" << popName << "_" << h2h1 << "\t";
-            if(LASSI) fout << results->names->at(popName);
+            if(SPECFILE) fout << results->names->at(popName);
             fout << endl;
+            
+            double *dist = results->dist->at(popName);
+            double *h12;
+            double *h2h1;
+            if(HAPSTATS){
+                h12 = results->h12->at(popName);
+                h2h1 = results->h2h1->at(popName);
+            }
+            double **x = results->data->at(popName);
 
             for (int w = 0; w < windows->size(); w++) {
                 int st = windows->at(w)->start;
-                int en = windows->at(w)->end;
+                int en = windows->at(w)->end; 
                 fout << mapData->chr << "\t" 
                     << mapData->physicalPos[st] << "\t" 
-                    << mapData->physicalPos[en] << "\t" 
-                    << windows->at(w)->end - windows->at(w)->start + 1;
-                double **x = results->data->at(popName);
-                double *h12;
-                double *h2h1;
-                if(HAPSTATS){
-                    h12 = results->h12->at(popName);
-                    h2h1 = results->h2h1->at(popName);
-                }
-                fout << "\t" << x[w][K];
-                fout << "\t" << x[w][K+1];
+                    << mapData->physicalPos[en] << "\t"
+                    << windows->at(w)->end - windows->at(w)->start + 1 << "\t"
+                    << setprecision(10) 
+                    << dist[w]
+                    << setprecision(6)
+                    << "\t" << x[w][K]
+                    << "\t" << x[w][K+1];
                 if(HAPSTATS){
                     fout << "\t" << h12[w];
                     fout << "\t" << h2h1[w];
                 }
-                if(LASSI){
+                if(SPECFILE){
                     for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
                 }       
                 fout << endl;
@@ -376,7 +419,7 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
 }
 
 
-LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K, bool HAPSTATS){
+LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K, bool HAPSTATS, string DIST_TYPE){
     
 
     LASSIInitialResults *results = new LASSIInitialResults;
@@ -387,6 +430,7 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
         results->h12 = new map<string,double *>;
         results->h2h1 = new map<string,double *>;
     }
+    results->dist = new map<string,double *>;
 
     for(int j = 0;j < popData->popOrder.size(); j++){
         string popName = popData->popOrder[j];
@@ -399,13 +443,23 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
         double ** x = new double*[results->windows->at(popName)->size()];
         double *h12;
         double *h2h1;
+        double *dist = new double[results->windows->at(popName)->size()];;
 
         if(HAPSTATS){
             h12 = new double[results->windows->at(popName)->size()];
             h2h1 = new double[results->windows->at(popName)->size()];
         }
-
-        for (int i = 0; i < results->windows->at(popName)->size(); i++) x[i] = new double[K+2];
+        
+        vector< pair_t* > *wins = results->windows->at(popName);
+        for (int i = 0; i < results->windows->at(popName)->size(); i++){
+            x[i] = new double[K+2];
+            int st = wins->at(i)->start;
+            int en = wins->at(i)->end;
+            if(DIST_TYPE.compare("bp") == 0) dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
+            else if(DIST_TYPE.compare("cm") == 0) dist[i] = i; //NEED TO UPDATE TO USING GENETIC MAP
+            else if(DIST_TYPE.compare("ns") == 0) dist[i] = (en-st+1)*0.5+st;
+            else if(DIST_TYPE.compare("nw") == 0) dist[i] = i;
+        }
 
         results->data->operator[](popName) = x;
         results->names->operator[](popName) = "";
@@ -414,22 +468,30 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
             results->h12->operator[](popName) = h12;
             results->h2h1->operator[](popName) = h2h1;
         }
+        results->dist->operator[](popName) = dist;
     }
     return results;
 }
 
-LASSIResults *initResults(int nwins, bool HAPSTATS){
+LASSIResults *initResults(int nwins, bool HAPSTATS, bool SALTI){
     LASSIResults *data = new LASSIResults;
     data->m = new int[nwins];
     data->nwins = nwins;
     data->T = new double[nwins];
+    if(SALTI) data->A = new double[nwins];
+    else data->A = NULL;
     if(HAPSTATS){
         data->h12 = new double[nwins];
         data->h2h1 = new double[nwins];
     }
+    else{
+        data->h12 = NULL;
+        data->h2h1 = NULL;
+    }
     for(int i = 0; i < nwins; i++){
         data->m[i] = 0;
         data->T[i] = 0;
+        if(SALTI) data->A[i] = 0;
         if(HAPSTATS){
             data->h12[i] = 0;
             data->h2h1[i] = 0;
@@ -438,20 +500,22 @@ LASSIResults *initResults(int nwins, bool HAPSTATS){
     return data;
 }
 
-map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr, bool SALTI){
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = new map<string, vector<LASSIResults *>* >;
     map<string, vector<SpectrumData *>* >::iterator it;
     for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
-        resultsByPopByChr->operator[](it->first) = initResults(it->second);
+        resultsByPopByChr->operator[](it->first) = initResults(it->second, SALTI);
     }
     return resultsByPopByChr;
 }
 
-vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr){
+vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr, bool SALTI){
     vector<LASSIResults *> *dataByChr = new vector<LASSIResults *>;
     LASSIResults *data;
     for(int i = 0; i < specDataByChr->size(); i++){
-        data = initResults(specDataByChr->at(i)->nwins, false);
+        data = initResults(specDataByChr->at(i)->nwins, false, SALTI);
+        //data->dist = specDataByChr->at(i)->dist;
+        //specDataByChr->at(i)->dist = NULL;
         if(specDataByChr->at(i)->HAPSTATS){
             data->h12 = specDataByChr->at(i)->h12;
             specDataByChr->at(i)->h12 = NULL;
@@ -468,6 +532,10 @@ void releaseResults(LASSIResults *data){
     if (data == NULL) return;
     if (data->m != NULL) delete [] data->m;
     if (data->T != NULL) delete [] data->T;
+    if (data->A != NULL) delete [] data->A;
+    if (data->h12 != NULL) delete [] data->h12;
+    if (data->h2h1 != NULL) delete [] data->h2h1;
+
     return;
 }
 
@@ -574,9 +642,11 @@ map<string, SpectrumData *> *readSpecData(string filename){
     map<string, SpectrumData *> *specDataByPop = new map<string, SpectrumData *>;
     SpectrumData *data;
     unsigned int **info = new unsigned int*[nwins];
+    double *dist = new double[nwins];
     for(int p = 0; p < npop; p++){
         data = initSpecData(nwins,K,false, HAPSTATS);
         data->info = info;
+        data->dist = dist;
         data->HAPSTATS = HAPSTATS;
         data->PHASED = PHASED;
         specDataByPop->operator[](popNames[p]) = data;
@@ -588,6 +658,7 @@ map<string, SpectrumData *> *readSpecData(string filename){
         getline(fin,junk);
         ss.str(junk);
         for(int i = 0; i < 4; i++) ss >> info[w][i];
+        ss >> dist[w];
         for(int p = 0; p < npop; p++){
             data = specDataByPop->at(popNames[p]);
             ss >> data->nhaps[w];

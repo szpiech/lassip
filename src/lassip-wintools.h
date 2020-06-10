@@ -44,9 +44,20 @@ struct LASSI_work_order2_t
     map<string, vector<SpectrumData *>* > *specDataByPopByChr;
     map<string, SpectrumData* > *avgSpecByPop;
     map<string, vector<LASSIResults *>* > *resultsByPopByChr;
-
     param_t *params;
 };
+
+//Use this for first phase precomputing the Qs
+struct SALTI_work_order_t
+{
+    int id;
+    SpectrumData *specData;
+    SpectrumData *avgSpec;
+    double ****q; //win->e->m->i
+    param_t *params;
+    LASSIResults *results;
+};
+
 
 
 pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData);
@@ -57,6 +68,7 @@ pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZ
 
 void calc_LASSI_stats2(void *work_order);
 void calc_LASSI_stats(void *work_order);
+void calc_SALTI_stats1(void *order);
 
 string int2str(int i);
 

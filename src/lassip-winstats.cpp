@@ -17,6 +17,40 @@
 */
 #include "lassip-winstats.h"
 
+void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
+   int K = avgSpec->K;
+   double U = avgSpec->freq[0][K-1];
+
+   int maxM = -1;
+   double maxE = -1;
+   double maxAltLikelihood = -99999999;
+   double altLikelihood = -99999999;
+   double epsStep = 1.0/(100.0*double(K));
+   int ei = 0;
+   for (double e = epsStep; e <= U; e += epsStep){
+      for (int m = 1; m < K; m++){
+         calcQ(q[ei][m-1], avgSpec, f, U, m, e, w);
+      }
+      ei++;
+   }
+   return;
+}
+void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double e, int w){
+   int K = avgSpec->K;
+
+   for(int i = m+1; i <= K; i++){
+      if(m == K-1) q[i-1] = e;
+      else q[i-1] = U - double(i-m-1.0)/double(K-m-1.0) * (U - e);
+   }
+   for(int i = 1; i <= m; i++){
+      q[i-1] = 0;
+      for(int j = m+1; j <= K; j++) q[i-1] += avgSpec->freq[0][j-1] - q[j-1];
+      q[i-1] *= f[m-1][i-1];
+      q[i-1] += avgSpec->freq[0][i-1];
+   }
+
+   return;
+}
 double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
    double tot = hfs->size;
    int *c = hfs->sortedCount;

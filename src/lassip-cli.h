@@ -58,6 +58,11 @@ const string HELP_WINSTEP = "The sliding window step size.";
 
 // Statistics flags
 
+const string ARG_CALC_SPEC = "--calc-spec";
+const bool DEFAULT_CALC_SPEC = false;
+const string HELP_CALC_SPEC = "Set this flag to compute K-truncated haplotype\n\
+frequency spectra.";
+
 const string ARG_LASSI = "--lassi";
 const bool DEFAULT_LASSI = false;
 const string HELP_LASSI = "Set this flag to use the LASSI method.";
@@ -70,6 +75,11 @@ const string HELP_LASSI_CHOICE = "Set this flag to change the way LASSI\n\
 const string ARG_HAPSTATS = "--hapstats";
 const bool DEFAULT_HAPSTATS = false;
 const string HELP_HAPSTATS = "Set this flag to calculate haplotype statistics.";
+
+const string ARG_SALTI = "--salti";
+const bool DEFAULT_SALTI = false;
+const string HELP_SALTI = "Set this flag to use the saltiLASSI method.";
+
 
 // Other flags
 /*
@@ -84,6 +94,11 @@ const string HELP_K = "Top K haplotypes for LASSI computations.";
 const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 0;
 const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
+
+const string ARG_DIST_TYPE = "--dist-type";
+const string DEFAULT_DIST_TYPE = "bp";
+const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, ns, nw";
+
 
 /*
 const string ARG_FINALIZE = "--finalize";

@@ -103,6 +103,7 @@ struct SpectrumData {
   unsigned int **info;
   unsigned int *nhaps;
   unsigned int *uhaps;
+  double *dist;
   double *h12;
   double *h2h1;
   bool HAPSTATS;
@@ -111,6 +112,7 @@ struct SpectrumData {
 
 struct LASSIResults {
   int *m;
+  double *A;
   double *T;
   double *h12;
   double *h2h1;
@@ -124,25 +126,27 @@ struct LASSIInitialResults{
   map<string,string> *names;
   map<string,double *> *h12;
   map<string,double *> *h2h1;
+  map<string,double *> *dist;
 };
 
 
-
+double ****initQ(int nwins,int K, double U);
+void releaseQ(double ****q, int nwins,int K, double U);
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP = false);
 void releaseAllWindows(vector< pair_t* > *windows);
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, 
-                                int WINSIZE, int WINSTEP, int K, bool HAPSTATS);
+                                int WINSIZE, int WINSTEP, int K, bool HAPSTATS, string DIST_TYPE);
 void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop,
-                              PopData *popData, int K, bool LASSI, bool HAPSTATS, bool PHASED, int FILTER_LEVEL);
+                              PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE);
 
 void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
                             map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 
-LASSIResults *initResults(int nwins, bool HAPSTATS);
-vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr);
-map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
+LASSIResults *initResults(int nwins, bool HAPSTATS, bool SALTI);
+vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr, bool SALTI);
+map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr, bool SALTI);
 
 void releaseResults(LASSIResults *data);
 
