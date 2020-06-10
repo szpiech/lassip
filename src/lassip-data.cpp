@@ -53,6 +53,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
         MapData *oldMapData = hapDataByPop->begin()->second->map;
         MapData *newMapData = initMapData(keepLoci);
+        newMapData->chr = oldMapData->chr;
         int l0 = 0;
         for(int l = 0; l < oldMapData->nloci; l++){
             if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
