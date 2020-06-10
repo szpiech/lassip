@@ -48,7 +48,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given, loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.0.2
+lassip v1.0.2a
 
 ----------Command Line Arguments----------
 
@@ -98,6 +98,8 @@ lassip v1.0.2
 
 
 ***CHANGE LOG***
+
+10JUN2020 - v1.0.2a Fixed a bug that caused chromosome name to be blank with filter level > 0.
 
 07JUN2020 - v1.0.2 Memory improvements for filter levels < 2.
 
