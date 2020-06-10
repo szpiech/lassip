@@ -120,6 +120,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
 
             cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
             newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
+            newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
                 if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
