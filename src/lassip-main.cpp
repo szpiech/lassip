@@ -46,6 +46,8 @@ int main(int argc, char *argv[])
   
   // Statistics flags
   params.addFlag(ARG_CALC_SPEC, DEFAULT_CALC_SPEC, "", HELP_CALC_SPEC);
+  params.addFlag(ARG_AVG_SPEC, DEFAULT_AVG_SPEC, "", HELP_AVG_SPEC);
+  params.addFlag(ARG_NULL_SPEC, DEFAULT_NULL_SPEC, "", HELP_NULL_SPEC);
   params.addFlag(ARG_LASSI, DEFAULT_LASSI, "", HELP_LASSI);
   params.addFlag(ARG_LASSI_CHOICE, DEFAULT_LASSI_CHOICE, "", HELP_LASSI_CHOICE);
   params.addFlag(ARG_HAPSTATS, DEFAULT_HAPSTATS, "", HELP_HAPSTATS);
@@ -86,6 +88,8 @@ int main(int argc, char *argv[])
   bool HAPSTATS = params.getBoolFlag(ARG_HAPSTATS);
   bool SALTI = params.getBoolFlag(ARG_SALTI);
   bool CALC_SPEC = params.getBoolFlag(ARG_CALC_SPEC);
+  bool AVG_SPEC = params.getBoolFlag(ARG_AVG_SPEC);
+  string nullSpecFile = params.getStringFlag(ARG_NULL_SPEC);
 
   // Other flags
   int K = params.getIntFlag(ARG_K);
@@ -217,7 +221,19 @@ int main(int argc, char *argv[])
     
 
     map<string, vector<SpectrumData *>* > *specDataByPopByChr = readSpecData(spectraFiles);
-    map<string, SpectrumData* > *avgSpecByPop = averageSpec(specDataByPopByChr);
+    map<string, SpectrumData* > *avgSpecByPop;
+    
+    if(nullSpecFile.compare(DEFAULT_NULL_SPEC) != 0){
+      avgSpecByPop = averageSpec(nullSpecFile);
+      if(!checkNull(avgSpecByPop,specDataByPopByChr)) return 1;
+    }
+    else avgSpecByPop = averageSpec(specDataByPopByChr);
+
+    if(AVG_SPEC){
+      writeAverageSpec(outfileBase,avgSpecByPop);
+      return 0;
+    }
+
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
     if(LASSI){
@@ -243,13 +259,18 @@ int main(int argc, char *argv[])
       cerr << "Done.\n";
     }
     else if (SALTI){
+      cerr << "saltiLASSI\n";
       map<string, vector<SpectrumData *>* >::iterator it;
       //pop
-      for (it = specDataByPopByChr->begin(); it != specDataByPopByChr->begin(); it++){
+      for (it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
         string popName = it->first;
+        cerr << popName << endl;
         SpectrumData *avgSpec = avgSpecByPop->at(popName);
         vector<SpectrumData *> *specDataByChr = specDataByPopByChr->at(popName);
         vector<LASSIResults *> *resultsByChr = resultsByPopByChr->at(popName);
+
+        double dmin = getDMin(specDataByChr);
+
         //chr
         for(int c = 0; c < specDataByChr->size(); c++){
           SALTI_work_order_t *order;
@@ -258,6 +279,7 @@ int main(int argc, char *argv[])
           K = specDataByChr->at(c)->K;
           double U = avgSpec->freq[0][K-1];
           double ****q = initQ(nwins,K,U);
+          //PRECOMPUTE all possible Qs
           for (int i = 0; i < numThreads; i++){
             order = new SALTI_work_order_t;
             order->id = i;
@@ -275,7 +297,30 @@ int main(int argc, char *argv[])
 
           for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
           delete [] peer;
-          cerr << "Done.\n";
+
+          peer = new pthread_t[numThreads];
+          for (int i = 0; i < numThreads; i++){
+            order = new SALTI_work_order_t;
+            order->id = i;
+            order->specData = specDataByChr->at(c);
+            order->avgSpec = avgSpec;
+            order->results = resultsByChr->at(c);
+            order->params = &params;
+            order->q = q;
+            order->dmin = dmin;
+
+            pthread_create(&(peer[i]),
+                            NULL,
+                           (void *(*)(void *))calc_SALTI_stats2,
+                           (void *)order);      
+          }
+
+          for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
+          delete [] peer;
+
+          releaseQ(q,nwins,K,U);
+
+          cerr << "Done with contig " << specDataByChr->at(c)->info[0][0] << ".\n";
         }
       }
     }
@@ -288,7 +333,7 @@ int main(int argc, char *argv[])
       ending = ".lassip.mlg.";
     }
     string outfile = outfileBase + ending + "out.gz";
-    //writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr);
+    writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr, SALTI);
   
   }
 

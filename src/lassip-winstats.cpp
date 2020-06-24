@@ -17,6 +17,18 @@
 */
 #include "lassip-winstats.h"
 
+double getDMin(vector<SpectrumData *> *specDataByChr){
+   double dmin = 9999999999;
+
+   for(int c = 0; c < specDataByChr->size(); c++){
+      for(int w = 1; w < specDataByChr->at(c)->nwins; w++){
+         double diff = abs(specDataByChr->at(c)->dist[w]-specDataByChr->at(c)->dist[w-1]);
+         if(dmin > diff && diff > 0) dmin = diff;
+      }
+   }
+   return dmin;
+}
+
 void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
@@ -100,6 +112,83 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
       res += (double(c[i])/tot)*(double(c[i])/tot);
    }
    return (res-first)/res;
+}
+
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, int width, double dmin){
+   double nullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,width);
+   //cerr << "null: " << nullLikelihood << endl;
+   int K = avgSpec->K;
+   double U = avgSpec->freq[0][K-1];
+
+   int maxM = -1;
+   double maxE = -1;
+   double maxA = -1;
+   double maxAltLikelihood = -99999999;
+   double altLikelihood = -99999999;
+   double epsStep = 1.0/(100.0*double(K));
+
+   double Amin = -log(0.99999)/dmin;
+   double Amax = -log(0.00001)/dmin;
+   double lAmin = log(Amin);
+   double lAmax = log(Amax);
+   double lstep = (lAmax-lAmin)/100;
+
+   for (int A = lAmin; A <= lAmax; A += lstep){
+      for (int m = 1; m <= K; m++){
+         int ei = 0;
+         for (double e = epsStep; e <= U; e += epsStep){
+            altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, exp(A), w, width);
+            if(altLikelihood > maxAltLikelihood){
+               maxAltLikelihood = altLikelihood;
+               maxM = m;
+               maxE = e;
+               maxA = exp(A);
+            }
+            ei++;
+         }
+      }
+   }
+
+   //m == K is identical to the neutral background
+   //so set the number of sweeping haplotypes to 0
+   if(maxM == K){
+      maxM = 0;
+      maxA = 0;
+   }
+   results->A[w] = maxA;
+   results->m[w] = maxM;
+   results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
+   return;
+}
+
+double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int width){
+   double res = 0;
+   int start = (w-width >= 0) ? w-width : 0;
+   int end = (w+width < specData->nwins) ? w+width : specData->nwins-1;
+
+   for (int win = start; win <= end; win++){
+      for (int i = 0; i < avgSpec->K; i++){
+         res += double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
+      }
+   }
+   return res;
+}
+
+double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int width){
+   if(m+1 == avgSpec->K) return calcSALTINullLikelihood(specData,avgSpec,w,width);
+   double res = 0;
+   int start = (w-width >= 0) ? w-width : 0;
+   int end = (w+width < specData->nwins) ? w+width : specData->nwins-1;
+
+   for (int win = start; win <= end; win++){
+      double Pr = exp(-A*abs(specData->dist[w]-specData->dist[win]));
+      for (int i = 0; i < avgSpec->K; i++){
+         double pi = double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
+         double qi = double(specData->nhaps[win])*specData->freq[win][i]*log(q[win][e][m][i]);
+         res += Pr*qi+(1-Pr)*pi;
+      }
+   }
+   return res;
 }
 
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){

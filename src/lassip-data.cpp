@@ -18,6 +18,88 @@
 #include "lassip-data.h"
 #include "lassip-wintools.h"
 
+
+void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop){
+    ogzstream fout;
+    string outfile = outfileBase + ".lassip.null.spectra.gz";
+    fout.open(outfile.c_str());
+    if (fout.fail()) {
+      cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
+      throw 1;
+    }
+    fout << "#K " << avgSpecByPop->begin()->second->K << " npop " << avgSpecByPop->size() << endl;
+    map<string, SpectrumData* >::iterator it;
+    for(it = avgSpecByPop->begin(); it != avgSpecByPop->end(); it++){
+        fout << it->first;
+        for(int k = 0; k < it->second->K; k++) fout << "\t" << it->second->freq[0][k];
+        fout << endl;
+    }
+    return;
+}
+bool checkNull(map<string, SpectrumData* > *avgSpecByPop,map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+
+    if(avgSpecByPop->begin()->second->K != specDataByPopByChr->begin()->second->at(0)->K){
+        cerr << "ERROR: Mismatching K between provided null spectrum and provided empirical spectrum data.\n";
+        return false;
+    }
+
+    if(avgSpecByPop->size() != specDataByPopByChr->size()){
+        cerr << "ERROR: Mismatching populations between provided null spectrum and provided empirical spectrum data.\n";
+        return false;
+    }
+    map<string, SpectrumData* >::iterator it;
+    for(it = avgSpecByPop->begin(); it != avgSpecByPop->end(); it++){
+        if(specDataByPopByChr->count(it->first) == 0){
+            cerr << "ERROR: Mismatching populations between provided null spectrum and provided empirical spectrum data.\n";
+            return false;
+        }
+    }
+
+    map<string, vector<SpectrumData *>* >::iterator it2;
+    for(it2 = specDataByPopByChr->begin(); it2 != specDataByPopByChr->end(); it2++){
+        if(avgSpecByPop->count(it2->first) == 0){
+            cerr << "ERROR: Mismatching populations between provided null spectrum and provided empirical spectrum data.\n";
+            return false;
+        }
+    }
+
+    return true;
+}
+
+map<string, SpectrumData* > *averageSpec(string nullSpecFile){
+    igzstream fin;
+    fin.open(nullSpecFile.c_str());
+    if (fin.fail()) {
+      cerr << "ERROR: Failed to open " << nullSpecFile << " for writing.\n";
+      throw 1;
+    }
+
+    unsigned int nwins = 0;
+    int K;
+    int npops;
+    string junk, popName;
+    //SpectrumData *avgSpec = initSpecData(1,K);
+    
+    cerr << "Loading null spectrum from " << nullSpecFile << " for npops = " << npops << " K = " << K << endl;
+
+    stringstream ss;
+    getline(fin,junk);
+    ss.str(junk);
+    //K 10 npop 1
+    ss >> junk >> K >> junk >> npops;
+
+    map<string, SpectrumData* > *avgSpecByPop = new map<string, SpectrumData* >;
+    for(int p = 0; p < npops; p++){
+        getline(fin,junk);
+        ss.clear();
+        ss.str(junk);
+        ss >> popName;
+        avgSpecByPop->operator[](popName) = initSpecData(1,K);
+        for(int k = 0; k < K; k++) ss >> avgSpecByPop->at(popName)->freq[0][k];
+    }
+    return avgSpecByPop;
+}
+
 double ****initQ(int nwins,int K, double U){
     double ****q = new double***[nwins];
     int nEps = int(U*100.0*K);
@@ -207,7 +289,7 @@ void releaseAllWindows(vector< pair_t* > *windows) {
     return;
 }
 
-void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr, map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr, map<string, vector<SpectrumData *>* > *specDataByPopByChr, bool SALTI){
     ogzstream fout;
     fout.open(outfile.c_str());
     if (fout.fail()) {
@@ -237,8 +319,9 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
             fout << it->first << "_" << h12 << "\t" 
                 << it->first << "_" << h2h1 << "\t";
         }  
-        fout << it->first << "_m\t"
-            << it->first << "_T";
+        fout << it->first << "_m\t";
+        if(SALTI) fout << it->first << "_A\t";
+        fout << it->first << "_T";
     }
     fout << endl;
 
@@ -267,7 +350,9 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
                     fout << results->h12[w] << "\t"
                         << results->h2h1[w] << "\t";
                 }
-                fout << results->m[w] << "\t" << results->T[w];
+                fout << results->m[w] << "\t";
+                if(SALTI) fout << results->A[w] << "\t";
+                fout << results->T[w];
             }
             fout << endl;
         }
@@ -577,7 +662,7 @@ map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
     bool HAPSTATS = specDataByPop->begin()->second->HAPSTATS;
 
     int npops = specDataByPop->size();
-    cerr << "Read " << filenames[0] << " with " << npops << " pops and K = " << K << endl;
+    cerr << "Loading " << filenames[0] << " with " << npops << " pops and K = " << K << endl;
 
     map<string, SpectrumData *>::iterator it;
     for(it = specDataByPop->begin(); it != specDataByPop->end(); it++){
@@ -588,7 +673,7 @@ map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
     for (int i = 1; i < filenames.size(); i++){
         specDataByPop = readSpecData(filenames[i]);
 
-        cerr << "Read " << filenames[i] << " with " << specDataByPop->size() 
+        cerr << "Loading " << filenames[i] << " with " << specDataByPop->size() 
             << " pops and K = " << specDataByPop->begin()->second->K << endl;
       
         if (K != specDataByPop->begin()->second->K || 

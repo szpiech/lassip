@@ -63,6 +63,16 @@ const bool DEFAULT_CALC_SPEC = false;
 const string HELP_CALC_SPEC = "Set this flag to compute K-truncated haplotype\n\
 frequency spectra.";
 
+const string ARG_AVG_SPEC = "--avg-spec";
+const bool DEFAULT_AVG_SPEC = false;
+const string HELP_AVG_SPEC = "Set this flag to compute and output the average\n\
+K-truncated haplotype frequency spectrum from a set of .spectra files.";
+
+const string ARG_NULL_SPEC = "--null-spec";
+const string DEFAULT_NULL_SPEC = "__nullspec1";
+const string HELP_NULL_SPEC = "A file containing a null K-truncated\n\
+haplotype spectrum for use computing LASSI or saltiLASSI.";
+
 const string ARG_LASSI = "--lassi";
 const bool DEFAULT_LASSI = false;
 const string HELP_LASSI = "Set this flag to use the LASSI method.";
@@ -92,7 +102,7 @@ const int DEFAULT_K = 10;
 const string HELP_K = "Top K haplotypes for LASSI computations.";
 
 const string ARG_FILTER_LEVEL = "--filter-level";
-const int DEFAULT_FILTER_LEVEL = 0;
+const int DEFAULT_FILTER_LEVEL = 2;
 const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
 
 const string ARG_DIST_TYPE = "--dist-type";

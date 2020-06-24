@@ -125,6 +125,32 @@ void calc_LASSI_stats2(void *order) {
 	return;
 }
 
+void calc_SALTI_stats2(void *order) {
+	SALTI_work_order_t *p = (SALTI_work_order_t *)order;
+
+	SpectrumData *specData = p->specData;
+    SpectrumData *avgSpec = p->avgSpec;
+    LASSIResults *results = p->results;
+	param_t *params = p->params;    
+	int id = p->id;
+	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
+	int numThreads = params->getIntFlag(ARG_THREADS);
+	int K = avgSpec->K;
+	//double **f = calcF(LASSI_CHOICE,K);
+	double ****q = p->q;
+	int width = 100;
+
+	for (int i = id; i < specData->nwins; i += numThreads) {
+		calcMTA(results, q, specData, avgSpec, i, width, p->dmin);
+	}
+
+	//for(int i = 0; i < K; i++) delete [] f[i];
+	//delete [] f;
+
+	return;
+}
+
+
 void calc_SALTI_stats1(void *order) {
 	SALTI_work_order_t *p = (SALTI_work_order_t *)order;
 

@@ -28,15 +28,22 @@
 
 using namespace std;
 
+double getDMin(vector<SpectrumData *> *specDataByChr);
+
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, int width, double dmin);
+double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int width);
+double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int width);
 
 int compare (const void *a, const void *b);
 int *uniqInt(int *array, int size, int &newSize);
 double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED);
 double calcH2H1(HaplotypeFrequencySpectrum *hfs);
 double **calcF(int type, int K);
-void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
+
 void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w);
 void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
+
+void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);
 double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
 //double subsample_sfs(array_t *sfs, int H, int j);

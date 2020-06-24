@@ -129,7 +129,9 @@ struct LASSIInitialResults{
   map<string,double *> *dist;
 };
 
-
+void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop);
+bool checkNull(map<string, SpectrumData* > *avgSpecByPop,map<string, vector<SpectrumData *>* > *specDataByPopByChr);
+map<string, SpectrumData* > *averageSpec(string nullSpecFile);
 double ****initQ(int nwins,int K, double U);
 void releaseQ(double ****q, int nwins,int K, double U);
 
@@ -142,7 +144,7 @@ void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, map<
                               PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE);
 
 void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
-                            map<string, vector<SpectrumData *>* > *specDataByPopByChr);
+                            map<string, vector<SpectrumData *>* > *specDataByPopByChr, bool SALTI);
 
 LASSIResults *initResults(int nwins, bool HAPSTATS, bool SALTI);
 vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr, bool SALTI);
@@ -158,7 +160,7 @@ map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames);
 
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr);
 map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
-
+map<string, SpectrumData* > *averageSpec(string nullSpecFile);
 //map<string,char> storeMap();
 
 //void extractAlleleStrs(string gt, string &string1, string &string2);

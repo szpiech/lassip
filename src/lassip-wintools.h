@@ -56,6 +56,7 @@ struct SALTI_work_order_t
     double ****q; //win->e->m->i
     param_t *params;
     LASSIResults *results;
+    double dmin;
 };
 
 
@@ -68,7 +69,9 @@ pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZ
 
 void calc_LASSI_stats2(void *work_order);
 void calc_LASSI_stats(void *work_order);
+
 void calc_SALTI_stats1(void *order);
+void calc_SALTI_stats2(void *order);
 
 string int2str(int i);
 
