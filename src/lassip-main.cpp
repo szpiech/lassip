@@ -166,8 +166,9 @@ int main(int argc, char *argv[])
       ERROR = true;
     }
   
-    if (!LASSI && !SALTI){
-      cerr << "ERROR: Must use --lassi xor --salti for analyzing haplotype spectra.\n";
+    if (!LASSI && !SALTI && !AVG_SPEC){
+      cerr << "ERROR: Must use --lassi or --salti for analyzing haplotype spectra.\n";
+      cerr << "\tOr use --avg-spec to compute average spectra from *.spectra files.\n";
       ERROR = true;
     }
     if(LASSI && SALTI){
