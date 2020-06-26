@@ -20,6 +20,7 @@
 #define __LASSIP_DATA_H__
 #include <string>
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <vector>
