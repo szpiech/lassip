@@ -20,7 +20,7 @@
 double getDMin(vector<SpectrumData *> *specDataByChr){
    double dmin = 9999999999;
 
-   for(int c = 0; c < specDataByChr->size(); c++){
+   for(unsigned int c = 0; c < specDataByChr->size(); c++){
       for(int w = 1; w < specDataByChr->at(c)->nwins; w++){
          double diff = abs(specDataByChr->at(c)->dist[w]-specDataByChr->at(c)->dist[w-1]);
          if(dmin > diff && diff > 0) dmin = diff;
@@ -116,7 +116,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    double U = avgSpec->freq[0][K-1];
 
    int maxM = -1;
-   double maxE = -1;
+   //double maxE = -1;
    double maxA = -1;
    double maxAltLikelihood = -99999999;
    double altLikelihood = -99999999;
@@ -142,7 +142,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
                maxAltLikelihood = altLikelihood;
                nullLikelihood = currNullLikelihood;
                maxM = m;
-               maxE = e;
+               //maxE = e;
                maxA = 1.0/exp(A);
             }
             ei++;
@@ -245,7 +245,7 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
    double U = avgSpec->freq[0][K-1];
 
    int maxM = -1;
-   double maxE = -1;
+   //double maxE = -1;
    double maxAltLikelihood = -99999999;
    double altLikelihood = -99999999;
    double epsStep = 1.0/(100.0*double(K));
@@ -255,7 +255,7 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
          if(altLikelihood > maxAltLikelihood){
             maxAltLikelihood = altLikelihood;
             maxM = m;
-            maxE = e;
+            //maxE = e;
          }
       }
    }
