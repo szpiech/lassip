@@ -30,6 +30,7 @@
 using namespace std;
 
 const double MISSING = -999;
+const unsigned int MISSING_UINT = -999;
 const char MISSING_CHAR = '?';
 const char MISSING_ALLELE = '-';
 const string TPED_MISSING = "-9";
