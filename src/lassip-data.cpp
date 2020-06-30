@@ -565,6 +565,7 @@ LASSIResults *initResults(int nwins, bool HAPSTATS, bool SALTI){
     data->m = new int[nwins];
     data->nwins = nwins;
     data->T = new double[nwins];
+    data->HAPSTATS = HAPSTATS;
     if(SALTI) data->A = new double[nwins];
     else data->A = NULL;
     if(HAPSTATS){
