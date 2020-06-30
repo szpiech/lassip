@@ -251,7 +251,7 @@ pair_t* findInclusiveSNPIndicies(unsigned int startSnpIndex, unsigned int currWi
 
 	unsigned int currWinEnd = currWinStart + WINSIZE - 1;
 	unsigned int endSnpIndex = startSnpIndex;
-	int numSnps = mapData->nloci;
+	unsigned int numSnps = mapData->nloci;
 
 	pair_t* snps = new pair_t;
 	snps->winStart = currWinStart;
