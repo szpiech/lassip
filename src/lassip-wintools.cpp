@@ -138,7 +138,7 @@ void calc_SALTI_stats2(void *order) {
 	//int K = avgSpec->K;
 	//double **f = calcF(LASSI_CHOICE,K);
 	double ****q = p->q;
-	int width = 100;
+	//int width = 100;
 
 	for (int i = id; i < specData->nwins; i += numThreads) {
 		calcMTA(results, q, specData, avgSpec, i, p->dmin);
