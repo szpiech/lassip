@@ -327,7 +327,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
 
     for(int c = 0; c < nchr; c++) nwins.push_back(resultsByPopByChr->begin()->second->at(c)->nwins);
 
-    SpectrumData *specData;
+    //SpectrumData *specData;
     LASSIResults *results;
     unsigned int **info;
     unsigned int *nhaps;
