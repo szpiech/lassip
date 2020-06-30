@@ -30,7 +30,7 @@ using namespace std;
 
 double getDMin(vector<SpectrumData *> *specDataByChr);
 
-void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, int width, double dmin);
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin);
 double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,double d);
 double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,double d);
 

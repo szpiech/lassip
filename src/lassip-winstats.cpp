@@ -109,7 +109,7 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
    return (res-first)/res;
 }
 
-void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, int width, double dmin){
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
    double nullLikelihood;// = calcSALTINullLikelihood(specData,avgSpec,w,width);
    //cerr << "null: " << nullLikelihood << endl;
    int K = avgSpec->K;

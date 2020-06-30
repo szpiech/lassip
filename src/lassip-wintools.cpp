@@ -25,7 +25,7 @@ void calc_LASSI_stats(void *order) {
 	PopData *popData = p->popData;
 	param_t *params = p->params;
 	
-	int WINSIZE = params->getIntFlag(ARG_WINSIZE);
+	//int WINSIZE = params->getIntFlag(ARG_WINSIZE);
 	map<string,double **> *results = p->results->data;
 	map<string,double *> *h12ByPop = p->results->h12;
   	map<string,double *> *h2h1ByPop = p->results->h2h1;
@@ -44,7 +44,7 @@ void calc_LASSI_stats(void *order) {
 		popName = popData->popOrder[pop];
 		vector< pair_t* > *windows = p->results->windows->at(popName);
 
-		for (int i = id; i < windows->size(); i += numThreads) {
+		for (unsigned int i = id; i < windows->size(); i += numThreads) {
 			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps);
 			double *h12; 
@@ -110,7 +110,7 @@ void calc_LASSI_stats2(void *order) {
 		specDataByChr = it->second;
 		resultsByChr = resultsByPopByChr->at(popName);
 		avgSpec = avgSpecByPop->at(popName);
-		for (int c = 0; c < specDataByChr->size(); c++){
+		for (unsigned int c = 0; c < specDataByChr->size(); c++){
 			specData = specDataByChr->at(c);
 			results = resultsByChr->at(c);
 			for (int i = id; i < specDataByChr->at(c)->nwins; i += numThreads) {
@@ -133,15 +133,15 @@ void calc_SALTI_stats2(void *order) {
     LASSIResults *results = p->results;
 	param_t *params = p->params;    
 	int id = p->id;
-	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
+	//int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
-	int K = avgSpec->K;
+	//int K = avgSpec->K;
 	//double **f = calcF(LASSI_CHOICE,K);
 	double ****q = p->q;
 	int width = 100;
 
 	for (int i = id; i < specData->nwins; i += numThreads) {
-		calcMTA(results, q, specData, avgSpec, i, width, p->dmin);
+		calcMTA(results, q, specData, avgSpec, i, p->dmin);
 	}
 
 	//for(int i = 0; i < K; i++) delete [] f[i];
@@ -156,7 +156,7 @@ void calc_SALTI_stats1(void *order) {
 
 	SpectrumData *specData = p->specData;
     SpectrumData *avgSpec = p->avgSpec;
-    LASSIResults *results = p->results;
+    //LASSIResults *results = p->results;
 	param_t *params = p->params;    
 	int id = p->id;
 	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
@@ -247,10 +247,10 @@ vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector
 }
 */
 
-pair_t* findInclusiveSNPIndicies(int startSnpIndex, int currWinStart, int WINSIZE, MapData* mapData) {
+pair_t* findInclusiveSNPIndicies(unsigned int startSnpIndex, unsigned int currWinStart, int WINSIZE, MapData* mapData) {
 
-	int currWinEnd = currWinStart + WINSIZE - 1;
-	int endSnpIndex = startSnpIndex;
+	unsigned int currWinEnd = currWinStart + WINSIZE - 1;
+	unsigned int endSnpIndex = startSnpIndex;
 	int numSnps = mapData->nloci;
 
 	pair_t* snps = new pair_t;
