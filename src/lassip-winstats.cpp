@@ -32,11 +32,6 @@ double getDMin(vector<SpectrumData *> *specDataByChr){
 void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
-
-   int maxM = -1;
-   double maxE = -1;
-   double maxAltLikelihood = -99999999;
-   double altLikelihood = -99999999;
    double epsStep = 1.0/(100.0*double(K));
    int ei = 0;
    for (double e = epsStep; e <= U; e += epsStep){
