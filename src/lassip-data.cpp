@@ -80,13 +80,13 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
     string junk, popName;
     //SpectrumData *avgSpec = initSpecData(1,K);
     
-    cerr << "Loading null spectrum from " << nullSpecFile << " for npops = " << npops << " K = " << K << endl;
-
     stringstream ss;
     getline(fin,junk);
     ss.str(junk);
     //K 10 npop 1
     ss >> junk >> K >> junk >> npops;
+
+    cerr << "Loading null spectrum from " << nullSpecFile << " for npops = " << npops << " K = " << K << endl;
 
     map<string, SpectrumData* > *avgSpecByPop = new map<string, SpectrumData* >;
     for(int p = 0; p < npops; p++){
@@ -94,7 +94,7 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
         ss.clear();
         ss.str(junk);
         ss >> popName;
-        avgSpecByPop->operator[](popName) = initSpecData(1,K);
+        avgSpecByPop->operator[](popName) = initSpecData(1,K,false,false);
         for(int k = 0; k < K; k++) ss >> avgSpecByPop->at(popName)->freq[0][k];
     }
     return avgSpecByPop;
@@ -640,7 +640,7 @@ map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr){
     int K = specDataByChr->at(0)->K;
     unsigned int nwins = 0;
-    SpectrumData *avgSpec = initSpecData(1,K);
+    SpectrumData *avgSpec = initSpecData(1,K,false,false);
     for (int i = 0; i < specDataByChr->size(); i++) nwins += specDataByChr->at(i)->nwins;
     for (int i = 0; i < specDataByChr->size(); i++){
         for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
