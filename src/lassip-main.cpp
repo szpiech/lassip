@@ -273,7 +273,7 @@ int main(int argc, char *argv[])
         double dmin = getDMin(specDataByChr);
 
         //chr
-        for(int c = 0; c < specDataByChr->size(); c++){
+        for(unsigned int c = 0; c < specDataByChr->size(); c++){
           SALTI_work_order_t *order;
           pthread_t *peer = new pthread_t[numThreads];
           int nwins = specDataByChr->at(c)->nwins;
