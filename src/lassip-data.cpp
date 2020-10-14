@@ -1683,8 +1683,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
             if (popData->ind2pop.count(inds[field]) != 0){
                 //extractAlleleStrs(junk,alleleStr1,alleleStr2);
                 //if(storeAs.count(alleleStr1) == 0 || storeAs.count(alleleStr2) == 0){
-                if((allele1 != '1' && allele1 != '0' && allele1 != MISSING_ALLELE) || 
-                    (allele2 != '1' && allele2 != '0' && allele2 != MISSING_ALLELE)){
+                if((allele1 != '1' && allele1 != '0' && allele1 != VCF_MISSING) || 
+                    (allele2 != '1' && allele2 != '0' && allele2 != VCF_MISSING)){
                     cerr << "ERROR: Alleles must be coded 0/1/. only.\n";
                     throw 0;
                 }
