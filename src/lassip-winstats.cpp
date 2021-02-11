@@ -110,7 +110,7 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
 }
 
 void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
-   int MAX_EXTEND = 250000;
+   int MAX_EXTEND = 1000000;
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
