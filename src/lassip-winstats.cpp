@@ -189,7 +189,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
 void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
    int MAX_EXTEND = 1000000; //bps each direction away from central window
    double minAlpha = 0.00001; //Smallest mixture proportion for Pr
-
+   double *dist = specData->dist;
    /*
    int rightLim, leftLim;
    double *dist = specData->dist;
