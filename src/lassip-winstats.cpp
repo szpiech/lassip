@@ -109,8 +109,9 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
    return (res-first)/res;
 }
 
+/*
 void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
-   int MAX_EXTEND = 1000000;
+   int MAX_EXTEND = 2500000;
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
@@ -167,6 +168,115 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
                maxM = m;
                //maxE = e;
                maxA = 1.0/exp(A);
+            }
+            ei++;
+         }
+      }
+   }
+
+   //m == K is identical to the neutral background
+   //so set the number of sweeping haplotypes to 0
+   if(maxM == K){
+      maxM = 0;
+      maxA = 0;
+   }
+   results->A[w] = maxA;
+   results->m[w] = maxM;
+   results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
+   return;
+}
+*/
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
+   int MAX_EXTEND = 1000000; //bps each direction away from central window
+   double minAlpha = 0.00001; //Smallest mixture proportion for Pr
+
+   /*
+   int rightLim, leftLim;
+   double *dist = specData->dist;
+   int d = w;
+   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
+      d++;
+      if(d >= specData->nwins){
+         d--;
+         break;
+      }
+   }
+   leftLim = d;
+   d = w;
+   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
+      d--;
+      if(d < 0){
+         d++;
+         break;
+      }
+   }
+   rightLim = d;
+   */
+
+   double nullLikelihood;
+   //cerr << "null: " << nullLikelihood << endl;
+   int K = avgSpec->K;
+   double U = avgSpec->freq[0][K-1];
+
+   int maxM = -1;
+   //double maxE = -1;
+   double maxA = -1;
+   double maxAltLikelihood = -99999999;
+   double altLikelihood = -99999999;
+   double epsStep = 1.0/(100.0*double(K));
+
+   double dmax = MAX_EXTEND;
+   double dstep = (dmax-dmin)/100;
+
+   //double Amin = -log(minAlpha)/dmin;
+   //double Amax = -log(minAlpha)/dmax;
+   //double lAmin = log(Amin);
+   //double lAmax = log(Amax);
+   //double lstep = (lAmax-lAmin)/100;
+
+   //double p = 0-log(1e-8);
+   //double d;
+
+   for(double CURRENT_EXTEND = dmin; CURRENT_EXTEND <= dmax; CURRENT_EXTEND += dstep){
+   //for (int A = lAmin; A <= lAmax; A += lstep){
+      //d = p/exp(A);
+      //cerr << "p " << p << " A " << A << " d " << d << endl;
+
+      //double CURRENT_EXTEND = -log(minAlpha)/exp(A);
+      int rightLim, leftLim;
+      int d = w;
+      while(abs(dist[w] - dist[d]) <= CURRENT_EXTEND){
+         d++;
+         if(d >= specData->nwins){
+            d--;
+            break;
+         }
+      }
+      leftLim = d;
+      d = w;
+      while(abs(dist[w] - dist[d]) <= CURRENT_EXTEND){
+         d--;
+         if(d < 0){
+            d++;
+            break;
+         }
+      }
+      rightLim = d;
+
+      double A = -log(minAlpha)/CURRENT_EXTEND;
+
+      double currNullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,rightLim,leftLim);
+
+      for (int m = 1; m <= K; m++){
+         int ei = 0;
+         for (double e = epsStep; e <= U; e += epsStep){
+            altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, A, w, rightLim, leftLim);
+            if(altLikelihood > maxAltLikelihood){
+               maxAltLikelihood = altLikelihood;
+               nullLikelihood = currNullLikelihood;
+               maxM = m;
+               //maxE = e;
+               maxA = 1.0/A;
             }
             ei++;
          }
