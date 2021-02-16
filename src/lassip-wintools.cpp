@@ -135,13 +135,14 @@ void calc_SALTI_stats2(void *order) {
 	int id = p->id;
 	//int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
+	double MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_BP);
 	//int K = avgSpec->K;
 	//double **f = calcF(LASSI_CHOICE,K);
 	double ****q = p->q;
 	//int width = 100;
 
 	for (int i = id; i < specData->nwins; i += numThreads) {
-		calcMTA(results, q, specData, avgSpec, i, p->dmin);
+		calcMTA(results, q, specData, avgSpec, i, p->dmin, MAX_EXTEND);
 	}
 
 	//for(int i = 0; i < K; i++) delete [] f[i];

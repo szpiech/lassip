@@ -54,13 +54,14 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_SALTI, DEFAULT_SALTI, "", HELP_SALTI);
   
   // Other flags
-  //params.addFlag(ARG_INIT, DEFAULT_INIT, "", HELP_INIT);
   params.addFlag(ARG_K, DEFAULT_K, "", HELP_K);
-  //params.addFlag(ARG_FINALIZE, DEFAULT_FINALIZE, "", HELP_FINALIZE);  
   params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
   params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "", HELP_FILTER_LEVEL);
-  params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
-  
+  //params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
+  params.addFlag(ARG_MAX_EXTEND_BP, DEFAULT_MAX_EXTEND_BP, "", HELP_MAX_EXTEND_BP);
+  //params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "", HELP_MAX_EXTEND_CM);
+  //params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "", HELP_MAX_EXTEND_NW);
+
   try {
     params.parseCommandLine(argc, argv);
   }
@@ -95,7 +96,10 @@ int main(int argc, char *argv[])
   int K = params.getIntFlag(ARG_K);
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
-  string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
+  //string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
+  string DIST_TYPE = "bp";
+  double MAX_EXTEND_BP = params.getDoubleFlag(ARG_MAX_EXTEND_BP);
+  //double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -140,12 +144,14 @@ int main(int argc, char *argv[])
     }
 
     if(DIST_TYPE.compare("bp") != 0 &&
-      //DIST_TYPE.compare("cm") != 0 &&
+      DIST_TYPE.compare("cm") != 0 &&
       DIST_TYPE.compare("ns") != 0 &&
       DIST_TYPE.compare("nw") != 0){
-      cerr << "ERROR: Must choose bp, cm, ns, or nw for distance measure.\n";
+      //cerr << "ERROR: Must choose bp, cm, ns, or nw for distance measure.\n";
+      cerr << "ERROR: Must choose bp for distance measure.\n";
       ERROR = true;
     }
+
     if (!CALC_SPEC && !HAPSTATS){
       cerr << "ERROR: Must use --calc-spec or --hapstats.\n";
       ERROR = true;
@@ -173,6 +179,10 @@ int main(int argc, char *argv[])
     }
     if(LASSI && SALTI){
       cerr << "ERROR: Must choose only one of --lassi or --salti for analyzing haplotype spectra.\n";
+      ERROR = true;
+    }
+    if(SALTI && MAX_EXTEND_BP < 1){
+      cerr << "ERROR: MAX_EXTEND (bp) must be >= 1.\n";
       ERROR = true;
     }
   }

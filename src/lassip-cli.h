@@ -105,10 +105,24 @@ const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 2;
 const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
 
+/*
 const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";
-const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, ns, nw";
+const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, nw.";
+*/
+const string ARG_MAX_EXTEND_BP = "--max-extend-bp";
+const double DEFAULT_MAX_EXTEND_BP = 1000000;
+const string HELP_MAX_EXTEND_BP = "Maximum distance in basepairs from core window to consider for saltiLASSI.";
 
+/*
+const string ARG_MAX_EXTEND_CM = "--max-extend-cm";
+const double DEFAULT_MAX_EXTEND_CM = 1;
+const string HELP_MAX_EXTEND_CM = "Maximum distance in centimorgans from core window to consider for saltiLASSI.";
+
+const string ARG_MAX_EXTEND_NW = "--max-extend-nw";
+const double DEFAULT_MAX_EXTEND_NW = 100;
+const string HELP_MAX_EXTEND_NW = "Maximum distance in number of windows from core window to consider for saltiLASSI.";
+*/
 
 /*
 const string ARG_FINALIZE = "--finalize";
