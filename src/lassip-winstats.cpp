@@ -109,9 +109,9 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
    return (res-first)/res;
 }
 
-/*
-void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin){
-   int MAX_EXTEND = 2500000;
+
+void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin,double MAX_EXTEND){
+   //int MAX_EXTEND = 2500000;
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
@@ -185,33 +185,12 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
    return;
 }
-*/
+
+/*
 void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin, double MAX_EXTEND){
    //int MAX_EXTEND = 1000000; //bps each direction away from central window
    double minAlpha = 0.00001; //Smallest mixture proportion for Pr
    double *dist = specData->dist;
-   /*
-   int rightLim, leftLim;
-   double *dist = specData->dist;
-   int d = w;
-   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
-      d++;
-      if(d >= specData->nwins){
-         d--;
-         break;
-      }
-   }
-   leftLim = d;
-   d = w;
-   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
-      d--;
-      if(d < 0){
-         d++;
-         break;
-      }
-   }
-   rightLim = d;
-   */
 
    double nullLikelihood;
    //cerr << "null: " << nullLikelihood << endl;
@@ -294,7 +273,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
    return;
 }
-
+*/
 double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int rightLim, int leftLim){
    double res = 0;
    //int start = (w-width >= 0) ? w-width : 0;
