@@ -735,7 +735,7 @@ map<string, SpectrumData *> *readSpecData(string filename){
 
     fin.open(filename.c_str());
     if (fin.fail()) {
-        cerr << "ERROR: Failed to open " << filename << " for writing.\n";
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
         throw 0;
     }
     getline(fin,junk);
