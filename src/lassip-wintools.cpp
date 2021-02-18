@@ -47,6 +47,7 @@ void calc_LASSI_stats(void *order) {
 		for (unsigned int i = id; i < windows->size(); i += numThreads) {
 			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps);
+			if(hfs == NULL) p->results->nullWins->operator[](popName)++;
 			double *h12; 
 			double *h2h1;
 			if(HAPSTATS){
@@ -56,6 +57,7 @@ void calc_LASSI_stats(void *order) {
 			double **x = results->at(popName);
 			double tot = 0;
 			for (int s = 0; s < K; s++){
+				if(hfs == NULL) break;
 				if(s < hfs->numClasses) tot+=double(hfs->sortedCount[s]);
 			}
 			//cerr << tot << endl;
@@ -66,15 +68,27 @@ void calc_LASSI_stats(void *order) {
 					names->at(popName) += popName + "_hfs_" + ss.str(); 
 					if (s != K-1) names->at(popName) += "\t";
 				}
-				if(s < hfs->numClasses) x[i][s] = double(hfs->sortedCount[s])/tot;
+				if(hfs == NULL) x[i][s] = 0;
+				else if(s < hfs->numClasses) x[i][s] = double(hfs->sortedCount[s])/tot;
 				else x[i][s] = 0;
 			}
-			x[i][K] = hfs->size;
-			x[i][K+1] = hfs->hap2count.size();
+			if(hfs == NULL){
+				x[i][K] = 0;
+				x[i][K+1] = 0;
+			}
+			else{
+				x[i][K] = hfs->size;
+				x[i][K+1] = hfs->hap2count.size();
+			}
 			if(HAPSTATS){
-				h12[i] = calcH12(hfs, PHASED);
-				//h2h1[i] = x[i][1]/x[i][0];
-				h2h1[i] = calcH2H1(hfs);
+				if(hfs == NULL){
+					h12[i] = 0;
+					h2h1[i] = 0;
+				}
+				else{
+					h12[i] = calcH12(hfs, PHASED);
+					h2h1[i] = calcH2H1(hfs);
+				}
 			}
 			releaseHaplotypeFrequencySpectrum(hfs);
 		}

@@ -124,6 +124,7 @@ struct LASSIResults {
 
 struct LASSIInitialResults{
   map<string,vector< pair_t* > *> *windows;
+  map<string,int> *nullWins;
   map<string,double ** > *data;
   map<string,string> *names;
   map<string,double *> *h12;

@@ -393,8 +393,17 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
         vector< pair_t* > *windows = results->windows->begin()->second;
         MapData *mapData = hapDataByPop->begin()->second->map;
 
+        //get max missing windows across pops
+        int maxNullWins = results->nullWins->begin()->second;
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            if(results->nullWins->operator[](popName) > maxNullWins){
+                maxNullWins = results->nullWins->operator[](popName);
+            }
+        }
+
         if (SPECFILE){
-            fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << popData->popOrder.size();
+            fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size()-maxNullWins << " K " << K << " npop " << popData->popOrder.size();
             for(unsigned int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
             fout << endl;
         }
@@ -409,6 +418,15 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
         double *dist = results->dist->begin()->second;
         
         for (unsigned int w = 0; w < windows->size(); w++) {
+            bool skip = false;
+            for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+                string popName = popData->popOrder[p];
+                double **x = results->data->at(popName);
+                if(x[w][K] == 0) skip = true;
+            }
+
+            if(skip) continue;
+
             int st = windows->at(w)->start;
             int en = windows->at(w)->end;
             fout << mapData->chr << "\t" 
@@ -446,6 +464,7 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             string popName = popData->popOrder[p];
             MapData *mapData = hapDataByPop->at(popName)->map;
             vector< pair_t* > *windows = results->windows->at(popName);
+            int nullWins = results->nullWins->operator[](popName);
 
             if(SPECFILE) outfile = outfileBase + "." + popName + ending + "spectra.gz";
             if(!SPECFILE && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
@@ -457,7 +476,7 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             }
 
             if (SPECFILE){
-                fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size() << " K " << K << " npop " << 1;
+                fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size()-nullWins << " K " << K << " npop " << 1;
                 fout << " " << popName;
                 fout << endl;
             }
@@ -478,6 +497,8 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             double **x = results->data->at(popName);
 
             for (unsigned int w = 0; w < windows->size(); w++) {
+                if(x[w][K] == 0) continue;
+
                 int st = windows->at(w)->start;
                 int en = windows->at(w)->end; 
                 fout << mapData->chr << "\t" 
@@ -513,6 +534,8 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
     results->windows = new map<string,vector< pair_t* > *>;
     results->names = new map<string,string>;
     results->data = new map<string,double ** >;
+    results->nullWins = new map<string,int>;
+
     if(HAPSTATS){
         results->h12 = new map<string,double *>;
         results->h2h1 = new map<string,double *>;
@@ -550,6 +573,7 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
 
         results->data->operator[](popName) = x;
         results->names->operator[](popName) = "";
+        results->nullWins->operator[](popName) = 0;
 
         if(HAPSTATS){
             results->h12->operator[](popName) = h12;
