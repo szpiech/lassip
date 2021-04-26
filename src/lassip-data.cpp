@@ -321,7 +321,8 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
         }  
         fout << it->first << "_m\t";
         if(SALTI) fout << it->first << "_A\t";
-        fout << it->first << "_T";
+        if(!SALTI) fout << it->first << "_T";
+        if(SALTI) fout << it->first << "_L";
     }
     fout << endl;
 
