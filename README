@@ -2,6 +2,7 @@
 
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
+saltiLASSI: DeGriorgio and Szpiech (2021) In Prep.
 LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
 H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
 H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
@@ -13,47 +14,63 @@ lassip accepts VCF files, either phased (default, "hap" output files) or unphase
 
 Use --hapstats to compute H/G stats in sliding windows along the genome, whether or not data are phased determines whether H or G statistics are used. 
 
-Use --lassi to compute the top K haplotype frequency specra in sliding windows along a contig. Pass multiple spectra files (e.g. from multiple contigs) with --spectra to run the CLR computation for detecting sweeps (Harris and DeGiorgio 2020).
+Use --calc-spec to compute the top K haplotype frequency specra in sliding windows along a contig. Pass multiple spectra files (e.g. from multiple contigs) with --spectra and --lassi to run the CLR computation for detecting sweeps (Harris and DeGiorgio 2020) or with --salti to run CLR computation from (DeGiorgio and Szpiech 2021).
 
 If only --hapstats is given, files are named <basename>.lassip.[hap|mlg].stats.gz with format:
 
-<chr>	<start>	<end>	<nSNPs>	<nHaps>	<uniqHaps>	<h12|g123>	<h2h1|g2g1>
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1>
 
 The final 4 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label.
 
-If only --lassi is given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
+If only --calc-spec is given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
 
 <header line for use with lassip when reading with --spectra>
-<chr>	<start>	<end>	<nSNPs>	<nHaps>	<uniqHaps>	<hfs1>	...	<hfsK>
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <hfs1> ... <hfsK>
 
 The final K+2 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. hfsN gives the frequency of the Nth most common haplotype in the given window.
 
-If both --lassi and --hapstats are given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
+If both --calc-spec and --hapstats are given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
 
 <header line for use with lassip when reading with --spectra>
-<chr>	<start>	<end>	<nSNPs>	<nHaps>	<uniqHaps>	<h12|g123>	<h2h1|g2g1>	<hfs1>	...	<hfsK>
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <hfs1> ... <hfsK>
 
 The final K+4 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. hfsN gives the frequency of the Nth most common haplotype in the given window.
 
-Passing *.spectra.gz files to lassip with --spectra <file1> ... <fileN> will compute the LASSI CLR and output a single file concatenating the results from all contigs, named <basename>.lassip.[hap|mlg].out.gz with one of two formats:
+Passing *.spectra.gz files to lassip with --spectra <file1> ... <fileN> will compute the LASSI CLR if --lassi is set and the saltiLASSI CLR if --salti is set. Output is a single file concatenating the results from all contigs, named <basename>.lassip.[hap|mlg].out.gz. For LASSI computations, one of two formats is output:
 
-<chr>	<start>	<end>	<nSNPs>	<nHaps>	<uniqHaps>	<h12|g123>	<h2h1|g2g1>	<m>	<T>
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <m> <T>
 
 or
 
-<chr>	<start>	<end>	<nSNPs>	<nHaps>	<uniqHaps>	<m>	<T>
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <m> <T>
 
-Depending on whether --hapstats was set when the *.spectra.gz files were generated. The final 4/6 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. m gives the inferred number of sweeping haplotypes, and T gives the CLR test statistic (Harris and DeGiorgio 2020).
+For saltiLASSI computations, one of two formats is output:
 
-If --filter-level 2 is given, loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <m> <A> <L>
+
+or
+
+<chr> <start> <end> <nSNPs> <nHaps> <uniqHaps> <m> <A> <L>
+
+Depending on whether --hapstats was set when the *.spectra.gz files were generated. The final columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. m gives the inferred number of sweeping haplotypes, A gives the sweep “width” and T/L gives the CLR test statistic.
+
+If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.0.2a
+lassip v1.1.0
 
 ----------Command Line Arguments----------
 
+--avg-spec <bool>: Set this flag to compute and output the average
+K-truncated haplotype frequency spectrum from a set of .spectra files.
+	Default: false
+
+--calc-spec <bool>: Set this flag to compute K-truncated haplotype
+frequency spectra.
+	Default: false
+
 --filter-level <int>: Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.
-	Default: 0
+	Default: 2
 
 --hapstats <bool>: Set this flag to calculate haplotype statistics.
 	Default: false
@@ -67,15 +84,26 @@ lassip v1.0.2a
 --lassi <bool>: Set this flag to use the LASSI method.
 	Default: false
 
---lassi-choice <int>: Set this flag to change the way LASSI
+--lassi-choice <int>: Set this flag to change the way LASSI/saltiLASSI
 	distributes mass across sweeping haplotype classes. Takes an integer in {1..5}.
+	See Harris and DeGiorgio (2020) for details.
 	Default: 4
+
+--max-extend-bp <double>: Maximum distance in basepairs from core window to consider for saltiLASSI.
+	Default: 100000.00
+
+--null-spec <string>: A file containing a null K-truncated
+haplotype spectrum for use computing LASSI or saltiLASSI.
+	Default: __nullspec1
 
 --out <string>: The basename for all output files.
 	Default: outfile
 
 --pop <string>: A file containing <ind ID> <pop ID>.
 	Default: __popfile1
+
+--salti <bool>: Set this flag to use the saltiLASSI method.
+	Default: false
 
 --spectra <string1> ... <stringN>: A list of spectra files for finalization.
 	Default: __specfile1
@@ -98,6 +126,12 @@ lassip v1.0.2a
 
 
 ***CHANGE LOG***
+
+07MAY2020 - v1.1.0 Introduced saltiLASSI framework. Must specify --lassi or --salti when passing spectra files with --spectra in order to choose a method.
+	--filter-level default changes to 2.
+	--null-spec introduced. Can be used to provide a null HFS for LASSI or saltiLASSI methods.
+	--avg-spec introduced. When used with --spectra will compute and output an averaged HFS which can be passed with --null-spec to use as background null HFS.
+	--max-extend-bp introduced. Maximum distance in basepairs from core window to consider for saltiLASSI.
 
 10JUN2020 - v1.0.2a Fixed a bug that caused chromosome name to be blank with filter level > 0.
 
