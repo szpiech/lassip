@@ -29,10 +29,15 @@ const string HELP_THREADS = "The number of threads to spawn during computations.
 
 // I/O flags
 
+const string ARG_FILENAME_MAP = "--map";
+const string DEFAULT_FILENAME_MAP = "__mapfile1";
+const string HELP_FILENAME_MAP = "A map file formatted <chr#> <locusID> <genetic pos> <physical pos>.\n\
+\tSites in VCF not in map file will be interpolated.";
+
 const string ARG_FILENAME_POP1_VCF = "--vcf";
 const string DEFAULT_FILENAME_POP1_VCF = "__vcffile1";
 const string HELP_FILENAME_POP1_VCF = "A VCF file containing haplotype data.\n\
-\tVariants should be coded 0/1";
+\tVariants should be coded 0/1.";
 
 const string ARG_FILENAME_POPFILE = "--pop";
 const string DEFAULT_FILENAME_POPFILE = "__popfile1";
@@ -92,11 +97,7 @@ const string HELP_SALTI = "Set this flag to use the saltiLASSI method.";
 
 
 // Other flags
-/*
-const string ARG_INIT = "--initial";
-const bool DEFAULT_INIT = false;
-const string HELP_INIT = "Initial computations.";
-*/
+
 const string ARG_K = "--k";
 const int DEFAULT_K = 10;
 const string HELP_K = "Top K haplotypes for LASSI computations.";
@@ -105,30 +106,21 @@ const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 2;
 const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
 
-/*
 const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";
 const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, nw.";
-*/
+
 const string ARG_MAX_EXTEND_BP = "--max-extend-bp";
 const double DEFAULT_MAX_EXTEND_BP = 100000;
 const string HELP_MAX_EXTEND_BP = "Maximum distance in basepairs from core window to consider for saltiLASSI.";
 
-/*
 const string ARG_MAX_EXTEND_CM = "--max-extend-cm";
-const double DEFAULT_MAX_EXTEND_CM = 1;
+const double DEFAULT_MAX_EXTEND_CM = 0.1;
 const string HELP_MAX_EXTEND_CM = "Maximum distance in centimorgans from core window to consider for saltiLASSI.";
 
 const string ARG_MAX_EXTEND_NW = "--max-extend-nw";
-const double DEFAULT_MAX_EXTEND_NW = 100;
+const double DEFAULT_MAX_EXTEND_NW = 5;
 const string HELP_MAX_EXTEND_NW = "Maximum distance in number of windows from core window to consider for saltiLASSI.";
-*/
-
-/*
-const string ARG_FINALIZE = "--finalize";
-const bool DEFAULT_FINALIZE = false;
-const string HELP_FINALIZE = "Finalize computations.";
-*/
 
 const string ARG_UNPHASED = "--unphased";
 const bool DEFAULT_UNPHASED = false;

@@ -18,7 +18,6 @@
 #include "lassip-data.h"
 #include "lassip-wintools.h"
 
-
 void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop){
     ogzstream fout;
     string outfile = outfileBase + ".lassip.null.spectra.gz";
@@ -330,7 +329,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
 
     //SpectrumData *specData;
     LASSIResults *results;
-    unsigned int **info;
+    string **info;
     unsigned int *nhaps;
     unsigned int *uhaps;
     double *dist;
@@ -566,10 +565,7 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
             x[i] = new double[K+2];
             int st = wins->at(i)->start;
             int en = wins->at(i)->end;
-            if(DIST_TYPE.compare("bp") == 0) dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
-            else if(DIST_TYPE.compare("cm") == 0) dist[i] = i; //NEED TO UPDATE TO USING GENETIC MAP
-            else if(DIST_TYPE.compare("ns") == 0) dist[i] = (en-st+1)*0.5+st;
-            else if(DIST_TYPE.compare("nw") == 0) dist[i] = i;
+            dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
         }
 
         results->data->operator[](popName) = x;
@@ -649,6 +645,42 @@ void releaseResults(LASSIResults *data){
     if (data->h12 != NULL) delete [] data->h12;
     if (data->h2h1 != NULL) delete [] data->h2h1;
 
+    return;
+}
+
+void fillNWDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        vector<SpectrumData *> *specDataByChr = it->second;
+        for(unsigned int i = 0; i < specDataByChr->size(); i++){
+            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
+                specDataByChr->at(i)->dist[w] = w;
+                //cerr << "chr" << i << " " << specDataByChr->at(i)->dist[w] << endl;
+            }
+        }
+    }
+    return;
+}
+
+void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, GMapData &geneticMap){
+    string c;
+    string locName;
+    double gPos;
+    int current_locus;
+
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        vector<SpectrumData *> *specDataByChr = it->second;
+        for(unsigned int i = 0; i < specDataByChr->size(); i++){
+            current_locus = 0;
+            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
+                c = specDataByChr->at(i)->info[w][0];
+                geneticMap.getMapInfo(specDataByChr->at(i)->dist[w],gPos,locName,c,current_locus);
+                specDataByChr->at(i)->dist[w] = gPos;
+                //cerr << "chr" << c << " " << specDataByChr->at(i)->dist[w] << endl;
+            }
+        }
+    }
     return;
 }
 
@@ -754,7 +786,7 @@ map<string, SpectrumData *> *readSpecData(string filename){
 
     map<string, SpectrumData *> *specDataByPop = new map<string, SpectrumData *>;
     SpectrumData *data;
-    unsigned int **info = new unsigned int*[nwins];
+    string **info = new string*[nwins];
     double *dist = new double[nwins];
     for(int p = 0; p < npop; p++){
         data = initSpecData(nwins,K,false, HAPSTATS);
@@ -767,7 +799,7 @@ map<string, SpectrumData *> *readSpecData(string filename){
     
     getline(fin,junk);
     for(unsigned int w = 0; w < nwins; w++){
-        info[w] = new unsigned int[4];
+        info[w] = new string[4];
         getline(fin,junk);
         ss.str(junk);
         for(int i = 0; i < 4; i++) ss >> info[w][i];
@@ -794,7 +826,7 @@ SpectrumData *initSpecData(int nwins, int K, bool doinfo, bool HAPSTATS){
     data->K = K;
     data->nwins = nwins;
     data->freq = new double*[nwins];
-    if(doinfo) data->info = new unsigned int*[nwins];
+    if(doinfo) data->info = new string*[nwins];
     else data->info = NULL;
     data->nhaps = new unsigned int[nwins];
     data->uhaps = new unsigned int[nwins];
@@ -806,8 +838,8 @@ SpectrumData *initSpecData(int nwins, int K, bool doinfo, bool HAPSTATS){
         data->freq[j] = new double[K];
         for (int i = 0; i < K; i++) data->freq[j][i] = 0;
         if(doinfo){
-            data->info[j] = new unsigned int[4];
-            for (int i = 0; i < 4; i++) data->info[j][i] = 0;
+            data->info[j] = new string[4];
+            for (int i = 0; i < 4; i++) data->info[j][i] = '0';
         }
     }
     return data;
@@ -2110,3 +2142,232 @@ map<string,char> storeMap(){
     return x;
 }
 */
+
+bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string c, int &current_index)
+{
+    bool success = true;
+
+    if (queryPos < physicalPos[c][0])
+    {
+        //cerr << "Skip low.\n";
+        success = false;
+    }
+    else if (queryPos > physicalPos[c][nloci[c] - 1])
+    {
+        //cerr << "Skip high.\n";
+        //success = false;
+        //c = chr;
+        gPos = this->interpolate(physicalPos[c][nloci[c] - 2], geneticPos[c][nloci[c] - 2],
+                                 physicalPos[c][nloci[c] - 1], geneticPos[c][nloci[c] - 1],
+                                 queryPos);
+        char buffer[50];
+        sprintf(buffer, "chr%s:%f", c.c_str(), queryPos);
+        locName = buffer;
+    }
+    else if (ppos2index[c].count(queryPos) > 0)
+    {
+        //cerr << "Exists:\t";
+        int index = ppos2index[c][queryPos];
+        gPos = geneticPos[c][index];
+        locName = locusName[c][index];
+        //c = chr;
+    }
+    else
+    {
+        //cerr << "Calc:\t";
+        int startIndex;
+        int endIndex;
+        for (/*current_index*/; current_index < nloci[c] - 1; current_index++)
+        {
+            if (queryPos > physicalPos[c][current_index] && queryPos < physicalPos[c][current_index + 1])
+            {
+                startIndex = current_index;
+                endIndex = current_index + 1;
+                break;
+            }
+        }
+
+        if (physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP)
+        {
+            //cerr << physicalPos[ppos2index[endPos]] - physicalPos[ppos2index[startPos]] << " > " << MAXGAP << endl;
+            return false;
+        }
+
+        //c = chr;
+        gPos = this->interpolate(physicalPos[c][startIndex], geneticPos[c][startIndex],
+                                 physicalPos[c][endIndex], geneticPos[c][endIndex],
+                                 queryPos);
+        char buffer[50];
+        sprintf(buffer, "chr%s:%f", c.c_str(), queryPos);
+        locName = buffer;
+    }
+
+    return success;
+}
+
+GMapData::GMapData(string filename, double mGap)
+{
+    ifstream fin;
+    cerr << "Opening " << filename << "...\n";
+    fin.open(filename.c_str());
+
+    if (fin.fail())
+    {
+        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
+        throw 0;
+    }
+
+
+    map<string,int> nloci;
+    vector<string> chrstr;
+    int fileStart = fin.tellg();
+    string line;
+    int n = 0;
+    int num_cols = 4;
+    int current_cols = 0;
+    string currChr = "-1";
+    stringstream ss;
+
+    while (getline(fin, line))
+    {
+        ss.str(line);
+        ss >> currChr;
+
+        if(nloci.count(currChr) == 0){
+            nloci[currChr] = 0;
+            chrstr.push_back(currChr);
+        }
+        nloci[currChr]++;
+
+        n++;
+        current_cols = countFields(line);
+        if (current_cols != num_cols)
+        {
+            cerr << "ERROR: line " << n << " of " << filename << " has " << current_cols
+                 << ", but expected " << num_cols << ".\n";
+            throw 0;
+        }
+    }
+
+    fin.clear();
+    fin.seekg(fileStart);
+
+    cerr << "Loading map data for " << n << " loci.\n";
+
+    //this->initGMapData(n+1);
+    this->initGMapData(chrstr,nloci,true);
+
+    string c, chrCheck;
+
+    for(long unsigned int i = 0; i != chrstr.size(); i++){
+        c = chrstr[i];
+
+        for (int locus = 0; locus < nloci[c]; locus++)
+        {
+            if(locus == 0){
+                locusName[c][0] = "0";
+                geneticPos[c][0] = 0;
+                physicalPos[c][0] = 0;
+                ppos2index[c][physicalPos[c][0]] = 0;
+                continue;
+            }
+            fin >> chrCheck;
+            if(c != chrCheck){
+                cerr << "ERROR: Mismatch among chromosomes when reading genetic map.\n";
+                throw 0;
+            }
+            fin >> locusName[c][locus];
+            fin >> geneticPos[c][locus];
+            fin >> physicalPos[c][locus];
+            ppos2index[c][physicalPos[c][locus]] = locus;
+        }
+    }
+
+    MAXGAP = mGap;
+    fin.close();
+    return;
+}
+
+void GMapData::initGMapData(vector<string> chrstr, map<string,int> nl, bool ADD){
+
+    for(long unsigned int i = 0; i != chrstr.size(); i++){
+        if(ADD) nl[chrstr[i]]++;
+    }
+
+    chr = chrstr;
+    nloci = nl;
+
+    int n;
+    string c;
+
+    for(long unsigned int i = 0; i != chrstr.size(); i++){
+        c = chrstr[i];
+        n = nloci[c];
+        physicalPos[c] = new int[n];
+        geneticPos[c] = new double[n];
+        locusName[c] = new string[n];
+
+        for(int l = 0; l < n; l++){
+            physicalPos[c][l] = MISSING;
+            geneticPos[c][l] = MISSING;
+            locusName[c][l] = "--";
+        }
+    }
+    return;
+}
+/*
+void GMapData::initGMapData(int n)
+{
+    if (n < 1)
+    {
+        cerr << "ERROR: number of loci (" << n << ") must be positive.\n";
+        throw 0;
+    }
+
+    nloci = n;
+    locusName = new string[nloci];
+    physicalPos = new int[nloci];
+    geneticPos = new double[nloci];
+
+    for (int locus = 0; locus < nloci; locus++)
+    {
+        locusName[locus] = "--";
+        physicalPos[locus] = MISSING;
+        geneticPos[locus] = MISSING;
+    }
+
+    return;
+}
+*/
+GMapData::~GMapData()
+{
+    for(long unsigned int i = 0; i != chr.size(); i++){
+        string c = chr[i];
+        delete [] locusName[c];
+        delete [] physicalPos[c];
+        delete [] geneticPos[c];
+    }
+}
+
+int GMapData::countFields(const string &str)
+{
+    string::const_iterator it;
+    int result;
+    int numFields = 0;
+    int seenChar = 0;
+    for (it = str.begin() ; it < str.end(); it++)
+    {
+        result = isspace(*it);
+        if (result == 0 && seenChar == 0)
+        {
+            numFields++;
+            seenChar = 1;
+        }
+        else if (result != 0)
+        {
+            seenChar = 0;
+        }
+    }
+    return numFields;
+}
+

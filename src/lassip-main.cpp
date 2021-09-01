@@ -36,6 +36,7 @@ int main(int argc, char *argv[])
 
   // I/O flags
   params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "", HELP_OUTFILE);
+  params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "", HELP_FILENAME_MAP);
   params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "", HELP_FILENAME_POP1_VCF);
   params.addFlag(ARG_FILENAME_POPFILE, DEFAULT_FILENAME_POPFILE, "", HELP_FILENAME_POPFILE);
   params.addListFlag(ARG_FILENAME_SPECFILES, DEFAULT_FILENAME_SPECFILES, "", HELP_FILENAME_SPECFILES);
@@ -57,10 +58,10 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_K, DEFAULT_K, "", HELP_K);
   params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
   params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "", HELP_FILTER_LEVEL);
-  //params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
+  params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
   params.addFlag(ARG_MAX_EXTEND_BP, DEFAULT_MAX_EXTEND_BP, "", HELP_MAX_EXTEND_BP);
-  //params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "", HELP_MAX_EXTEND_CM);
-  //params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "", HELP_MAX_EXTEND_NW);
+  params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "", HELP_MAX_EXTEND_CM);
+  params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "", HELP_MAX_EXTEND_NW);
 
   try {
     params.parseCommandLine(argc, argv);
@@ -72,6 +73,8 @@ int main(int argc, char *argv[])
   int numThreads = params.getIntFlag(ARG_THREADS);
 
   // I/O
+  string mapFilename = params.getStringFlag(ARG_FILENAME_MAP);
+  bool MAP = (mapFilename.compare(DEFAULT_FILENAME_MAP) == 0) ? false : true;
   string vcfFilename = params.getStringFlag(ARG_FILENAME_POP1_VCF);
   bool VCF = (vcfFilename.compare(DEFAULT_FILENAME_POP1_VCF) == 0) ? false : true;
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
@@ -96,10 +99,11 @@ int main(int argc, char *argv[])
   int K = params.getIntFlag(ARG_K);
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
-  //string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
-  string DIST_TYPE = "bp";
+  string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
+  //string DIST_TYPE = "bp";
   double MAX_EXTEND_BP = params.getDoubleFlag(ARG_MAX_EXTEND_BP);
-  //double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
+  double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
+  double MAX_EXTEND_CM = params.getDoubleFlag(ARG_MAX_EXTEND_CM);
 
   // Check for consistency errors within flags
   bool ERROR = false;
@@ -143,21 +147,17 @@ int main(int argc, char *argv[])
       ERROR = true;
     }
 
-    if(DIST_TYPE.compare("bp") != 0 &&
-      DIST_TYPE.compare("cm") != 0 &&
-      DIST_TYPE.compare("ns") != 0 &&
-      DIST_TYPE.compare("nw") != 0){
-      //cerr << "ERROR: Must choose bp, cm, ns, or nw for distance measure.\n";
-      cerr << "ERROR: Must choose bp for distance measure.\n";
-      ERROR = true;
-    }
-
     if (!CALC_SPEC && !HAPSTATS){
       cerr << "ERROR: Must use --calc-spec or --hapstats.\n";
       ERROR = true;
     }    
     if (CALC_SPEC && K < 1){
       cerr << "ERROR: K must be >= 1.\n";
+      ERROR = true;
+    }
+
+    if(MAP){
+      cerr << "ERROR: Map file not required at this stage.\n";
       ERROR = true;
     }
   }
@@ -181,8 +181,41 @@ int main(int argc, char *argv[])
       cerr << "ERROR: Must choose only one of --lassi or --salti for analyzing haplotype spectra.\n";
       ERROR = true;
     }
-    if(SALTI && MAX_EXTEND_BP < 1){
+
+    if(DIST_TYPE.compare("bp") != 0 &&
+      DIST_TYPE.compare("cm") != 0 &&
+      DIST_TYPE.compare("nw") != 0){
+      cerr << "ERROR: Must choose bp, cm, or nw for distance measure.\n";
+      ERROR = true;
+    }
+
+    if(LASSI && MAP){
+      cerr << "ERROR: Map file only used for saltiLASSI computations.\n";
+      ERROR = true;
+    }
+
+    if(MAP && DIST_TYPE.compare("cm") != 0){
+      cerr << "ERROR: Must choose --dist-type cm when providing a map file.\n";
+      ERROR = true;
+    }
+
+    if(!MAP && DIST_TYPE.compare("cm") == 0){
+      cerr << "ERROR: Must provide a map file when choosing --dist-type cm.\n";
+      ERROR = true;
+    }
+
+    if(SALTI && DIST_TYPE.compare("bp") == 0 && MAX_EXTEND_BP < 1){
       cerr << "ERROR: MAX_EXTEND (bp) must be >= 1.\n";
+      ERROR = true;
+    }
+
+    if(SALTI && DIST_TYPE.compare("cm") == 0 && MAX_EXTEND_CM <= 0){
+      cerr << "ERROR: MAX_EXTEND (cm) must be > 0.\n";
+      ERROR = true;
+    }
+
+    if(SALTI && DIST_TYPE.compare("nw") == 0 && MAX_EXTEND_NW <= 0){
+      cerr << "ERROR: MAX_EXTEND (nw) must be > 0.\n";
       ERROR = true;
     }
   }
@@ -271,6 +304,18 @@ int main(int argc, char *argv[])
     }
     else if (SALTI){
       cerr << "saltiLASSI\n";
+
+      if(DIST_TYPE.compare("nw") == 0){
+        //populate specDataByPopByChr->chr->pop->dist[] with integers
+        fillNWDistance(specDataByPopByChr);
+      }
+      else if (DIST_TYPE.compare("cm") == 0){
+        //load genetic map from file
+        GMapData geneticMap(mapFilename,3000000);
+        //populate specDataByPopByChr->chr->pop->dist[] with genetic distances 
+        fillCMDistance(specDataByPopByChr,geneticMap);
+      }
+
       map<string, vector<SpectrumData *>* >::iterator it;
       //pop
       for (it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){

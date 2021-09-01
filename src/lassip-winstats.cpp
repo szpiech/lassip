@@ -115,7 +115,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
-   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
+   while(abs(dist[w] - dist[d]) <= MAX_EXTEND){
       d++;
       if(d >= specData->nwins){
          d--;
@@ -124,7 +124,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    }
    leftLim = d;
    d = w;
-   while(abs(dist[w] - dist[d]) < MAX_EXTEND){
+   while(abs(dist[w] - dist[d]) <= MAX_EXTEND){
       d--;
       if(d < 0){
          d++;
@@ -154,7 +154,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    //double p = 0-log(1e-8);
    //double d;
 
-   for (int A = lAmin; A <= lAmax; A += lstep){
+   for (double A = lAmin; A <= lAmax; A += lstep){
       //d = p/exp(A);
       //cerr << "p " << p << " A " << A << " d " << d << endl;
       //double currNullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,d);
