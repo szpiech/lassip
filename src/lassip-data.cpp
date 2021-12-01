@@ -648,41 +648,6 @@ void releaseResults(LASSIResults *data){
     return;
 }
 
-void fillNWDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
-    map<string, vector<SpectrumData *>* >::iterator it;
-    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
-        vector<SpectrumData *> *specDataByChr = it->second;
-        for(unsigned int i = 0; i < specDataByChr->size(); i++){
-            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
-                specDataByChr->at(i)->dist[w] = w;
-                //cerr << "chr" << i << " " << specDataByChr->at(i)->dist[w] << endl;
-            }
-        }
-    }
-    return;
-}
-
-void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, GMapData &geneticMap){
-    string c;
-    string locName;
-    double gPos;
-    int current_locus;
-
-    map<string, vector<SpectrumData *>* >::iterator it;
-    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
-        vector<SpectrumData *> *specDataByChr = it->second;
-        for(unsigned int i = 0; i < specDataByChr->size(); i++){
-            current_locus = 0;
-            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
-                c = specDataByChr->at(i)->info[w][0];
-                geneticMap.getMapInfo(specDataByChr->at(i)->dist[w],gPos,locName,c,current_locus);
-                specDataByChr->at(i)->dist[w] = gPos;
-                //cerr << "chr" << c << " " << specDataByChr->at(i)->dist[w] << endl;
-            }
-        }
-    }
-    return;
-}
 
 //need for each pop
 map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
@@ -2149,14 +2114,13 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
 
     if (queryPos < physicalPos[c][0])
     {
-        //cerr << "Skip low.\n";
-        success = false;
+        gPos = this->interpolate(physicalPos[c][0], geneticPos[c][0],
+                                 physicalPos[c][1], geneticPos[c][1],
+                                 queryPos);
+        success = true;
     }
     else if (queryPos > physicalPos[c][nloci[c] - 1])
     {
-        //cerr << "Skip high.\n";
-        //success = false;
-        //c = chr;
         gPos = this->interpolate(physicalPos[c][nloci[c] - 2], geneticPos[c][nloci[c] - 2],
                                  physicalPos[c][nloci[c] - 1], geneticPos[c][nloci[c] - 1],
                                  queryPos);
@@ -2166,15 +2130,12 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
     }
     else if (ppos2index[c].count(queryPos) > 0)
     {
-        //cerr << "Exists:\t";
         int index = ppos2index[c][queryPos];
         gPos = geneticPos[c][index];
         locName = locusName[c][index];
-        //c = chr;
     }
     else
     {
-        //cerr << "Calc:\t";
         int startIndex;
         int endIndex;
         for (/*current_index*/; current_index < nloci[c] - 1; current_index++)
@@ -2187,13 +2148,8 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
             }
         }
 
-        if (physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP)
-        {
-            //cerr << physicalPos[ppos2index[endPos]] - physicalPos[ppos2index[startPos]] << " > " << MAXGAP << endl;
-            return false;
-        }
+        if (physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP) return false;
 
-        //c = chr;
         gPos = this->interpolate(physicalPos[c][startIndex], geneticPos[c][startIndex],
                                  physicalPos[c][endIndex], geneticPos[c][endIndex],
                                  queryPos);
@@ -2201,7 +2157,6 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
         sprintf(buffer, "chr%s:%f", c.c_str(), queryPos);
         locName = buffer;
     }
-
     return success;
 }
 
@@ -2255,22 +2210,24 @@ GMapData::GMapData(string filename, double mGap)
     cerr << "Loading map data for " << n << " loci.\n";
 
     //this->initGMapData(n+1);
-    this->initGMapData(chrstr,nloci,true);
+    this->initGMapData(chrstr,nloci,false);
 
     string c, chrCheck;
 
     for(long unsigned int i = 0; i != chrstr.size(); i++){
         c = chrstr[i];
-
         for (int locus = 0; locus < nloci[c]; locus++)
         {
+            /*
             if(locus == 0){
                 locusName[c][0] = "0";
                 geneticPos[c][0] = 0;
                 physicalPos[c][0] = 0;
                 ppos2index[c][physicalPos[c][0]] = 0;
+                cout << c << " " << physicalPos[c][locus] << " " << geneticPos[c][locus] << endl;
                 continue;
             }
+            */
             fin >> chrCheck;
             if(c != chrCheck){
                 cerr << "ERROR: Mismatch among chromosomes when reading genetic map.\n";
@@ -2279,6 +2236,7 @@ GMapData::GMapData(string filename, double mGap)
             fin >> locusName[c][locus];
             fin >> geneticPos[c][locus];
             fin >> physicalPos[c][locus];
+            //cout << c << " " << physicalPos[c][locus] << " " << geneticPos[c][locus] << endl;
             ppos2index[c][physicalPos[c][locus]] = locus;
         }
     }
@@ -2371,3 +2329,36 @@ int GMapData::countFields(const string &str)
     return numFields;
 }
 
+void fillNWDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr){
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        vector<SpectrumData *> *specDataByChr = it->second;
+        for(unsigned int i = 0; i < specDataByChr->size(); i++){
+            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
+                specDataByChr->at(i)->dist[w] = w;
+            }
+        }
+    }
+    return;
+}
+
+void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, GMapData &geneticMap){
+    string c;
+    string locName;
+    double gPos;
+    int current_locus;
+
+    map<string, vector<SpectrumData *>* >::iterator it;
+    for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
+        vector<SpectrumData *> *specDataByChr = it->second;
+        for(unsigned int i = 0; i < specDataByChr->size(); i++){
+            current_locus = 0;
+            for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
+                c = specDataByChr->at(i)->info[w][0];
+                geneticMap.getMapInfo(specDataByChr->at(i)->dist[w],gPos,locName,c,current_locus);
+                specDataByChr->at(i)->dist[w] = gPos;
+            }
+        }
+    }
+    return;
+}
