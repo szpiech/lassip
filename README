@@ -2,7 +2,7 @@
 
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
-saltiLASSI: DeGriorgio and Szpiech (2021) bioRxiv doi.org/10.1101/2021.05.12.443825.
+saltiLASSI: DeGriorgio and Szpiech (2021) bioRxiv 2021.05.12.443825.
 LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
 H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
 H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
@@ -57,7 +57,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.1.0
+lassip v1.1.1
 
 ----------Command Line Arguments----------
 
@@ -68,6 +68,9 @@ K-truncated haplotype frequency spectrum from a set of .spectra files.
 --calc-spec <bool>: Set this flag to compute K-truncated haplotype
 frequency spectra.
 	Default: false
+
+--dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
+	Default: bp
 
 --filter-level <int>: Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.
 	Default: 2
@@ -84,13 +87,22 @@ frequency spectra.
 --lassi <bool>: Set this flag to use the LASSI method.
 	Default: false
 
---lassi-choice <int>: Set this flag to change the way LASSI/saltiLASSI
+--lassi-choice <int>: Set this flag to change the way LASSI
 	distributes mass across sweeping haplotype classes. Takes an integer in {1..5}.
-	See Harris and DeGiorgio (2020) for details.
 	Default: 4
+
+--map <string>: A map file formatted <chr#> <locusID> <genetic pos> <physical pos>.
+	Sites in VCF not in map file will be interpolated.
+	Default: __mapfile1
 
 --max-extend-bp <double>: Maximum distance in basepairs from core window to consider for saltiLASSI.
 	Default: 100000.00
+
+--max-extend-cm <double>: Maximum distance in centimorgans from core window to consider for saltiLASSI.
+	Default: 0.05
+
+--max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
+	Default: 5.00
 
 --null-spec <string>: A file containing a null K-truncated
 haplotype spectrum for use computing LASSI or saltiLASSI.
@@ -115,7 +127,7 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 	Default: false
 
 --vcf <string>: A VCF file containing haplotype data.
-	Variants should be coded 0/1
+	Variants should be coded 0/1.
 	Default: __vcffile1
 
 --winsize <int>: The window size within which to calculate statistics.
@@ -127,7 +139,16 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 ***CHANGE LOG***
 
-07MAY2020 - v1.1.0 Introduced saltiLASSI framework. Must specify --lassi or --salti when passing spectra files with --spectra in order to choose a method.
+03DEC2021 - Bug fixes relating to genetic map distance interpolation.
+
+02SEPT2021 - v1.1.1 Introduced saltiLASSI options for measuring distance in bp (basepairs), nw (number of windows), or cm (centimorgans). New command line flags:
+    --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
+    --max-extend-cm <double>: Maximum distance in centimorgans from core window to consider for saltiLASSI.
+    --map <string>: A map file formatted <chr#> <locusID> <genetic pos> <physical pos>. Sites in VCF not in map file will be interpolated.
+    --dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
+    These flags are used with --salti and --spectra flags when finalizing the computations.
+
+07MAY2021 - v1.1.0 Introduced saltiLASSI framework. Must specify --lassi or --salti when passing spectra files with --spectra in order to choose a method.
 	--filter-level default changes to 2.
 	--null-spec introduced. Can be used to provide a null HFS for LASSI or saltiLASSI methods.
 	--avg-spec introduced. When used with --spectra will compute and output an averaged HFS which can be passed with --null-spec to use as background null HFS.

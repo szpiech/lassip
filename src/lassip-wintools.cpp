@@ -149,7 +149,18 @@ void calc_SALTI_stats2(void *order) {
 	int id = p->id;
 	//int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
-	double MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_BP);
+	double MAX_EXTEND;
+	string DIST_TYPE = params->getStringFlag(ARG_DIST_TYPE);
+	if(DIST_TYPE.compare("bp") == 0){
+		MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_BP);
+	}
+	else if(DIST_TYPE.compare("nw") == 0){
+		MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_NW);
+	}
+	else if(DIST_TYPE.compare("cm") == 0){
+		MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_CM);
+	}
+	
 	//int K = avgSpec->K;
 	//double **f = calcF(LASSI_CHOICE,K);
 	double ****q = p->q;

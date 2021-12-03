@@ -26,6 +26,7 @@
 #include <vector>
 #include "gzstream.h"
 #include <map>
+#include <cstdio>
 
 using namespace std;
 
@@ -35,6 +36,35 @@ const char MISSING_CHAR = '?';
 const char MISSING_ALLELE = '-';
 const string TPED_MISSING = "-9";
 const char VCF_MISSING = '.';
+
+class GMapData
+{
+public:
+    GMapData(string filename, double mGap);
+    ~GMapData();
+    bool getMapInfo(double queryPos, double &gPos, string &locName, string c, int &current_locus);
+
+private:
+    map<string,int * > physicalPos;
+    map<string,double * > geneticPos;
+    map<string,string * > locusName;
+    map<string,map<int, int> > ppos2index;
+    map<string,int> nloci;
+    vector<string> chr;
+
+    double MAXGAP;
+
+    int countFields(const string &str);
+    //void initGMapData(int n);
+    void initGMapData(vector<string> chrstr, map<string,int> nloci, bool ADD = false);
+    double interpolate(double x0, double y0, double x1, double y1, double query);
+};
+
+inline double GMapData::interpolate(double x0, double y0, double x1, double y1, double query)
+{
+    return ( ( (y1 - y0) / (x1 - x0) ) * query + ( y0 - ((y1 - y0) / (x1 - x0)) * x0 ) );
+}
+
 
 struct MapData
 {
@@ -102,7 +132,8 @@ struct SpectrumData {
   double **freq;
   int nwins;
   int K;
-  unsigned int **info;
+  //unsigned int **info;
+  string **info;
   unsigned int *nhaps;
   unsigned int *uhaps;
   double *dist;
@@ -152,6 +183,9 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
 LASSIResults *initResults(int nwins, bool HAPSTATS, bool SALTI);
 vector<LASSIResults *> *initResults(vector<SpectrumData *> *specDataByChr, bool SALTI);
 map<string, vector<LASSIResults *>* > *initResults(map<string, vector<SpectrumData *>* > *specDataByPopByChr, bool SALTI);
+
+void fillNWDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
+void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, GMapData &geneticMap);
 
 void releaseResults(LASSIResults *data);
 
