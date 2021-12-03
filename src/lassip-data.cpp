@@ -2230,7 +2230,7 @@ GMapData::GMapData(string filename, double mGap)
             */
             fin >> chrCheck;
             if(c != chrCheck){
-                cerr << "ERROR: Mismatch among chromosomes when reading genetic map.\n";
+                cerr << "ERROR: " << c << " " << chrCheck << ": Mismatch among chromosomes when reading genetic map.\n";
                 throw 0;
             }
             fin >> locusName[c][locus];

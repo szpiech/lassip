@@ -115,7 +115,7 @@ const double DEFAULT_MAX_EXTEND_BP = 100000;
 const string HELP_MAX_EXTEND_BP = "Maximum distance in basepairs from core window to consider for saltiLASSI.";
 
 const string ARG_MAX_EXTEND_CM = "--max-extend-cm";
-const double DEFAULT_MAX_EXTEND_CM = 0.1;
+const double DEFAULT_MAX_EXTEND_CM = 0.05;
 const string HELP_MAX_EXTEND_CM = "Maximum distance in centimorgans from core window to consider for saltiLASSI.";
 
 const string ARG_MAX_EXTEND_NW = "--max-extend-nw";
