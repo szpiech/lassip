@@ -2,7 +2,7 @@
 
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
-saltiLASSI: DeGriorgio and Szpiech (2021) In Prep.
+saltiLASSI: DeGriorgio and Szpiech (2021) bioRxiv 2021.05.12.443825.
 LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
 H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
 H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
@@ -99,7 +99,7 @@ frequency spectra.
 	Default: 100000.00
 
 --max-extend-cm <double>: Maximum distance in centimorgans from core window to consider for saltiLASSI.
-	Default: 0.10
+	Default: 0.05
 
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
@@ -138,6 +138,8 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 
 ***CHANGE LOG***
+
+03DEC2021 - Bug fixes relating to genetic map distance interpolation.
 
 02SEPT2021 - v1.1.1 Introduced saltiLASSI options for measuring distance in bp (basepairs), nw (number of windows), or cm (centimorgans). New command line flags:
     --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
