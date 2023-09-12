@@ -57,7 +57,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.1.1
+lassip v1.1.2
 
 ----------Command Line Arguments----------
 
@@ -138,6 +138,8 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 
 ***CHANGE LOG***
+
+12092023 - v1.1.2 Grid search across epsilon now starts at 0 and not 1/(100*K). This fixes a bug that tends to manifest when there is lots of missing data. When the average/null truncated HFS has its smallest frequency class p_K < 1/(100*K), this created a condition where the likelihoods were not computed and only placeholder values were output for all windows, since we set p_K = U but also expected p_K = U >= 1/(100*K). 
 
 03DEC2021 - Bug fixes relating to genetic map distance interpolation.
 
