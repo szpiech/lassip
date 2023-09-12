@@ -101,7 +101,7 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
 
 double ****initQ(int nwins,int K, double U){
     double ****q = new double***[nwins];
-    int nEps = int(U*100.0*K);
+    int nEps = int(U*100.0*K)+1;
     for(int w = 0; w < nwins; w++){
         q[w] = new double **[nEps];
         for(int e = 0; e < nEps; e++){
@@ -113,7 +113,7 @@ double ****initQ(int nwins,int K, double U){
 }
 
 void releaseQ(double ****q, int nwins,int K, double U){
-    int nEps = int(U*100.0*K);
+    int nEps = int(U*100.0*K)+1;
     for(int w = 0; w < nwins; w++){
         for(int e = 0; e < nEps; e++){
             for(int m = 0; m < K-1; m++) delete [] q[w][e][m];
