@@ -23,8 +23,7 @@
 #include <map>
 #include <vector>
 #include <cstdlib>
-#include "binom.h"
-#include <gsl/gsl_combination.h>
+#include <cmath>
 
 using namespace std;
 
@@ -46,37 +45,10 @@ void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w);
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);
 double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
-//double subsample_sfs(array_t *sfs, int H, int j);
-//array_t *sfs_window(FreqData *freqData, pair_t* snpIndex, bool SFS_SUB);
+
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
-//void calc_Q(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
-//double calc_alpha(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
-//double calc_pi(map< string, HaplotypeData* > *hapDataByPop, string popName, pair_t *snps);
-//double pi_window(HaplotypeData *hapData, pair_t* snpIndex);
-//double pi_from_sfs(array_t *sfs);
-//double pi_k(HaplotypeFrequencySpectrum *hfs, int k);
-//double pi_k2(HaplotypeFrequencySpectrum *hfs, int k, pair_t *subset_snps = NULL);
-//double pi_numerator_btw_pools(string *haps1, int length1, string *haps2, int length2, map<string, int> &hap2count, pair_t *subset_snps = NULL);
-//double pi_numerator(string *haps, int length, map<string, int> &hap2count, pair_t *subset_snps = NULL);
-//int hamming_dist_str(string one, string two, pair_t *subset_snps = NULL);
-//int hamming_dist_ptr(short *one, short *two, int length);
-//int hamming_dist_ptr(char *one, char *two, int length);
-
-//double tajimaD_from_sfs(array_t *sfs, double pi = -9, double S = -9);
-//double thetaH_from_sfs(array_t *sfs);
-//double fayWuH_from_sfs(array_t *sfs, double pi = -9);
-
-//double ehh_from_hfs(HaplotypeFrequencySpectrum *hfs);
-//double ehhk_from_hfs(HaplotypeFrequencySpectrum *hfs, int k);
-
-//int segsites(array_t *sfs);
-//double calc_a1(int n);
-//double calc_a2(int n);
-//double calc_e1(int n, double a1);
-//double calc_e2(int n, double a1, double a2);
 
 int numSitesInDataWin(pair_t* win);
 
-//const double MISSING = -999999999;
 
 #endif
