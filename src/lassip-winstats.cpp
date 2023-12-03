@@ -34,7 +34,7 @@ void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
    double U = avgSpec->freq[0][K-1];
    double epsStep = 1.0/(100.0*double(K));
    int ei = 0;
-   for (double e = 0; e <= U; e += epsStep){
+   for (double e = epsStep; e <= U; e += epsStep){
       for (int m = 1; m < K; m++){
          calcQ(q[ei][m-1], avgSpec, f, U, m, e, w);
       }
@@ -166,7 +166,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
       //double currNullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,d);
       for (int m = 1; m <= K; m++){
          int ei = 0;
-         for (double e = 0; e <= U; e += epsStep){
+         for (double e = epsStep; e <= U; e += epsStep){
             altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, exp(A), w, leftLim, rightLim);
             //cerr << "A " << A << " m " << m << " e " << " alt " << altLikelihood << endl;
             if(altLikelihood > maxAltLikelihood){
