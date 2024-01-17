@@ -58,6 +58,9 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_K, DEFAULT_K, "", HELP_K);
   params.addFlag(ARG_UNPHASED, DEFAULT_UNPHASED, "", HELP_UNPHASED);
   params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "", HELP_FILTER_LEVEL);
+  params.addFlag(ARG_FILTER_LMISS, DEFAULT_FILTER_LMISS, "", HELP_FILTER_LMISS);
+  params.addFlag(ARG_FILTER_HMISS, DEFAULT_FILTER_HMISS, "", HELP_FILTER_HMISS);
+  params.addFlag(ARG_MATCH_TOL, DEFAULT_MATCH_TOL, "", HELP_MATCH_TOL);
   params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "", HELP_DIST_TYPE);
   params.addFlag(ARG_MAX_EXTEND_BP, DEFAULT_MAX_EXTEND_BP, "", HELP_MAX_EXTEND_BP);
   params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "", HELP_MAX_EXTEND_CM);
@@ -100,6 +103,9 @@ int main(int argc, char *argv[])
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
   string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
+  double FILTER_LMISS = params.getDoubleFlag(ARG_FILTER_LMISS);
+  double FILTER_HMISS = params.getDoubleFlag(ARG_FILTER_HMISS);
+  int MATCH_TOL = params.getIntFlag(ARG_MATCH_TOL);
   //string DIST_TYPE = "bp";
   double MAX_EXTEND_BP = params.getDoubleFlag(ARG_MAX_EXTEND_BP);
   double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
@@ -144,6 +150,21 @@ int main(int argc, char *argv[])
 
     if(FILTER_LEVEL != 0 && FILTER_LEVEL != 1 && FILTER_LEVEL != 2){
       cerr << "ERROR: Filter level must be 0, 1, or 2.\n";
+      ERROR = true;
+    }
+
+    if(FILTER_LMISS < 0 || FILTER_LMISS > 1){
+      cerr << "ERROR: Missing data locus filter must be in [0,1].\n";
+      ERROR = true;
+    }
+
+    if(FILTER_HMISS < 0 || FILTER_HMISS > 1){
+      cerr << "ERROR: Missing data halotype filter must be in [0,1].\n";
+      ERROR = true;
+    }
+
+    if(MATCH_TOL < 0){
+      cerr << "ERROR: Haplotype match tolerance must be an integer >= 0.\n";
       ERROR = true;
     }
 

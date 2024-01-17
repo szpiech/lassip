@@ -104,7 +104,19 @@ const string HELP_K = "Top K haplotypes for LASSI computations.";
 
 const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 2;
-const string HELP_FILTER_LEVEL = "Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.";
+const string HELP_FILTER_LEVEL = "Filter monomorphic sites and sites with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.";
+
+const string ARG_FILTER_LMISS = "--max-lmiss";
+const double DEFAULT_FILTER_LMISS = 0.1;
+const string HELP_FILTER_LMISS = "Filter loci with > this proportion of missing data.";
+
+const string ARG_FILTER_HMISS = "--max-hmiss";
+const double DEFAULT_FILTER_HMISS = 0.2;
+const string HELP_FILTER_HMISS = "Drop haplotypes with > this proportion of missing data when computing the HFS.";
+
+const string ARG_MATCH_TOL = "--match-tol";
+const int DEFAULT_MATCH_TOL = 0;
+const string HELP_MATCH_TOL = "Group haplotypes into the same class if they have <= this many pairwise differences.";
 
 const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";

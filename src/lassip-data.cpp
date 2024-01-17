@@ -125,7 +125,7 @@ void releaseQ(double ****q, int nwins,int K, double U){
     return;
 }
 
-map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL){
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS){
     if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
         int nOriginalLoci = 0;
         int totHaps = 0;
@@ -152,7 +152,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         }
         int keepLoci = 0;
         for(int i = 0; i < nOriginalLoci; i++){
-            if(count[i] > 0 && count[i] < totHaps - nmissing[i]) keepLoci++;
+            if(count[i] > 0 && count[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LEVEL) keepLoci++;
         }
 
         cerr << "Filtering " << nOriginalLoci - keepLoci << " loci.\n";
@@ -163,7 +163,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         newMapData->chr = oldMapData->chr;
         int l0 = 0;
         for(int l = 0; l < oldMapData->nloci; l++){
-            if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+            if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LEVEL){
                 newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
                 newMapData->locusName[l0] = oldMapData->locusName[l];
                 l0++;
@@ -178,7 +178,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
             l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LEVEL){
                     for(int h = 0; h < hapData->nhaps; h++){
                         newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
                     }
@@ -222,7 +222,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             
             int keepLoci = 0;
             for(int i = 0; i < nOriginalLoci; i++){
-                if(count[i] > 0 && count[i] < totHaps - nmissing[i]) keepLoci++;
+                if(count[i] > 0 && count[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LEVEL) keepLoci++;
             }
 
             cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
@@ -230,7 +230,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l] > 0 && count[l] < totHaps - nmissing[l]){
+                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[i])/double(totHaps) <= FILTER_LEVEL){
                     newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
                     newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
