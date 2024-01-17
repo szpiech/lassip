@@ -230,7 +230,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[i])/double(totHaps) <= FILTER_LEVEL){
+                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LEVEL){
                     newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
                     newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
