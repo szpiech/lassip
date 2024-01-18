@@ -397,37 +397,130 @@ double **calcF(int type, int K){
    return f;
 }
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex) {
+int ndiff_str(string str1, string str2){
+   int ndiff = 0;
+   string::iterator i;
+   string::iterator j;
+   for (i = str1.begin(); i != str1.end(); i++){
+      for (j = str2.begin(); j != str2.end(); j++){
+         if (*i == MISSING_ALLELE || *j == MISSING_ALLELE) continue;
+         if (*i != *j) ndiff++;
+      }
+   }
+   return ndiff;
+}
+
+
+void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
+   map<string, double>::iterator it1;
+   map<string, double>::iterator it2;
+   
+   vector<string> best_matches;
+   vector<string> to_delete;
+   int mindiff = len+1;
+
+   for (it2 = miss_hap2count.begin(); it2 != miss_hap2count.end(); it2++){
+      for (it1 = hap2count.begin(); it1 != hap2count.end(); it1++){
+         
+         int d = ndiff_str(it2->first,it1->first);
+
+         if(d <= MATCH_TOL){
+            if(d == mindiff){
+               best_matches.push_back(it1->first);
+            }
+            else if (d < mindiff){
+               mindiff = d;
+               best_matches.clear();
+               best_matches.push_back(it1->first);
+            }
+         }
+         else{
+            continue;
+         }
+      
+      }
+   
+      if(best_matches.size() > 0){
+         for (int i = 0; i < best_matches.size(); i++){
+            hap2count[best_matches[i]] += (it2->second/double(best_matches.size()));
+         }
+         to_delete.push_back(it2->first);
+      }
+      best_matches.clear();
+      mindiff = len+1;
+   }
+
+   for (int i = 0; i < to_delete.size(); i++){
+      miss_hap2count.erase(to_delete[i]);
+   }
+
+   if (miss_hap2count.empty()) return;
+
+   for (it2 = miss_hap2count.begin(); it2 != miss_hap2count.end(); it2++){
+      hap2count[it2->first] = it2->second;
+   }
+
+   return;
+
+}
+
+void printHFS(map<string,double> hap2count){
+   map<string,double>::iterator it;
+   for (it = hap2count.begin(); it != hap2count.end(); it++){
+      cout << it->first << "\t" << it->second << endl;
+   }
+}
+
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
 
    bool skip = false;
    //Generate haplotypes and populate hap2count
+
+   //map<string,double> nomiss_hap2count;
+   map<string,double> miss_hap2count;
+   int nmissing = 0;
+   int haplen = snpIndex->end - snpIndex->start + 1;
+   
    for (int hap = 0; hap < hapData->nhaps; hap++) {
       string haplotype;
 
+      nmissing = 0;
+      
       for (int site = snpIndex->start; site <= snpIndex->end; site++) {
          if (hapData->data[hap][site] == MISSING_ALLELE){
-            skip = true;
-            break;
+            //skip = true;
+            //break;
+            nmissing++;
          }
          if (site == snpIndex->start) {
-            //haplotypeList[hap] = data[hap][site];
             haplotype = hapData->data[hap][site];
          }
          else {
-            //haplotypeList[hap] += data[hap][site];
             haplotype += hapData->data[hap][site];
          }
       }
-      //cerr << haplotype << endl;
+
+      skip = (double(nmissing)/double(haplen) > FILTER_HMISS);
+
       if (!skip){
-         if (hfs->hap2count.count(haplotype) == 0) {
-            hfs->hap2count[haplotype] = 1;
+         if(nmissing == 0){
+            if (hfs->hap2count.count(haplotype) == 0) {
+               hfs->hap2count[haplotype] = 1;
+            }
+            else {
+               hfs->hap2count[haplotype]++;
+            }
          }
-         else {
-            hfs->hap2count[haplotype]++;
+         else{
+            if(miss_hap2count.count(haplotype) == 0){
+               miss_hap2count[haplotype] = 1;
+            }
+            else{
+               miss_hap2count[haplotype]++;
+            }
          }
       }
       else{
@@ -435,12 +528,14 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       }
    }
 
+   match_haps_w_missing(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+
    if(hfs->hap2count.size() == 0) return NULL;
 
    //Populate count2hap and sortedCounts
    int *sortedCount = new int[hfs->hap2count.size()]; //could contain duplicates
    hfs->numClasses = hfs->hap2count.size();
-   map<string, int>::iterator it;
+   map<string, double>::iterator it;
    int i = 0;
    for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++, i++) {
       sortedCount[i] = it->second;//unsorted
@@ -452,6 +547,8 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    //hfs->sortedCount = uniqInt(sortedCount, hfs->numClasses, hfs->size);//remove duplicates
    hfs->sortedCount = sortedCount;
    //delete [] sortedCount;
+
+   //printHFS(hfs->hap2count);
 
    return hfs;
 }

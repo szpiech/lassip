@@ -35,6 +35,9 @@ void calc_LASSI_stats(void *order) {
 	bool PHASED = !(p->params->getBoolFlag(ARG_UNPHASED));
 	map<string,string> *names = p->results->names;
 
+	double FILTER_HMISS = p->params->getDoubleFlag(ARG_FILTER_HMISS);
+	int MATCH_TOL = p->params->getIntFlag(ARG_MATCH_TOL);
+	
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	HaplotypeFrequencySpectrum *hfs;
 	pair_t *snps;
@@ -46,7 +49,7 @@ void calc_LASSI_stats(void *order) {
 
 		for (unsigned int i = id; i < windows->size(); i += numThreads) {
 			snps = windows->at(i);		
-			hfs = hfs_window(hapDataByPop->at(popName), snps);
+			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL);
 			if(hfs == NULL) p->results->nullWins->operator[](popName)++;
 			double *h12; 
 			double *h2h1;

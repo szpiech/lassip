@@ -299,6 +299,19 @@ int main(int argc, char *argv[])
       return 0;
     }
 
+    //Check null spectra to make sure p_K >= 1/(100*K) otherwise grid search won't work.
+    //This condition can happen when there is not enough data to estimate the truncated
+    //HFS well, and the Kth highest frequency haplotype is < 1/(100*K)
+    for(map<string, SpectrumData* >::iterator it = avgSpecByPop->begin(); it != avgSpecByPop->end(); it++){
+      SpectrumData *spec = it->second;
+      if(spec->freq[0][spec->K-1] < 1.0/(100.0*double(K))){
+        cerr << "ERROR: Null spectrum " << it->first << " likely not well-estimated. Kth frequency class is < " << 1.0/(100.0*double(K)) << ", preventing grid search.\n";
+        ERROR = true;
+      }
+    }
+
+    if(ERROR) return 1;
+
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
     if(LASSI){

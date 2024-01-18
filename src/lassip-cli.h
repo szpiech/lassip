@@ -19,7 +19,7 @@
 #ifndef __LASSIP_CLI_H__
 #define __LASSIP_CLI_H__
 
-const string VERSION = "1.1.2a";
+const string VERSION = "1.2.0";
 
 const string PREAMBLE = "";
 
@@ -104,7 +104,7 @@ const string HELP_K = "Top K haplotypes for LASSI computations.";
 
 const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 2;
-const string HELP_FILTER_LEVEL = "Filter monomorphic sites and sites with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.";
+const string HELP_FILTER_LEVEL = "Filter monomorphic sites and sites\nwith missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.";
 
 const string ARG_FILTER_LMISS = "--max-lmiss";
 const double DEFAULT_FILTER_LMISS = 0.1;
@@ -116,7 +116,7 @@ const string HELP_FILTER_HMISS = "Drop haplotypes with > this proportion of miss
 
 const string ARG_MATCH_TOL = "--match-tol";
 const int DEFAULT_MATCH_TOL = 0;
-const string HELP_MATCH_TOL = "Group haplotypes into the same class if they have <= this many pairwise differences.";
+const string HELP_MATCH_TOL = "Group haplotypes with missing data into\nthe same class as a haplotype with no missing data if they have <= this many pairwise differences.";
 
 const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";

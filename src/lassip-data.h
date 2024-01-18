@@ -114,7 +114,7 @@ struct PopData
 };
 
 struct HaplotypeFrequencySpectrum {
-  map<string,int> hap2count;
+  map<string,double> hap2count;
   //multimap<int,string> count2hap;
   int *sortedCount;
   int size;

@@ -46,8 +46,10 @@ void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgS
 double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w);
 double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex);
-
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL);
+void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL);
+int ndiff(string str1, string str2, int len);
+void printHFS(map<string,double> hap2count);
 int numSitesInDataWin(pair_t* win);
 
 
