@@ -10,7 +10,7 @@ G123: Harris et al. (2018) Genetics 210:1419-1452.
 G2/G1: Harris et al. (2018) Genetics 210:1419-1452.
 Number of Unique Haplotypes at Locus
 
-lassip accepts VCF files, either phased (default, "hap" output files) or unphased (set --unphased, "mlg" output files), with or without missing data. lassip expects one vcf file per contig, provided one at a time. You must provide a population file that specifies population IDs for each individual ID you wish to analyse. Only IDs listed in the population file will be analyzed, and if multiple populations are present, all statistics will be computed on a per-population basis.
+lassip accepts VCF files, either phased (default, "hap" output files) or unphased (set --unphased, "mlg" output files), with or without missing data. ***SEE CHANGELOG 19JAN2024 for update on how missing data is handeled. lassip expects one vcf file per contig, provided one at a time. You must provide a population file that specifies population IDs for each individual ID you wish to analyse. Only IDs listed in the population file will be analyzed, and if multiple populations are present, all statistics will be computed on a per-population basis.
 
 Use --hapstats to compute H/G stats in sliding windows along the genome, whether or not data are phased determines whether H or G statistics are used. 
 
@@ -57,7 +57,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.1.2a
+lassip v1.2.0
 
 ----------Command Line Arguments----------
 
@@ -72,7 +72,8 @@ frequency spectra.
 --dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
 	Default: bp
 
---filter-level <int>: Filter level: 0-none, 1-poly in analysis, 2-poly in each pop.
+--filter-level <int>: Filter monomorphic sites and sites
+with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.
 	Default: 2
 
 --hapstats <bool>: Set this flag to calculate haplotype statistics.
@@ -95,6 +96,10 @@ frequency spectra.
 	Sites in VCF not in map file will be interpolated.
 	Default: __mapfile1
 
+--match-tol <int>: Group haplotypes with missing data into
+the same class as a haplotype with no missing data if they have <= this many pairwise differences.
+	Default: 0
+
 --max-extend-bp <double>: Maximum distance in basepairs from core window to consider for saltiLASSI.
 	Default: 100000.00
 
@@ -103,6 +108,12 @@ frequency spectra.
 
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
+
+--max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
+	Default: 0.20
+
+--max-lmiss <double>: Filter loci with > this proportion of missing data.
+	Default: 0.10
 
 --null-spec <string>: A file containing a null K-truncated
 haplotype spectrum for use computing LASSI or saltiLASSI.
@@ -139,6 +150,40 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 ***CHANGE LOG***
 
+18JAN2024 - v1.2.0. Changing the way missing data is handled. Three new command line arguments:
+
+--max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
+	Default: 0.20
+
+Previous behavior is that as soon as a missing genotype is encountered this haplotype is excluded from HFS calculation. You can now modify this behavior with --max-hmiss. A haplotype will only be dropped if there is more than MAX_HMISS proportion of alleles missing in that haplotype. e.g. 10-00--011 is a 10-snp haplotype with missing data represented by '-'. The default MAX_HMISS is 0.2, and since 3/10 > 0.2 this haplotype would be excluded. 10-0011011 has only 1/10 missing data, so it is kept.
+
+--max-lmiss <double>: Filter loci with > this proportion of missing data.
+	Default: 0.10
+
+Previous behavior did not filter loci based on missing data. Here you can set the proportion of missing data beyond which a locus will be excluded. --filter-level controls how this is calculated, 0 fir no filtering at all, 1 to calculate the denominator from all provided samples, 2 to calculate denominator based on population groups.
+
+--match-tol <int>: Group haplotypes with missing data into
+	the same class as a haplotype with no missing data if they have <= this many pairwise differences.
+	Default: 0
+
+The current implementation now tries to cluster any haplotypes that have missing data (that pass the MAX_HMISS check) with haplotypes in the data that are complete (i.e. no missing data). To do this, I calculate # of pairwise differences, ignoring any locations with missing data, and cluster the missing-data haplotype with the complete haplotype(s) to which it has the fewest differences (enforcing that the number of differences must at least be <= MATCH_TOL). If there are ties, it is counted fractionally with equal contribution to each matching haplotype. Let me illustrate:
+
+Complete haps
+A 101
+B 111
+C 110
+
+Haps w/missing data
+D 1-1
+E 0-1
+
+Let d(X,Y) be the # pairwise differences and MATCH_TOL == 0, then d(D,A) = 0, d(D,B) = 0, d(D,C) = 1. In this case D would be counted 0.5 as A and 0.5 as B.
+
+d(E,A) = 1, d(E,B) = 1, d(E,C) = 2. E would be kept as its own haplotype class.
+
+Let MATCH_TOL == 1, then D would still be counted as 0.5 towards both A and B. The clustering always prefers the fewest number of differences even if MATCH_TOL would allow more. E would also cluster 0.5 with A and 0.5 with B.
+
+Even if MATCH_TOL > 0, complete haplotypes are never merged (this could be changed, thinking about it). Haps w/ missing data are never merged among themselves (some non-trivial issues here, but thinking about solutions).
 
 03DEC2023 - v1.1.2a Reverting the changes from v1.1.2 regarding grid search. This introduced more bugs than it helped to fix. Please do not use v1.1.2. 
 
