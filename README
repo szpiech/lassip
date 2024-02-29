@@ -2,7 +2,7 @@
 
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
-saltiLASSI: DeGriorgio and Szpiech (2021) bioRxiv 2021.05.12.443825.
+saltiLASSI: DeGriorgio and Szpiech (2022) PLoS Genetics 18: e1010134.
 LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
 H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
 H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
@@ -149,6 +149,8 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 
 ***CHANGE LOG***
+
+29FEB2024 - Fixed more bugs that appear in the 1.1.2a version. DO NOT USE 1.1.2a.
 
 18JAN2024 - v1.2.0. Changing the way missing data is handled. Three new command line arguments:
 
