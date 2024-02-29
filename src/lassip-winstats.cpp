@@ -122,7 +122,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
          break;
       }
    }
-   rightLim = d;
+   leftLim = d;
    d = w;
    while(abs(dist[w] - dist[d]) <= MAX_EXTEND){
       d--;
@@ -131,11 +131,9 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
          break;
       }
    }
-   leftLim = d;
-
-   //cerr << "dmin " << dmin << " w " << w << " leftLim " << leftLim << " rightLim " << rightLim << endl;
-
-   double nullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,leftLim,rightLim);
+   rightLim = d;
+   
+   double nullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,rightLim,leftLim);
    //cerr << "null: " << nullLikelihood << endl;
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
@@ -167,7 +165,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
       for (int m = 1; m <= K; m++){
          int ei = 0;
          for (double e = epsStep; e <= U; e += epsStep){
-            altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, exp(A), w, leftLim, rightLim);
+            altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, exp(A), w, rightLim, leftLim);
             //cerr << "A " << A << " m " << m << " e " << " alt " << altLikelihood << endl;
             if(altLikelihood > maxAltLikelihood){
                maxAltLikelihood = altLikelihood;
@@ -194,7 +192,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
 }
 
 
-double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int leftLim, int rightLim){
+double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int rightLim, int leftLim){
    double res = 0;
    //int start = (w-width >= 0) ? w-width : 0;
    //int end = (w+width < specData->nwins) ? w+width : specData->nwins-1;
@@ -218,7 +216,7 @@ double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int 
    }
    */
 
-   for (int win = leftLim; win <= rightLim; win++){
+   for (int win = rightLim; win <= leftLim; win++){
       for (int i = 0; i < avgSpec->K; i++){
          res += double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
       }
@@ -226,7 +224,7 @@ double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int 
    return res;
 }
 
-double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int leftLim, int rightLim){
+double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int rightLim, int leftLim){
    if(m+1 == avgSpec->K) return calcSALTINullLikelihood(specData,avgSpec,w,rightLim,leftLim);
    double res = 0;
    //int start = (w-width >= 0) ? w-width : 0;
@@ -258,7 +256,7 @@ double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,doubl
    }
    */
 
-   for (int win = leftLim; win <= rightLim; win++){
+   for (int win = rightLim; win <= leftLim; win++){
       double Pr = exp(-A*abs(specData->dist[w]-specData->dist[win]));
       for (int i = 0; i < avgSpec->K; i++){
          double pi = double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
