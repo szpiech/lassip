@@ -397,15 +397,19 @@ double **calcF(int type, int K){
 
 int ndiff_str(string str1, string str2){
    int ndiff = 0;
+   bool all_missing = true;
    string::iterator i;
    string::iterator j;
    for (i = str1.begin(); i != str1.end(); i++){
       for (j = str2.begin(); j != str2.end(); j++){
          if (*i == MISSING_ALLELE || *j == MISSING_ALLELE) continue;
-         if (*i != *j) ndiff++;
+         if (*i != *j){
+            ndiff++;
+            all_missing = false;
+         }
       }
    }
-   return ndiff;
+   return all_missing ? -1 : ndiff;
 }
 
 
@@ -422,7 +426,7 @@ void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss
          
          int d = ndiff_str(it2->first,it1->first);
 
-         if(d <= MATCH_TOL){
+         if(d <= MATCH_TOL && d >= 0){
             if(d == mindiff){
                best_matches.push_back(it1->first);
             }
@@ -454,7 +458,54 @@ void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss
 
    if (miss_hap2count.empty()) return;
 
-   for (it2 = miss_hap2count.begin(); it2 != miss_hap2count.end(); it2++){
+   //naive clustering of incomplete haplotypes with each other
+   //In principle results could be dependent on order processed and clusters may not strictly conform to MATCH_TOL
+   //Can be improved at the expense of computational burden
+
+   map<string,double> miss_hap2count2 = miss_hap2count;
+   map<string,double> miss_clustered2count;
+   best_matches.clear();
+   //to_delete.clear();
+   mindiff = len+1;
+   
+   int i0 = 0;
+   int j0 = 0;
+   for (it2 = miss_hap2count2.begin(); it2 != miss_hap2count2.end(); it2++){
+      for (it1 = miss_hap2count.begin(); it1 != miss_hap2count.end(); it1++){
+         
+         if (i0 == j0) continue;
+
+         int d = ndiff_str(it2->first,it1->first);
+
+         if(d <= MATCH_TOL && d >= 0){
+            if(d == mindiff){
+               best_matches.push_back(it1->first);
+            }
+            else if (d < mindiff){
+               mindiff = d;
+               best_matches.clear();
+               best_matches.push_back(it1->first);
+            }
+         }
+         else{
+            continue;
+         }
+         j0++;
+      }
+      
+      if(best_matches.size() > 0){
+         for (int i = 0; i < best_matches.size(); i++){
+            miss_clustered2count[best_matches[i]] = hap2count[best_matches[i]];
+            miss_clustered2count[best_matches[i]] += (it2->second/double(best_matches.size()));
+         }
+         miss_hap2count.erase(it2->first);
+      }
+      best_matches.clear();
+      mindiff = len+1;
+      i0++;
+   }
+
+   for (it2 = miss_clustered2count.begin(); it2 != miss_clustered2count.end(); it2++){
       hap2count[it2->first] = it2->second;
    }
 
