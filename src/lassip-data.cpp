@@ -125,7 +125,7 @@ void releaseQ(double ****q, int nwins,int K, double U){
     return;
 }
 
-map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS){
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED){
     if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
         int nOriginalLoci = 0;
         int totHaps = 0;
@@ -134,6 +134,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             if(p == 0) nOriginalLoci = hapDataByPop->at(popData->popOrder[p])->nloci;
         }
         int *count = new int[nOriginalLoci];
+        int *count2 = new int[nOriginalLoci];
         int *nmissing = new int[nOriginalLoci];
         for(int i = 0; i < nOriginalLoci; i++){
             count[i] = 0;
@@ -146,13 +147,14 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             for(int l = 0; l < hapData->nloci; l++){
                 for(int h = 0; h < hapData->nhaps; h++){
                     count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
                     nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
                 }
             }
         }
         int keepLoci = 0;
         for(int i = 0; i < nOriginalLoci; i++){
-            if(count[i] > 0 && count[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
+            if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
         }
 
         cerr << "Filtering " << nOriginalLoci - keepLoci << " loci.\n";
@@ -178,7 +180,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
             l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                     for(int h = 0; h < hapData->nhaps; h++){
                         newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
                     }
@@ -191,6 +193,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         }
 
         delete [] count;
+        delete [] count2;
         delete [] nmissing;
         delete hapDataByPop;
         return newHapDataByPop;
@@ -207,6 +210,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             int totHaps = hapDataByPop->at(popName)->nhaps;
 
             int *count = new int[nOriginalLoci];
+            int *count2 = new int[nOriginalLoci];
             int *nmissing = new int[nOriginalLoci];
             for(int i = 0; i < nOriginalLoci; i++){
                 count[i] = 0;
@@ -216,13 +220,15 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             for(int l = 0; l < hapData->nloci; l++){
                 for(int h = 0; h < hapData->nhaps; h++){
                     count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
                     nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
                 }
             }
             
             int keepLoci = 0;
             for(int i = 0; i < nOriginalLoci; i++){
-                if(count[i] > 0 && count[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
+                //cerr << count[i] << " " << totHaps << " " << nmissing[i] << " " << FILTER_LMISS << endl;
+                if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
             }
 
             cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
@@ -230,7 +236,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                     newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
                     newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
@@ -241,6 +247,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             }
             releaseHapData(hapData);
             delete [] count;
+            delete [] count2;
             delete [] nmissing;
         }
         delete hapDataByPop;
