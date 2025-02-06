@@ -529,7 +529,7 @@ void garud_match_haps_w_missing(map<string,double> &hap2count,map<string,double>
          }
       }
    }
-
+}
 
 //this one is for testing whether the order of haplotypes changes the inferred clusters
 void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
