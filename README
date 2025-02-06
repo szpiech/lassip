@@ -57,7 +57,7 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.2.0
+lassip v1.2.1
 
 ----------Command Line Arguments----------
 
@@ -149,6 +149,8 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 
 ***CHANGE LOG***
+
+06FEB2025 - v1.2.1. Fixed a bug related to filtering monomorphic sites when using --unphased. I have also simplified the haplotype clustering method in the context of missing data. Haplotypes are merged if their hamming distance is < MATCH_TOL. Locations where at least 1 haplotype has a missing genotype call are ignored. This follows the approach from https://github.com/ngarud/SelectionHapStats/blob/master/scripts/H12_H2H1.py. NOTE: This approach can result in different hapotype cllusters depending on the order the haplotypes are processed. Generally, this seems to have relatively small impact on the number of unique haplotypes inferred, but I have implemented a random shuffle such that on subsequent runs the haplotype order is different. You can use this feature to investigate how clustering might change across runs.
 
 29FEB2024 - Fixed more bugs that appear in the 1.1.2a version. DO NOT USE 1.1.2a.
 
