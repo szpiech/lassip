@@ -887,7 +887,7 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    }
 
    //printHFS(miss_hap2count);
-   garud_match_haps_w_missing(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
    //printHFS(hfs->hap2count);
 
    if(hfs->hap2count.size() == 0) return NULL;
