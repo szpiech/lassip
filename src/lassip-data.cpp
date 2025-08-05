@@ -165,7 +165,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         newMapData->chr = oldMapData->chr;
         int l0 = 0;
         for(int l = 0; l < oldMapData->nloci; l++){
-            if(count[l] > 0 && count[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+            if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                 newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
                 newMapData->locusName[l0] = oldMapData->locusName[l];
                 l0++;
@@ -1707,8 +1707,14 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         for (int field = 0; field < nfields; field++)
         {
             fin >> junk;
-            allele1 = junk[0];
-            allele2 = junk[2];
+            if (junk == "."){
+                allele1 = VCF_MISSING;
+                allele2 = VCF_MISSING;                
+            }
+            else{
+                allele1 = junk[0];
+                allele2 = junk[2];
+            }
             if (popData->ind2pop.count(inds[field]) != 0){
                 //extractAlleleStrs(junk,alleleStr1,alleleStr2);
                 //if(storeAs.count(alleleStr1) == 0 || storeAs.count(alleleStr2) == 0){
