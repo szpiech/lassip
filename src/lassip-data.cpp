@@ -1707,6 +1707,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         for (int field = 0; field < nfields; field++)
         {
             fin >> junk;
+            //cerr << junk << " ";
             if (junk == "."){
                 allele1 = VCF_MISSING;
                 allele2 = VCF_MISSING;                
@@ -1715,6 +1716,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                 allele1 = junk[0];
                 allele2 = junk[2];
             }
+            //cerr << allele1 << " " << allele2 << endl;
             if (popData->ind2pop.count(inds[field]) != 0){
                 //extractAlleleStrs(junk,alleleStr1,alleleStr2);
                 //if(storeAs.count(alleleStr1) == 0 || storeAs.count(alleleStr2) == 0){
