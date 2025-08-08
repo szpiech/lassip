@@ -149,6 +149,7 @@ haplotype spectrum for use computing LASSI or saltiLASSI.
 
 
 ***CHANGE LOG***
+08AUG2025 - v1.2.2. Fixed more bugs under unusual use cases related to filtering monomorphic sites and missing data. Missing data filtering and monomorphic filtering is now done separately, and you will receive a message with the number of sites filtered for each reason. There is a new command line argument --keep-monomorphic, if you wish to skip the monomorphic filtering step.
 
 06FEB2025 - v1.2.1. Fixed a bug related to filtering monomorphic sites when using --unphased. I have also simplified the haplotype clustering method in the context of missing data. Haplotypes are merged if their hamming distance is < MATCH_TOL. Locations where at least 1 haplotype has a missing genotype call are ignored. This follows the approach from https://github.com/ngarud/SelectionHapStats/blob/master/scripts/H12_H2H1.py. NOTE: This approach can result in different hapotype cllusters depending on the order the haplotypes are processed. Generally, this seems to have relatively small impact on the number of unique haplotypes inferred, but I have implemented a random shuffle such that on subsequent runs the haplotype order is different. You can use this feature to investigate how clustering might change across runs.
 
