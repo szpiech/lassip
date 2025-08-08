@@ -138,6 +138,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         int *nmissing = new int[nOriginalLoci];
         for(int i = 0; i < nOriginalLoci; i++){
             count[i] = 0;
+            count2[i] = 0;
             nmissing[i] = 0;
         }
 
@@ -154,10 +155,10 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         }
         int keepLoci = 0;
         for(int i = 0; i < nOriginalLoci; i++){
-            if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
+            if(double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
         }
 
-        cerr << "Filtering " << nOriginalLoci - keepLoci << " loci.\n";
+        cerr << "Filtering " << nOriginalLoci - keepLoci << " loci with missing data fraction >" << FILTER_LMISS << ".\n";
 
         map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
         MapData *oldMapData = hapDataByPop->begin()->second->map;
@@ -165,7 +166,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         newMapData->chr = oldMapData->chr;
         int l0 = 0;
         for(int l = 0; l < oldMapData->nloci; l++){
-            if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+            if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                 newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
                 newMapData->locusName[l0] = oldMapData->locusName[l];
                 l0++;
@@ -180,7 +181,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
             l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+                if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                     for(int h = 0; h < hapData->nhaps; h++){
                         newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
                     }
@@ -214,6 +215,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             int *nmissing = new int[nOriginalLoci];
             for(int i = 0; i < nOriginalLoci; i++){
                 count[i] = 0;
+                count2[i] = 0;
                 nmissing[i] = 0;
             }
 
@@ -228,7 +230,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             int keepLoci = 0;
             for(int i = 0; i < nOriginalLoci; i++){
                 //cerr << count[i] << " " << totHaps << " " << nmissing[i] << " " << FILTER_LMISS << endl;
-                if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i] && double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
+                if(double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
             }
 
             cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
@@ -236,7 +238,7 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
             newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l] && double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
+                if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
                     newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
                     newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
                     for(int h = 0; h < hapData->nhaps; h++){
@@ -256,6 +258,138 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
     }
 }
 
+map< string, HaplotypeData* > *filterHaplotypeDataMonomorphic(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, bool PHASED){
+    if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
+        int nOriginalLoci = 0;
+        int totHaps = 0;
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            totHaps += hapDataByPop->at(popData->popOrder[p])->nhaps;
+            if(p == 0) nOriginalLoci = hapDataByPop->at(popData->popOrder[p])->nloci;
+        }
+        int *count = new int[nOriginalLoci];
+        int *count2 = new int[nOriginalLoci];
+        int *nmissing = new int[nOriginalLoci];
+        for(int i = 0; i < nOriginalLoci; i++){
+            count[i] = 0;
+            count2[i] = 0;
+            nmissing[i] = 0;
+        }
+
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            for(int l = 0; l < hapData->nloci; l++){
+                for(int h = 0; h < hapData->nhaps; h++){
+                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
+                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
+                }
+            }
+        }
+        int keepLoci = 0;
+        for(int i = 0; i < nOriginalLoci; i++){
+            if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i]) keepLoci++;
+        }
+
+        cerr << "Filtering " << nOriginalLoci - keepLoci << " monomorphic loci.\n";
+
+        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+        MapData *oldMapData = hapDataByPop->begin()->second->map;
+        MapData *newMapData = initMapData(keepLoci);
+        newMapData->chr = oldMapData->chr;
+        int l0 = 0;
+        for(int l = 0; l < oldMapData->nloci; l++){
+            if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
+                newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
+                newMapData->locusName[l0] = oldMapData->locusName[l];
+                l0++;
+            }
+        }
+
+        releaseMapData(oldMapData);
+
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
+            l0 = 0;
+            for(int l = 0; l < hapData->nloci; l++){
+                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
+                    for(int h = 0; h < hapData->nhaps; h++){
+                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
+                    }
+                    l0++;
+                }
+            }
+            newHapDataByPop->at(popName)->map = newMapData;
+            hapData->map = NULL;
+            releaseHapData(hapData);
+        }
+
+        delete [] count;
+        delete [] count2;
+        delete [] nmissing;
+        delete hapDataByPop;
+        return newHapDataByPop;
+
+    }
+    else{//FILTER_LEVEL == 2, filter sites monomorphic within pops
+        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            string popName = popData->popOrder[p];
+            HaplotypeData *hapData = hapDataByPop->at(popName);
+            
+            int nOriginalLoci = hapDataByPop->at(popName)->nloci;
+            int totHaps = hapDataByPop->at(popName)->nhaps;
+
+            int *count = new int[nOriginalLoci];
+            int *count2 = new int[nOriginalLoci];
+            int *nmissing = new int[nOriginalLoci];
+            for(int i = 0; i < nOriginalLoci; i++){
+                count[i] = 0;
+                count2[i] = 0;
+                nmissing[i] = 0;
+            }
+
+            for(int l = 0; l < hapData->nloci; l++){
+                for(int h = 0; h < hapData->nhaps; h++){
+                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
+                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
+                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
+                }
+            }
+            
+            int keepLoci = 0;
+            for(int i = 0; i < nOriginalLoci; i++){
+                //cerr << count[i] << " " << totHaps << " " << nmissing[i] << " " << FILTER_LMISS << endl;
+                if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i]) keepLoci++;
+            }
+
+            cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
+            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
+            newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
+            int l0 = 0;
+            for(int l = 0; l < hapData->nloci; l++){
+                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
+                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
+                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
+                    for(int h = 0; h < hapData->nhaps; h++){
+                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
+                    }
+                    l0++;
+                }
+            }
+            releaseHapData(hapData);
+            delete [] count;
+            delete [] count2;
+            delete [] nmissing;
+        }
+        delete hapDataByPop;
+        return newHapDataByPop;
+
+    }
+}
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP) {
     vector< pair_t* > *windows = new vector< pair_t* >;

@@ -245,7 +245,7 @@ HaplotypeData *readHaplotypeDataVCF(string filename);
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED, bool SHARED_MAP);
 //void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED);
-
+map< string, HaplotypeData* > *filterHaplotypeDataMonomorphic(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, bool PHASED);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace

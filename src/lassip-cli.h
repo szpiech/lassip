@@ -106,6 +106,10 @@ const string ARG_FILTER_LEVEL = "--filter-level";
 const int DEFAULT_FILTER_LEVEL = 2;
 const string HELP_FILTER_LEVEL = "Filter monomorphic sites and sites\nwith missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.";
 
+const string ARG_KEEP_MONO = "--keep-monomorphic";
+const bool DEFAULT_KEEP_MONO = false;
+const string HELP_KEEP_MONO = "Set this flag to retain any monomorphic sites in the data.";
+
 const string ARG_FILTER_LMISS = "--max-lmiss";
 const double DEFAULT_FILTER_LMISS = 0.1;
 const string HELP_FILTER_LMISS = "Filter loci with > this proportion of missing data.";

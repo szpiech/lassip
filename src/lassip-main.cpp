@@ -65,6 +65,7 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_MAX_EXTEND_BP, DEFAULT_MAX_EXTEND_BP, "", HELP_MAX_EXTEND_BP);
   params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "", HELP_MAX_EXTEND_CM);
   params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "", HELP_MAX_EXTEND_NW);
+  params.addFlag(ARG_KEEP_MONO, DEFAULT_KEEP_MONO, "", HELP_KEEP_MONO);
 
   try {
     params.parseCommandLine(argc, argv);
@@ -102,6 +103,7 @@ int main(int argc, char *argv[])
   int K = params.getIntFlag(ARG_K);
   bool PHASED = !(params.getBoolFlag(ARG_UNPHASED));
   int FILTER_LEVEL = params.getIntFlag(ARG_FILTER_LEVEL);
+  bool KEEP_MONO = params.getBoolFlag(ARG_KEEP_MONO);
   string DIST_TYPE = params.getStringFlag(ARG_DIST_TYPE);
   double FILTER_LMISS = params.getDoubleFlag(ARG_FILTER_LMISS);
   double FILTER_HMISS = params.getDoubleFlag(ARG_FILTER_HMISS);
@@ -259,6 +261,7 @@ int main(int argc, char *argv[])
 
     if(FILTER_LEVEL > 0){
       hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, PHASED);
+      if(!KEEP_MONO) hapDataByPop = filterHaplotypeDataMonomorphic(hapDataByPop, popData, FILTER_LEVEL, PHASED);
     } 
 
     LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
