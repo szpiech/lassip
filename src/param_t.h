@@ -26,7 +26,24 @@
 
 using namespace std;
 
+//sysexits.h conventions, so that a caller can tell a bad command line from bad
+//data from an I/O failure.
+const int EXIT_USAGE   = 64;
+const int EXIT_DATAERR = 65;
+const int EXIT_IOERR   = 74;
+const int EXIT_INTERNAL = 70;
+
 const string ARG_HELP = "--help";
+const string ARG_HELP_SHORT = "-h";
+const string ARG_VERSION = "--version";
+
+//Thrown by parseCommandLine when the program should stop before doing any work:
+//code 0 after --help or --version, EXIT_USAGE after a command line error.
+struct ParamExit
+{
+    int code;
+    ParamExit(int c) : code(c) {}
+};
 
 class param_t
 {
@@ -49,6 +66,13 @@ public:
     bool addListFlag(string flag, char value, string label, string description);
 
     void printHelp();
+    void setVersion(string str);
+    void setUsage(string str);
+
+    //true if the flag was given on the command line, as opposed to holding its
+    //default. Lets callers distinguish "not supplied" from "supplied the
+    //default value" without comparing against sentinel strings.
+    bool isFlagSet(string flag);
 
     bool parseCommandLine(int argc, char *argv[]);
 
@@ -92,6 +116,9 @@ private:
     bool flagExists(string flag);
 
     string preamble;
+    string version;
+    string usage;
+    vector<string> flagOrder;
 };
 
 #endif

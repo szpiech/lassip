@@ -212,21 +212,57 @@ bool param_t::addListFlag(string flag, const char value[], string label, string 
 
 void param_t::printHelp()
 {
-    map<string, string>::iterator it;
+    //Help goes to stdout: it is what the user asked for, not a diagnostic, and
+    //this lets `lassip --help | less` work.
+    if (usage.length() > 0) cout << usage << "\n";
+    cout << preamble << endl;
 
-    cerr << preamble << endl;
-
-    cerr << "----------Command Line Arguments----------\n\n";
-
-    for (it = help.begin(); it != help.end(); it++)
+    //Flags are grouped by the label given to addFlag, in the order the groups
+    //were first registered, so that related options appear together instead of
+    //alphabetically -- which used to put --avg-spec first and scatter the two
+    //stages of the workflow through one long list.
+    vector<string> groupOrder;
+    map<string, vector<string> > byGroup;
+    for (unsigned int i = 0; i < flagOrder.size(); i++)
     {
-        if (labels[(*it).first].compare("SILENT") != 0)
+        string flag = flagOrder[i];
+        if (help.count(flag) == 0) continue;
+        string group = labels[flag];
+        if (group.compare("SILENT") == 0) continue;
+        if (byGroup.count(group) == 0) groupOrder.push_back(group);
+        byGroup[group].push_back(flag);
+    }
+
+    for (unsigned int g = 0; g < groupOrder.size(); g++)
+    {
+        string group = groupOrder[g];
+        if (group.length() > 0) cout << "----------" << group << "----------\n\n";
+        else cout << "----------Command Line Arguments----------\n\n";
+        for (unsigned int i = 0; i < byGroup[group].size(); i++)
         {
-            cerr << (*it).first << " " << (*it).second << "\n\n";
+            string flag = byGroup[group][i];
+            cout << flag << " " << help[flag] << "\n\n";
         }
     }
 
     return;
+}
+
+void param_t::setVersion(string str)
+{
+    version = str;
+    return;
+}
+
+void param_t::setUsage(string str)
+{
+    usage = str;
+    return;
+}
+
+bool param_t::isFlagSet(string flag)
+{
+    return (isSet.count(flag) > 0 && isSet[flag]);
 }
 
 bool param_t::goodDouble(string str)
@@ -503,9 +539,15 @@ bool param_t::parseCommandLine(int argc, char *argv[])
                 }
             }
         }
+        else if (ARG_HELP_SHORT.compare(argv[i]) == 0)
+        {
+            argb[ARG_HELP] = true;
+            isSet[ARG_HELP] = true;
+        }
         else //if (argv[i][0] == '-')
         {
             cerr << "ERROR: command line flag " << argv[i] << " not recognized.\n";
+            cerr << "Run lassip --help for a list of options.\n";
             badFlags++;
         }
     }
@@ -513,10 +555,16 @@ bool param_t::parseCommandLine(int argc, char *argv[])
     if (getBoolFlag(ARG_HELP))
     {
         this->printHelp();
-        throw 0;
+        throw ParamExit(0);
     }
 
-    if (badFlags) throw 0;
+    if (getBoolFlag(ARG_VERSION))
+    {
+        cout << version << "\n";
+        throw ParamExit(0);
+    }
+
+    if (badFlags) throw ParamExit(EXIT_USAGE);
 
     return 0;
 }
@@ -528,7 +576,8 @@ bool param_t::flagExists(string flag)
 
 param_t::param_t()
 {
-    this->addFlag(ARG_HELP, false, "__help", "Prints this help dialog.");
+    this->addFlag(ARG_HELP, false, "SILENT", "Prints this help dialog.");
+    this->addFlag(ARG_VERSION, false, "SILENT", "Prints the version and exits.");
 }
 
 bool param_t::getBoolFlag(string flag)

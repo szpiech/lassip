@@ -26,11 +26,15 @@
 
 using namespace std;
 
-int main(int argc, char *argv[])
+//The body of the program. main() at the bottom of this file is a thin wrapper
+//that turns the exceptions thrown from here and from the data layer into
+//distinct exit codes.
+int lassipMain(int argc, char *argv[])
 {
-  cerr << "lassip v" + VERSION + "\n";
   param_t params;
   params.setPreamble(PREAMBLE);
+  params.setUsage(USAGE);
+  params.setVersion("lassip v" + VERSION);
 
   params.addFlag(ARG_THREADS, DEFAULT_THREADS, "", HELP_THREADS);
 
@@ -68,12 +72,15 @@ int main(int argc, char *argv[])
   params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "", HELP_MAX_EXTEND_NW);
   params.addFlag(ARG_KEEP_MONO, DEFAULT_KEEP_MONO, "", HELP_KEEP_MONO);
 
-  try {
-    params.parseCommandLine(argc, argv);
+  if (argc == 1){
+    cerr << USAGE << "\n";
+    cerr << "Run lassip --help for the full list of options.\n";
+    return EXIT_USAGE;
   }
-  catch (...) {
-    return 1;
-  }
+
+  params.parseCommandLine(argc, argv);
+
+  cerr << "lassip v" + VERSION + "\n";
 
   int numThreads = params.getIntFlag(ARG_THREADS);
 
@@ -245,7 +252,7 @@ int main(int argc, char *argv[])
   }
 
   if (ERROR) {
-    return 1;
+    return EXIT_USAGE;
   }
 
   string ending;
@@ -293,7 +300,7 @@ int main(int argc, char *argv[])
     
     if(nullSpecFile.compare(DEFAULT_NULL_SPEC) != 0){
       avgSpecByPop = averageSpec(nullSpecFile);
-      if(!checkNull(avgSpecByPop,specDataByPopByChr)) return 1;
+      if(!checkNull(avgSpecByPop,specDataByPopByChr)) return EXIT_DATAERR;
     }
     else avgSpecByPop = averageSpec(specDataByPopByChr);
 
@@ -313,7 +320,7 @@ int main(int argc, char *argv[])
       }
     }
 
-    if(ERROR) return 1;
+    if(ERROR) return EXIT_USAGE;
 
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
@@ -420,3 +427,27 @@ int main(int argc, char *argv[])
   return 0;
 }
 
+int main(int argc, char *argv[])
+{
+  //Distinct exit codes so that a caller can tell a bad command line from bad
+  //input data. The data layer signals failure by throwing an int; --help and
+  //--version unwind through ParamExit with code 0.
+  try {
+    return lassipMain(argc, argv);
+  }
+  catch (const ParamExit &e){
+    return e.code;
+  }
+  catch (int){
+    cerr << "lassip: exiting after the error above.\n";
+    return EXIT_DATAERR;
+  }
+  catch (const exception &e){
+    cerr << "lassip: " << e.what() << "\n";
+    return EXIT_INTERNAL;
+  }
+  catch (...){
+    cerr << "lassip: unknown error.\n";
+    return EXIT_INTERNAL;
+  }
+}

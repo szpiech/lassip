@@ -21,7 +21,30 @@
 
 const string VERSION = "1.2.2";
 
-const string PREAMBLE = "";
+const string USAGE = "\
+Usage: lassip --vcf <file> --pop <file> --calc-spec [--hapstats] --winsize <int> --winstep <int> --out <prefix>\n\
+       lassip --spectra <file> [<file> ...] (--lassi | --salti | --avg-spec) --out <prefix>";
+
+const string PREAMBLE = "\n\
+lassip computes haplotype frequency spectrum statistics in two stages.\n\
+\n\
+Stage 1 reads genotypes and writes a haplotype frequency spectrum per window:\n\
+\n\
+  lassip --vcf YRI.chr22.vcf.gz --pop YRI.ids.pop.txt --calc-spec --hapstats \\\n\
+         --winsize 117 --winstep 12 --k 10 --out YRI.chr22\n\
+\n\
+Stage 2 reads those spectra (all contigs of a population at once) and writes\n\
+the likelihood ratio statistics:\n\
+\n\
+  lassip --spectra YRI.chr*.lassip.hap.spectra.gz --salti --out YRI\n\
+\n\
+Flags belonging to the other stage are ignored, so check which stage you are in\n\
+if an option seems to have no effect.\n\
+\n\
+Methods: LASSI (Harris and DeGiorgio 2020, Mol Biol Evol 37:2789),\n\
+saltiLASSI (DeGiorgio and Szpiech 2022, PLoS Genet 18:e1010134),\n\
+H12/H2H1 (Garud et al. 2015, PLoS Genet 11:e1005004),\n\
+2-population LASSI (Harris and DeGiorgio 2020, Genetics 210:1429).";
 
 const string ARG_THREADS = "--threads";
 const int DEFAULT_THREADS = 1;
