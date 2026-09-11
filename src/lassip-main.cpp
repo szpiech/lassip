@@ -86,12 +86,12 @@ int lassipMain(int argc, char *argv[])
 
   // I/O
   string mapFilename = params.getStringFlag(ARG_FILENAME_MAP);
-  bool MAP = (mapFilename.compare(DEFAULT_FILENAME_MAP) == 0) ? false : true;
+  bool MAP = params.isFlagSet(ARG_FILENAME_MAP);
   string vcfFilename = params.getStringFlag(ARG_FILENAME_POP1_VCF);
-  bool VCF = (vcfFilename.compare(DEFAULT_FILENAME_POP1_VCF) == 0) ? false : true;
+  bool VCF = params.isFlagSet(ARG_FILENAME_POP1_VCF);
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
   string popFilename = params.getStringFlag(ARG_FILENAME_POPFILE);
-  bool POP = (popFilename.compare(DEFAULT_FILENAME_POPFILE) == 0) ? false : true;
+  bool POP = params.isFlagSet(ARG_FILENAME_POPFILE);
   vector<string> spectraFiles = params.getStringListFlag(ARG_FILENAME_SPECFILES);
   
   // Window control
@@ -194,7 +194,7 @@ int lassipMain(int argc, char *argv[])
   }
 
   if(FINALIZE){
-    if(spectraFiles.size() == 1 && spectraFiles[0].compare(DEFAULT_FILENAME_SPECFILES) == 0){
+    if(!params.isFlagSet(ARG_FILENAME_SPECFILES)){
       cerr << "ERROR: Must provide spectra files to calculate LASSI statistic.\n";
       ERROR = true;
     }
@@ -298,7 +298,7 @@ int lassipMain(int argc, char *argv[])
     map<string, vector<SpectrumData *>* > *specDataByPopByChr = readSpecData(spectraFiles);
     map<string, SpectrumData* > *avgSpecByPop;
     
-    if(nullSpecFile.compare(DEFAULT_NULL_SPEC) != 0){
+    if(params.isFlagSet(ARG_NULL_SPEC)){
       avgSpecByPop = averageSpec(nullSpecFile);
       if(!checkNull(avgSpecByPop,specDataByPopByChr)) return EXIT_DATAERR;
     }

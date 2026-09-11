@@ -357,6 +357,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             else
             {
                 listargi[argv[i]].clear();//clear the default value
+                isSet[argv[i]] = true;
                 int flagIndex = i;//remember where the flag is in argv
                 while (i + 1 < argc) //go until the end of the list
                 {
@@ -416,6 +417,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             else
             {
                 listargd[argv[i]].clear();//clear the default value
+                isSet[argv[i]] = true;
                 int flagIndex = i;//remember where the flag is in argv
                 while (i + 1 < argc) //go until the end of the list
                 {
@@ -469,6 +471,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             else
             {
                 listargs[argv[i]].clear();//clear the default value
+                isSet[argv[i]] = true;
                 int flagIndex = i;//remember where the flag is in argv
                 while (i + 1 < argc) //go until the end of the list
                 {
@@ -521,6 +524,7 @@ bool param_t::parseCommandLine(int argc, char *argv[])
             else
             {
                 listargch[argv[i]].clear();//clear the default value
+                isSet[argv[i]] = true;
                 int flagIndex = i;//remember where the flag is in argv
                 while (i + 1 < argc) //go until the end of the list
                 {

@@ -53,21 +53,21 @@ const string HELP_THREADS = "The number of threads to spawn during computations.
 // I/O flags
 
 const string ARG_FILENAME_MAP = "--map";
-const string DEFAULT_FILENAME_MAP = "__mapfile1";
+const string DEFAULT_FILENAME_MAP = "";
 const string HELP_FILENAME_MAP = "A map file formatted <chr#> <locusID> <genetic pos> <physical pos>.\n\
 \tSites in VCF not in map file will be interpolated.";
 
 const string ARG_FILENAME_POP1_VCF = "--vcf";
-const string DEFAULT_FILENAME_POP1_VCF = "__vcffile1";
+const string DEFAULT_FILENAME_POP1_VCF = "";
 const string HELP_FILENAME_POP1_VCF = "A VCF file containing haplotype data.\n\
 \tVariants should be coded 0/1.";
 
 const string ARG_FILENAME_POPFILE = "--pop";
-const string DEFAULT_FILENAME_POPFILE = "__popfile1";
+const string DEFAULT_FILENAME_POPFILE = "";
 const string HELP_FILENAME_POPFILE = "A file containing <ind ID> <pop ID>.";
 
 const string ARG_FILENAME_SPECFILES = "--spectra";
-const string DEFAULT_FILENAME_SPECFILES = "__specfile1";
+const string DEFAULT_FILENAME_SPECFILES = "";
 const string HELP_FILENAME_SPECFILES = "A list of spectra files for finalization.";
 
 const string ARG_OUTFILE = "--out";
@@ -97,7 +97,7 @@ const string HELP_AVG_SPEC = "Set this flag to compute and output the average\n\
 K-truncated haplotype frequency spectrum from a set of .spectra files.";
 
 const string ARG_NULL_SPEC = "--null-spec";
-const string DEFAULT_NULL_SPEC = "__nullspec1";
+const string DEFAULT_NULL_SPEC = "";
 const string HELP_NULL_SPEC = "A file containing a null K-truncated\n\
 haplotype spectrum for use computing LASSI or saltiLASSI.";
 
