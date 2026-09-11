@@ -57,33 +57,97 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
-lassip v1.2.1
+BUILDING AND TESTING
 
-----------Command Line Arguments----------
+    cd src && make                 # portable -O3 build
+    make ARCHFLAGS="-m64 -mmmx -msse -msse2"   # the flags lassip <= 1.2.2 used, x86-64 only
+    make check                     # build, then run the regression suite in tests/
 
---avg-spec <bool>: Set this flag to compute and output the average
-K-truncated haplotype frequency spectrum from a set of .spectra files.
+tests/run_tests.sh compares the current build against recorded outputs for both
+stages over data already in the repository (testing/small.vcf.gz and
+example/YRI.chr22.vcf.gz, plus fixtures it derives at run time): phased,
+unphased, two populations, each --filter-level, missing genotypes, --avg-spec,
+and stage 2 under --lassi and --salti with each --dist-type. Stage-1 outputs are
+compared by hash; stage-2 outputs column by column, so a failure names the
+statistic that moved. Run it after any change to src/.
+
+
+Usage: lassip --vcf <file> --pop <file> --calc-spec [--hapstats] --winsize <int> --winstep <int> --out <prefix>
+       lassip --spectra <file> [<file> ...] (--lassi | --salti | --avg-spec) --out <prefix>
+
+lassip computes haplotype frequency spectrum statistics in two stages.
+
+Stage 1 reads genotypes and writes a haplotype frequency spectrum per window:
+
+  lassip --vcf YRI.chr22.vcf.gz --pop YRI.ids.pop.txt --calc-spec --hapstats \
+         --winsize 117 --winstep 12 --k 10 --out YRI.chr22
+
+Stage 2 reads those spectra (all contigs of a population at once) and writes
+the likelihood ratio statistics:
+
+  lassip --spectra YRI.chr*.lassip.hap.spectra.gz --salti --out YRI
+
+Flags belonging to the other stage are ignored, so check which stage you are in
+if an option seems to have no effect.
+
+Methods: LASSI (Harris and DeGiorgio 2020, Mol Biol Evol 37:2789),
+saltiLASSI (DeGiorgio and Szpiech 2022, PLoS Genet 18:e1010134),
+H12/H2H1 (Garud et al. 2015, PLoS Genet 11:e1005004),
+2-population LASSI (Harris and DeGiorgio 2020, Genetics 210:1429).
+----------General----------
+
+--threads <int>: The number of threads to spawn during computations.
+	Default: 1
+
+--seed <int>: Seed for the shuffle used when clustering haplotypes that
+carry missing data. Runs with the same seed, inputs and flags are reproducible
+regardless of --threads. Set 0 to seed from the system clock instead, which
+reproduces the non-reproducible behaviour of lassip <= 1.2.2.
+	Default: 1
+
+----------Input and output----------
+
+--out <string>: The basename for all output files.
+	Default: outfile
+
+--map <string>: A map file formatted <chr#> <locusID> <genetic pos> <physical pos>.
+	Sites in VCF not in map file will be interpolated.
+	Default: 
+
+--vcf <string>: A VCF file containing haplotype data.
+	Variants should be coded 0/1.
+	Default: 
+
+--pop <string>: A file containing <ind ID> <pop ID>.
+	Default: 
+
+--spectra <string1> ... <stringN>: A list of spectra files for finalization.
+	Default: 
+
+--unphased <bool>: Set this flag to indicate data are unphased.
 	Default: false
+
+----------Windows----------
+
+--winsize <int>: The window size within which to calculate statistics.
+	Default: 0
+
+--winstep <int>: The sliding window step size.
+	Default: 0
+
+----------Statistics----------
 
 --calc-spec <bool>: Set this flag to compute K-truncated haplotype
 frequency spectra.
 	Default: false
 
---dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
-	Default: bp
-
---filter-level <int>: Filter monomorphic sites and sites
-with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.
-	Default: 2
-
---hapstats <bool>: Set this flag to calculate haplotype statistics.
+--avg-spec <bool>: Set this flag to compute and output the average
+K-truncated haplotype frequency spectrum from a set of .spectra files.
 	Default: false
 
---help <bool>: Prints this help dialog.
-	Default: false
-
---k <int>: Top K haplotypes for LASSI computations.
-	Default: 10
+--null-spec <string>: A file containing a null K-truncated
+haplotype spectrum for use computing LASSI or saltiLASSI.
+	Default: 
 
 --lassi <bool>: Set this flag to use the LASSI method.
 	Default: false
@@ -92,13 +156,38 @@ with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute fre
 	distributes mass across sweeping haplotype classes. Takes an integer in {1..5}.
 	Default: 4
 
---map <string>: A map file formatted <chr#> <locusID> <genetic pos> <physical pos>.
-	Sites in VCF not in map file will be interpolated.
-	Default: __mapfile1
+--hapstats <bool>: Set this flag to calculate haplotype statistics.
+	Default: false
+
+--salti <bool>: Set this flag to use the saltiLASSI method.
+	Default: false
+
+--k <int>: Top K haplotypes for LASSI computations.
+	Default: 10
+
+----------Filtering----------
+
+--filter-level <int>: Filter monomorphic sites and sites
+with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute freq per pop.
+	Default: 2
+
+--max-lmiss <double>: Filter loci with > this proportion of missing data.
+	Default: 0.10
+
+--max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
+	Default: 0.20
 
 --match-tol <int>: Group haplotypes with missing data into
 the same class as a haplotype with no missing data if they have <= this many pairwise differences.
 	Default: 0
+
+--keep-monomorphic <bool>: Set this flag to retain any monomorphic sites in the data.
+	Default: false
+
+----------saltiLASSI----------
+
+--dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
+	Default: bp
 
 --max-extend-bp <double>: Maximum distance in basepairs from core window to consider for saltiLASSI.
 	Default: 100000.00
@@ -109,46 +198,64 @@ the same class as a haplotype with no missing data if they have <= this many pai
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
 
---max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
-	Default: 0.20
-
---max-lmiss <double>: Filter loci with > this proportion of missing data.
-	Default: 0.10
-
---null-spec <string>: A file containing a null K-truncated
-haplotype spectrum for use computing LASSI or saltiLASSI.
-	Default: __nullspec1
-
---out <string>: The basename for all output files.
-	Default: outfile
-
---pop <string>: A file containing <ind ID> <pop ID>.
-	Default: __popfile1
-
---salti <bool>: Set this flag to use the saltiLASSI method.
-	Default: false
-
---spectra <string1> ... <stringN>: A list of spectra files for finalization.
-	Default: __specfile1
-
---threads <int>: The number of threads to spawn during computations.
-	Default: 1
-
---unphased <bool>: Set this flag to indicate data are unphased.
-	Default: false
-
---vcf <string>: A VCF file containing haplotype data.
-	Variants should be coded 0/1.
-	Default: __vcffile1
-
---winsize <int>: The window size within which to calculate statistics.
-	Default: 0
-
---winstep <int>: The sliding window step size.
-	Default: 0
-
 
 ***CHANGE LOG***
+
+UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
+
+  Reproducibility. Runs on data containing missing genotypes were not
+  reproducible: the haplotype shuffle described in the 06FEB2025 entry was
+  seeded from the system clock once per window, so repeated identical runs
+  disagreed even at the default --match-tol 0, and even single-threaded. The
+  seed is now --seed (default 1), mixed with each window's SNP boundaries, so a
+  run depends only on the seed, the inputs and the flags -- not on --threads or
+  on window order. --seed 0 restores clock seeding if you want to investigate
+  how clustering changes across runs, which is what that feature was for.
+  Note that which complete haplotype an incomplete one merges into is still
+  order-dependent; the seed makes the order reproducible, it does not remove
+  the dependence.
+
+  Speed and memory, measured on example/YRI.chr22.vcf.gz (278,607 SNPs, 216
+  haplotypes, --winsize 117 --winstep 12, 23,208 windows, K = 10):
+
+    stage 1 (--calc-spec --hapstats)   30.1 s -> 4.4 s at 1 thread
+                                       12.5 s -> 2.3 s at 8 threads
+    stage 2 (--salti)                  ~50 min -> 17 s at 8 threads
+                                       ~6 h -> 114 s of CPU
+                                       1,009 MB -> 48 MB peak memory
+
+  Spectra are byte-identical to v1.2.2. For saltiLASSI, m and the likelihood
+  ratio are unchanged; the reported A moves to an adjacent point on the
+  101-point grid in about 1% of windows, because the likelihood is flat in A
+  there and which grid point wins is decided by rounding -- v1.2.2 has the same
+  instability, not a stable value that has been perturbed.
+
+  Bug fixes. The null-spectrum check at the --spectra stage used the K from the
+  command line rather than from the spectra file, so its threshold was wrong
+  unless you repeated the same --k. --calc-spec --dist-type cm wrote a column
+  with no name in the header. A GT field shorter than three characters (haploid
+  or truncated) was read past its end. A VCF containing more than one
+  chromosome was silently labelled with the first record's contig; it is now
+  rejected. An error raised while reading input escaped main and aborted the
+  process instead of exiting with a code.
+
+  CLI. --help goes to stdout and exits 0 (-h also works), --version prints the
+  version, a bare lassip prints a usage synopsis, and the help is grouped by
+  topic with worked examples for both stages. Flags belonging to the other
+  stage now warn instead of being silently ignored. Exit codes follow sysexits:
+  64 for a command line error, 65 for bad input data.
+
+  Housekeeping. 1,357 lines of unreachable code removed. The Makefile tracks
+  header dependencies, keeps the x86-only architecture flags in an overridable
+  ARCHFLAGS (empty by default, so builds work on arm64), and has a check
+  target. tests/ holds a regression suite.
+
+  Note: example/YRI.chr22.lassip.hap.spectra.gz and .out.gz were produced by
+  v1.0.0 and predate the ppos column, so they no longer match what
+  example/do_lassip_YRI.bash writes. The script itself was also passing --lassi
+  to stage 1, where it does nothing, and so wrote .stats.gz rather than the
+  .spectra.gz its second line reads; that is fixed.
+
 08AUG2025 - v1.2.2. Fixed more bugs under unusual use cases related to filtering monomorphic sites and missing data. Missing data filtering and monomorphic filtering is now done separately, and you will receive a message with the number of sites filtered for each reason. There is a new command line argument --keep-monomorphic, if you wish to skip the monomorphic filtering step.
 
 06FEB2025 - v1.2.1. Fixed a bug related to filtering monomorphic sites when using --unphased. I have also simplified the haplotype clustering method in the context of missing data. Haplotypes are merged if their hamming distance is < MATCH_TOL. Locations where at least 1 haplotype has a missing genotype call are ignored. This follows the approach from https://github.com/ngarud/SelectionHapStats/blob/master/scripts/H12_H2H1.py. NOTE: This approach can result in different hapotype cllusters depending on the order the haplotypes are processed. Generally, this seems to have relatively small impact on the number of unique haplotypes inferred, but I have implemented a random shuffle such that on subsequent runs the haplotype order is different. You can use this feature to investigate how clustering might change across runs.
