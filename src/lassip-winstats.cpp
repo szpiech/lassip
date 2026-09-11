@@ -580,7 +580,7 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
          }
       }
       else{
-         cerr << "dropped\n";
+         //haplotype exceeded --max-hmiss and is left out of this window's spectrum
          skip = false;
       }
    }
