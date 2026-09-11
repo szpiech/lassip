@@ -411,7 +411,7 @@ double **calcF(int type, int K){
 //This function immediately stops counting differences once MATCH_TOL is exceeded
 //It also combines loci where str1 is missing but str2 is not, stored in str3
 //Intended usage is to use str3 to replace str1 iff ndiff == 0.
-int garud_ndiff_str(string str1, string str2, string &str3, int MATCH_TOL){
+int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL){
    int ndiff = 0;
 
    str3 = str1;
@@ -585,8 +585,14 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       }
    }
 
-   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
-                                      windowSeed(SEED, snpIndex->start, snpIndex->end));
+   //With no missing genotypes in the window and no match tolerance there is
+   //nothing for the clustering to merge, but the routine would still copy both
+   //count maps, shuffle the key vector and run an O(u^2) comparison over unique
+   //haplotypes. On the YRI chr22 example that pass was ~65% of stage-1 runtime.
+   if(!miss_hap2count.empty() || MATCH_TOL > 0){
+      garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
+                                         windowSeed(SEED, snpIndex->start, snpIndex->end));
+   }
 
    if(hfs->hap2count.size() == 0) return NULL;
 

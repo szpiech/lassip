@@ -50,7 +50,7 @@ double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, dou
 unsigned int windowSeed(int seed, int start, int end);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED);
 void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed);
-int garud_ndiff_str(string str1, string str2, string &str3, int MATCH_TOL);
+int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL);
 int numSitesInDataWin(pair_t* win);
 
 
