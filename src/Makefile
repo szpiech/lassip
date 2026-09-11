@@ -5,7 +5,27 @@
 #For dynamic linking
 
 CC = g++
-G++FLAG = -O3 -m64 -mmmx -msse -msse2
+
+# Optimisation, architecture and warning flags are separate variables so that any
+# of them can be overridden from the command line. ARCHFLAGS is empty by default:
+# the -m64 -mmmx -msse -msse2 this Makefile used to pass unconditionally are
+# x86-only, and clang on arm64 accepts but ignores them.
+#
+#   make                                        # portable -O3 build
+#   make ARCHFLAGS="-m64 -mmmx -msse -msse2"    # x86-64, as lassip <= 1.2.2 built
+#   make ARCHFLAGS="-march=native"              # tuned for this machine
+#   make OPTFLAGS="-O0 -g" WARNFLAGS="-Wall -Wextra"   # debugging
+#   make check                                  # build, then run tests/run_tests.sh
+OPTFLAGS  ?= -O3
+ARCHFLAGS ?=
+WARNFLAGS ?=
+G++FLAG   ?= $(OPTFLAGS) $(ARCHFLAGS) $(WARNFLAGS)
+
+# -MMD -MP makes the compiler emit a .d file per object listing the headers it
+# included, so that editing a header rebuilds what depends on it. Without this,
+# a header-only change left stale objects to be linked against new declarations.
+DEPFLAGS = -MMD -MP
+
 LINK_OPTS2 = -lz -pthread
 
 
@@ -17,28 +37,25 @@ LINK_OPTS2 = -lz -pthread
 #L_PATH = ../lib/win32
 
 
+SRCS = lassip-main.cpp lassip-data.cpp param_t.cpp gzstream.cpp \
+       lassip-winstats.cpp lassip-wintools.cpp
+OBJS = $(SRCS:.cpp=.o)
+DEPS = $(SRCS:.cpp=.d)
+
+.PHONY : all check clean
+
 all : lassip
 
-lassip : lassip-main.o lassip-data.o param_t.o gzstream.o lassip-winstats.o lassip-wintools.o
-	$(CC) $(G++FLAG) -o lassip lassip-main.o lassip-data.o param_t.o gzstream.o lassip-winstats.o lassip-wintools.o $(LINK_OPTS2) $(LINK_OPTS)
+lassip : $(OBJS)
+	$(CC) $(G++FLAG) -o $@ $(OBJS) $(LINK_OPTS2) $(LINK_OPTS)
 
-lassip-main.o : lassip-main.cpp 
-	$(CC) $(G++FLAG) -c lassip-main.cpp $(I_PATH)
+%.o : %.cpp
+	$(CC) $(G++FLAG) $(DEPFLAGS) -c $< $(I_PATH)
 
-lassip-data.o : lassip-data.cpp
-	$(CC) $(G++FLAG) -c lassip-data.cpp $(I_PATH)
-
-lassip-winstats.o : lassip-winstats.cpp
-	$(CC) $(G++FLAG) -c lassip-winstats.cpp $(I_PATH)
-
-lassip-wintools.o : lassip-wintools.cpp
-	$(CC) $(G++FLAG) -c lassip-wintools.cpp $(I_PATH)
-
-param_t.o : param_t.cpp
-	$(CC) $(G++FLAG) -c param_t.cpp
-
-gzstream.o : gzstream.cpp
-	$(CC) $(G++FLAG) -c gzstream.cpp $(I_PATH)
+check : lassip
+	../tests/run_tests.sh --bin ./lassip
 
 clean :
-	rm *.o
+	rm -f $(OBJS) $(DEPS) lassip
+
+-include $(DEPS)
