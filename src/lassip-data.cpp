@@ -401,10 +401,13 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
     }    
 
     string distStr;
-    if(DIST_TYPE.compare("bp") == 0) distStr = "ppos";
-    else if (DIST_TYPE.compare("gm") == 0) distStr = "gpos";
-    else if (DIST_TYPE.compare("ns") == 0) distStr = "siteNum";
-    else if (DIST_TYPE.compare("nw") == 0) distStr = "winNum";
+    //The stage-1 column is always the window's physical midpoint; --dist-type
+    //only changes what stage 2 measures distance in. Label it accordingly
+    //rather than leaving the header blank, which is what --dist-type cm did:
+    //the old table answered to gm and ns, which are not accepted values, and
+    //had no entry for cm.
+    if(DIST_TYPE.compare("nw") == 0) distStr = "winNum";
+    else distStr = "ppos";
 
     //bool SPECFILE = LASSI || SALTI;
 

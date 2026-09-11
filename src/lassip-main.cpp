@@ -127,6 +127,16 @@ int lassipMain(int argc, char *argv[])
   bool INIT = VCF;
   bool FINALIZE = !VCF;
 
+  //--dist-type selects the coordinate the statistics are reported and extended
+  //along; it is meaningful at both stages, and used to be checked only at the
+  //second, so `--calc-spec --dist-type cm` silently wrote a nameless column.
+  if(DIST_TYPE.compare("bp") != 0 &&
+     DIST_TYPE.compare("cm") != 0 &&
+     DIST_TYPE.compare("nw") != 0){
+    cerr << "ERROR: --dist-type must be one of bp, cm or nw.\n";
+    ERROR = true;
+  }
+
   if(!INIT && !FINALIZE){
     cerr << "ERROR: Must specify either --vcf or --spectra.\n";
     ERROR = true;
@@ -190,6 +200,31 @@ int lassipMain(int argc, char *argv[])
     if(MAP){
       cerr << "ERROR: Map file not required at this stage.\n";
       ERROR = true;
+    }
+  }
+
+  //Flags are shared by both stages but most only act in one of them. Silence
+  //here is how example/do_lassip_YRI.bash came to pass --lassi to stage 1,
+  //where it does nothing, and stopped reproducing the file committed beside it.
+  if(INIT){
+    const string stage2Only[] = {ARG_LASSI, ARG_SALTI, ARG_AVG_SPEC, ARG_NULL_SPEC,
+                                 ARG_LASSI_CHOICE, ARG_MAX_EXTEND_BP, ARG_MAX_EXTEND_CM,
+                                 ARG_MAX_EXTEND_NW};  //--map already draws a hard error here
+    for (unsigned int i = 0; i < sizeof(stage2Only)/sizeof(stage2Only[0]); i++){
+      if(params.isFlagSet(stage2Only[i])){
+        cerr << "WARNING: " << stage2Only[i] << " has no effect with --vcf; it applies to the --spectra stage.\n";
+      }
+    }
+  }
+  else{
+    const string stage1Only[] = {ARG_CALC_SPEC, ARG_HAPSTATS, ARG_WINSIZE, ARG_WINSTEP,
+                                 ARG_K, ARG_UNPHASED, ARG_FILENAME_POPFILE, ARG_FILTER_LEVEL,
+                                 ARG_FILTER_LMISS, ARG_FILTER_HMISS, ARG_KEEP_MONO,
+                                 ARG_MATCH_TOL, ARG_SEED};
+    for (unsigned int i = 0; i < sizeof(stage1Only)/sizeof(stage1Only[0]); i++){
+      if(params.isFlagSet(stage1Only[i])){
+        cerr << "WARNING: " << stage1Only[i] << " has no effect with --spectra; it applies to the --vcf stage.\n";
+      }
     }
   }
 
@@ -314,8 +349,11 @@ int lassipMain(int argc, char *argv[])
     //HFS well, and the Kth highest frequency haplotype is < 1/(100*K)
     for(map<string, SpectrumData* >::iterator it = avgSpecByPop->begin(); it != avgSpecByPop->end(); it++){
       SpectrumData *spec = it->second;
-      if(spec->freq[0][spec->K-1] < 1.0/(100.0*double(K))){
-        cerr << "ERROR: Null spectrum " << it->first << " likely not well-estimated. Kth frequency class is < " << 1.0/(100.0*double(K)) << ", preventing grid search.\n";
+      //K comes from the spectra file at this stage; --k is not read here, and
+      //using it made this threshold wrong unless the user happened to repeat
+      //the same --k they used to build the spectra.
+      if(spec->freq[0][spec->K-1] < 1.0/(100.0*double(spec->K))){
+        cerr << "ERROR: Null spectrum " << it->first << " likely not well-estimated. Kth frequency class is < " << 1.0/(100.0*double(spec->K)) << ", preventing grid search.\n";
         ERROR = true;
       }
     }
