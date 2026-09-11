@@ -42,23 +42,48 @@ int nEpsGrid(int K, double U){
    return (n > 0) ? n : 0;
 }
 
+//Allocate the sweep-spectrum table. Its values depend only on the null spectrum,
+//the scaling choice, m and epsilon -- not on the window -- so one table serves
+//every window of a contig. It used to be allocated per window, which for the
+//23,208-window YRI chr22 example meant 852 MB of identical copies (of a 1.0 GB
+//peak RSS) and a cache miss on every window; the distinct data is 37 KB.
+double ***initQ(int K, double U){
+   int nEps = nEpsGrid(K, U);
+   double ***q = new double **[nEps];
+   for(int e = 0; e < nEps; e++){
+      q[e] = new double *[K-1];
+      for(int m = 0; m < K-1; m++) q[e][m] = new double[K];
+   }
+   return q;
+}
+
+void releaseQ(double ***q, int K, double U){
+   int nEps = nEpsGrid(K, U);
+   for(int e = 0; e < nEps; e++){
+      for(int m = 0; m < K-1; m++) delete [] q[e][m];
+      delete [] q[e];
+   }
+   delete [] q;
+   return;
+}
+
 //The epsilon grid point at index ei (0-based), i.e. the ei+1'th step of 1/(100K).
 double epsAt(int ei, int K){
    return double(ei + 1) / (100.0 * double(K));
 }
 
-void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
+void calcQ(double ***q, SpectrumData *avgSpec, double **f){
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
    int nEps = nEpsGrid(K, U);
    for (int ei = 0; ei < nEps; ei++){
       for (int m = 1; m < K; m++){
-         calcQ(q[ei][m-1], avgSpec, f, U, m, epsAt(ei, K), w);
+         calcQ(q[ei][m-1], avgSpec, f, U, m, epsAt(ei, K));
       }
    }
    return;
 }
-void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double e, int w){
+void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double e){
    int K = avgSpec->K;
 
    for(int i = m+1; i <= K; i++){
@@ -126,7 +151,7 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
 }
 
 
-void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin,double MAX_EXTEND){
+void calcMTA(LASSIResults *results, double ***q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin,double MAX_EXTEND){
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
@@ -182,7 +207,7 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    double *lq = new double[K];
    for (int e = 0; e < nEps; e++){
       for (int m = 0; m < K-1; m++){
-         for (int i = 0; i < K; i++) lq[i] = log(q[w][e][m][i]);
+         for (int i = 0; i < K; i++) lq[i] = log(q[e][m][i]);
          double *Qem = Q + ((size_t)e*(K-1) + m)*nloc;
          for (int j = 0; j < nloc; j++){
             int win = rightLim + j;
@@ -253,81 +278,6 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    delete [] lq;
    delete [] Pr;
    return;
-}
-
-double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int rightLim, int leftLim){
-   double res = 0;
-   //int start = (w-width >= 0) ? w-width : 0;
-   //int end = (w+width < specData->nwins) ? w+width : specData->nwins-1;
-   //double center = specData->dist[w];
-   /*
-   //to the left
-   int win = w-1;
-   while(center - specData->dist[win] <= d && win >= 0){
-      for (int i = 0; i < avgSpec->K; i++){
-         res += double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-      }
-      win--;
-   }
-   //to the right
-   win = w;
-   while(specData->dist[win] - center  <= d && win < specData->nwins){
-      for (int i = 0; i < avgSpec->K; i++){
-         res += double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-      }
-      win++;
-   }
-   */
-
-   for (int win = rightLim; win <= leftLim; win++){
-      for (int i = 0; i < avgSpec->K; i++){
-         res += double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-      }
-   }
-   return res;
-}
-
-double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int rightLim, int leftLim){
-   if(m+1 == avgSpec->K) return calcSALTINullLikelihood(specData,avgSpec,w,rightLim,leftLim);
-   double res = 0;
-   //int start = (w-width >= 0) ? w-width : 0;
-   //int end = (w+width < specData->nwins) ? w+width : specData->nwins-1;
-   //double center = specData->dist[w];
-
-   /*
-   //to the left
-   int win = w-1;
-   while(center - specData->dist[win] <= d && win >= 0){
-      double Pr = exp(-A*abs(center-specData->dist[win]));
-      for (int i = 0; i < avgSpec->K; i++){
-         double pi = double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-         double qi = double(specData->nhaps[win])*specData->freq[win][i]*log(q[win][e][m][i]);
-         res += Pr*qi+(1-Pr)*pi;
-      }
-      win--;
-   }
-   //to the right
-   win = w;
-   while(specData->dist[win] - center <= d && win < specData->nwins){
-      double Pr = exp(-A*abs(center-specData->dist[win]));
-      for (int i = 0; i < avgSpec->K; i++){
-         double pi = double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-         double qi = double(specData->nhaps[win])*specData->freq[win][i]*log(q[win][e][m][i]);
-         res += Pr*qi+(1-Pr)*pi;
-      }
-      win++;
-   }
-   */
-
-   for (int win = rightLim; win <= leftLim; win++){
-      double Pr = exp(-A*abs(specData->dist[w]-specData->dist[win]));
-      for (int i = 0; i < avgSpec->K; i++){
-         double pi = double(specData->nhaps[win])*specData->freq[win][i]*log(avgSpec->freq[0][i]);
-         double qi = double(specData->nhaps[win])*specData->freq[win][i]*log(q[win][e][m][i]);
-         res += Pr*qi+(1-Pr)*pi;
-      }
-   }
-   return res;
 }
 
 void calcMandT(LASSIResults *results, SpectrumData *specData, SpectrumData *avgSpec, double **f, int w){

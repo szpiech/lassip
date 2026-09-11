@@ -157,8 +157,6 @@ struct LASSIInitialResults{
 void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop);
 bool checkNull(map<string, SpectrumData* > *avgSpecByPop,map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 map<string, SpectrumData* > *averageSpec(string nullSpecFile);
-double ****initQ(int nwins,int K, double U);
-void releaseQ(double ****q, int nwins,int K, double U);
 
 vector< pair_t* > *findAllWindows(MapData *mapData, int WINSIZE, int WINSTEP, bool USE_BP = false);
 void releaseAllWindows(vector< pair_t* > *windows);

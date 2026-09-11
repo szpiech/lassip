@@ -99,32 +99,6 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
     return avgSpecByPop;
 }
 
-double ****initQ(int nwins,int K, double U){
-    double ****q = new double***[nwins];
-    int nEps = int(U*100.0*K);
-    for(int w = 0; w < nwins; w++){
-        q[w] = new double **[nEps];
-        for(int e = 0; e < nEps; e++){
-            q[w][e] = new double *[K-1];
-            for(int m = 0; m < K-1; m++) q[w][e][m] = new double[K];
-        }
-    }
-    return q;
-}
-
-void releaseQ(double ****q, int nwins,int K, double U){
-    int nEps = int(U*100.0*K);
-    for(int w = 0; w < nwins; w++){
-        for(int e = 0; e < nEps; e++){
-            for(int m = 0; m < K-1; m++) delete [] q[w][e][m];
-            delete [] q[w][e];
-        }
-        delete [] q[w];
-    }
-    delete [] q;
-    return;
-}
-
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED){
     if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
         int nOriginalLoci = 0;

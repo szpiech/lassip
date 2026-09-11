@@ -53,7 +53,7 @@ struct SALTI_work_order_t
     int id;
     SpectrumData *specData;
     SpectrumData *avgSpec;
-    double ****q; //win->e->m->i
+    double ***q; //e->m->i
     param_t *params;
     LASSIResults *results;
     double dmin;
@@ -70,8 +70,7 @@ pair_t* findInclusiveSNPIndicies(unsigned int startSnpIndex, unsigned int currWi
 void calc_LASSI_stats2(void *work_order);
 void calc_LASSI_stats(void *work_order);
 
-void calc_SALTI_stats1(void *order);
-void calc_SALTI_stats2(void *order);
+void calc_SALTI_stats(void *order);
 
 
 #endif

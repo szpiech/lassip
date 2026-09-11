@@ -369,30 +369,17 @@ int main(int argc, char *argv[])
         for(unsigned int c = 0; c < specDataByChr->size(); c++){
           SALTI_work_order_t *order;
           pthread_t *peer = new pthread_t[numThreads];
-          int nwins = specDataByChr->at(c)->nwins;
           K = specDataByChr->at(c)->K;
           double U = avgSpec->freq[0][K-1];
-          double ****q = initQ(nwins,K,U);
-          //PRECOMPUTE all possible Qs
-          for (int i = 0; i < numThreads; i++){
-            order = new SALTI_work_order_t;
-            order->id = i;
-            order->specData = specDataByChr->at(c);
-            order->avgSpec = avgSpec;
-            order->results = resultsByChr->at(c);
-            order->params = &params;
-            order->q = q;
 
-            pthread_create(&(peer[i]),
-                            NULL,
-                           (void *(*)(void *))calc_SALTI_stats1,
-                           (void *)order);      
-          }
+          //The sweep spectra depend on the null spectrum, the scaling choice, m
+          //and epsilon, but not on the window, so one table serves every window.
+          double **f = calcF(LASSI_CHOICE, K);
+          double ***q = initQ(K, U);
+          calcQ(q, avgSpec, f);
+          for(int i = 0; i < K; i++) delete [] f[i];
+          delete [] f;
 
-          for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
-          delete [] peer;
-
-          peer = new pthread_t[numThreads];
           for (int i = 0; i < numThreads; i++){
             order = new SALTI_work_order_t;
             order->id = i;
@@ -405,14 +392,14 @@ int main(int argc, char *argv[])
 
             pthread_create(&(peer[i]),
                             NULL,
-                           (void *(*)(void *))calc_SALTI_stats2,
+                           (void *(*)(void *))calc_SALTI_stats,
                            (void *)order);      
           }
 
           for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
           delete [] peer;
 
-          releaseQ(q,nwins,K,U);
+          releaseQ(q,K,U);
 
           cerr << "Done with contig " << specDataByChr->at(c)->info[0][0] << ".\n";
         }
