@@ -31,6 +31,7 @@ bool param_t::addFlag(string flag, bool value, string label, string description)
         argb[flag] = value;
         help[flag] = "<bool>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -52,6 +53,7 @@ bool param_t::addFlag(string flag, double value, string label, string descriptio
         argd[flag] = value;
         help[flag] = "<double>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -73,6 +75,7 @@ bool param_t::addFlag(string flag, int value, string label, string description)
         argi[flag] = value;
         help[flag] = "<int>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -94,6 +97,7 @@ bool param_t::addFlag(string flag, char value, string label, string description)
         argch[flag] = value;
         help[flag] = "<char>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -111,6 +115,7 @@ bool param_t::addFlag(string flag, string value, string label, string descriptio
         args[flag] = value;
         help[flag] = "<string>: " + description + "\n\tDefault: " + value;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -137,6 +142,7 @@ bool param_t::addListFlag(string flag, double value, string label, string descri
         listargd[flag].push_back(value);
         help[flag] = "<double1> ... <doubleN>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -157,6 +163,7 @@ bool param_t::addListFlag(string flag, char value, string label, string descript
         listargch[flag].push_back(value);
         help[flag] = "<char1> ... <charN>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -178,6 +185,7 @@ bool param_t::addListFlag(string flag, int value, string label, string descripti
         listargi[flag].push_back(value);
         help[flag] = "<int1> ... <intN>: " + description + "\n\tDefault: " + buffer;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
@@ -195,6 +203,7 @@ bool  param_t::addListFlag(string flag, string value, string label, string descr
         listargs[flag].push_back(value);
         help[flag] = "<string1> ... <stringN>: " + description + "\n\tDefault: " + value;
         labels[flag] = label;
+        flagOrder.push_back(flag);
     }
     else
     {
