@@ -531,8 +531,25 @@ void garud_match_haps_w_missing(map<string,double> &hap2count,map<string,double>
    }
 }
 
-//this one is for testing whether the order of haplotypes changes the inferred clusters
-void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
+//Derive a per-window seed. Mixing the window's SNP boundaries into the user seed
+//makes the shuffle below depend only on the seed and the window itself, so results
+//do not change with --threads or with the order in which windows are processed.
+unsigned int windowSeed(int seed, int start, int end){
+   if (seed == 0) return (unsigned int) chrono::system_clock::now().time_since_epoch().count();
+   unsigned long long z = (unsigned long long)(unsigned int)seed  * 0x9E3779B97F4A7C15ULL
+                        + (unsigned long long)(unsigned int)start * 0xBF58476D1CE4E5B9ULL
+                        + (unsigned long long)(unsigned int)end   * 0x94D049BB133111EBULL;
+   z ^= z >> 31;
+   z *= 0xBF58476D1CE4E5B9ULL;
+   z ^= z >> 29;
+   return (unsigned int)(z ^ (z >> 32));
+}
+
+//The haplotype order fed to the clustering below changes which incomplete
+//haplotype gets merged into which complete one, so the shuffle is a real
+//degree of freedom in the result, not just a test harness. The seed is
+//therefore a user-visible parameter (--seed); see windowSeed above.
+void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed){
 
    map<string, double>::iterator it1;
    map<string, double>::iterator it2;
@@ -550,7 +567,6 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
       hapIDs.push_back(it1->first);
    }
 
-   unsigned seed = chrono::system_clock::now().time_since_epoch().count();
    shuffle(hapIDs.begin(),hapIDs.end(),default_random_engine(seed));
 
    map<string, int> compared;
@@ -828,7 +844,7 @@ void printHFS(map<string,double> hap2count){
    }
 }
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL) {
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
@@ -887,7 +903,8 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    }
 
    //printHFS(miss_hap2count);
-   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
+                                      windowSeed(SEED, snpIndex->start, snpIndex->end));
    //printHFS(hfs->hap2count);
 
    if(hfs->hap2count.size() == 0) return NULL;

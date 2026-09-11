@@ -155,8 +155,8 @@ selected() {
 # ---------------------------------------------------------------- fixtures
 
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
-       spec_missing spec_missing_tol spec_medium avg_spec lassi lassi_nullspec
-       salti_bp salti_nw salti_cm"
+       spec_missing spec_missing_tol missing_determinism spec_medium avg_spec
+       lassi lassi_nullspec salti_bp salti_nw salti_cm"
 
 if [ "$LIST" = 1 ]; then for c in $CASES; do echo "$c"; done; exit 0; fi
 
@@ -246,38 +246,41 @@ if selected spec_filter0; then
 fi
 
 if selected spec_missing; then
-    # SMOKE TEST ONLY, and not by choice: as of v1.2.2 a VCF containing missing
-    # genotypes gives a different spectrum on every run, even single-threaded and
-    # even at the default --match-tol 0. hfs_window always calls
-    # garud_match_haps_w_missing_shuffle, which shuffles the haplotype list with a
-    # std::default_random_engine seeded from the system clock per window; the
-    # branch that merges an incomplete haplotype into a compatible complete one
-    # then depends on that order. Four identical runs of this case produce four
-    # different files. Promote this to compare_hash once the seed is under user
-    # control.
+    # Deterministic since --seed exists: the per-window shuffle used when clustering
+    # haplotypes that carry missing data is seeded from --seed mixed with the
+    # window's SNP boundaries, so output no longer depends on the clock or on
+    # --threads. Before that, four identical runs of this case gave four files.
     if run_lassip "$WORK/spec_missing.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
         --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
         --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 0 --out "$WORK/ms"; then
-        nrow=$(gzip -dc "$WORK/ms.POP1.lassip.hap.spectra.gz" | tail -n +3 | wc -l | tr -d ' ')
-        if [ "$nrow" -gt 0 ]; then pass "spec_missing (smoke: $nrow windows)"
-        else fail spec_missing "no windows written"; fi
+        compare_hash spec_missing "$WORK/ms.POP1.lassip.hap.spectra.gz" spec_missing
     else fail spec_missing "run failed"; fi
 fi
 
 if selected spec_missing_tol; then
-    # Clustering haplotypes that carry missing data (--match-tol > 0) goes through a
-    # shuffle whose seed comes from the system clock, so this case is only a smoke
-    # test until the seed is under user control: it asserts the run succeeds and
-    # produces windows, not the exact spectrum.
+    # --match-tol > 0 actively merges haplotypes that differ at missing sites
     if run_lassip "$WORK/spec_missing_tol.log" --vcf "$WORK/small.missing.vcf.gz" \
         --pop "$WORK/small.pop1.txt" --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
         --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --out "$WORK/mt"; then
-        nrow=$(gzip -dc "$WORK/mt.POP1.lassip.hap.spectra.gz" | tail -n +3 | wc -l | tr -d ' ')
-        if [ "$nrow" -gt 0 ]; then pass "spec_missing_tol (smoke: $nrow windows)"
-        else fail spec_missing_tol "no windows written"; fi
-    else
-        fail spec_missing_tol "run failed"
-    fi
+        compare_hash spec_missing_tol "$WORK/mt.POP1.lassip.hap.spectra.gz" spec_missing_tol
+    else fail spec_missing_tol "run failed"; fi
+fi
+
+if selected missing_determinism; then
+    # The property itself, independent of any golden: the same seed must give the
+    # same spectrum whatever --threads is set to.
+    ok=1
+    for t in 1 3; do
+        run_lassip "$WORK/det$t.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+            --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+            --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --threads "$t" --out "$WORK/det$t" || ok=0
+    done
+    if [ "$ok" = 1 ]; then
+        h1=$(hash_gz "$WORK/det1.POP1.lassip.hap.spectra.gz")
+        h3=$(hash_gz "$WORK/det3.POP1.lassip.hap.spectra.gz")
+        if [ "$h1" = "$h3" ]; then pass "missing_determinism"
+        else fail missing_determinism "--threads 1 and --threads 3 disagree on data with missing genotypes"; fi
+    else fail missing_determinism "run failed"; fi
 fi
 
 if selected spec_medium; then

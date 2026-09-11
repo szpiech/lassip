@@ -138,6 +138,13 @@ const string ARG_MAX_EXTEND_NW = "--max-extend-nw";
 const double DEFAULT_MAX_EXTEND_NW = 5;
 const string HELP_MAX_EXTEND_NW = "Maximum distance in number of windows from core window to consider for saltiLASSI.";
 
+const string ARG_SEED = "--seed";
+const int DEFAULT_SEED = 1;
+const string HELP_SEED = "Seed for the shuffle used when clustering haplotypes that\n\
+carry missing data. Runs with the same seed, inputs and flags are reproducible\n\
+regardless of --threads. Set 0 to seed from the system clock instead, which\n\
+reproduces the non-reproducible behaviour of lassip <= 1.2.2.";
+
 const string ARG_UNPHASED = "--unphased";
 const bool DEFAULT_UNPHASED = false;
 const string HELP_UNPHASED = "Set this flag to indicate data are unphased.";

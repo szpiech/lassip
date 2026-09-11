@@ -37,6 +37,7 @@ void calc_LASSI_stats(void *order) {
 
 	double FILTER_HMISS = p->params->getDoubleFlag(ARG_FILTER_HMISS);
 	int MATCH_TOL = p->params->getIntFlag(ARG_MATCH_TOL);
+	int SEED = p->params->getIntFlag(ARG_SEED);
 	
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	HaplotypeFrequencySpectrum *hfs;
@@ -49,7 +50,7 @@ void calc_LASSI_stats(void *order) {
 
 		for (unsigned int i = id; i < windows->size(); i += numThreads) {
 			snps = windows->at(i);		
-			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL);
+			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL, SEED);
 			if(hfs == NULL) p->results->nullWins->operator[](popName)++;
 			double *h12; 
 			double *h2h1;
