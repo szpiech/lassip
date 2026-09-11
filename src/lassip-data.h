@@ -209,8 +209,9 @@ void releaseHapData(HaplotypeData *data);
 //reads haplotype data from a VCF, splitting samples into the populations named
 //in the pop file; throws on malformed input
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED, bool SHARED_MAP);
-map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED);
-map< string, HaplotypeData* > *filterHaplotypeDataMonomorphic(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, bool PHASED);
+void accumulateLocusCounts(HaplotypeData *hapData, int *count, int *count2, int *nmissing);
+map< string, HaplotypeData* > *compactLoci(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, const char *keep, int keepLoci, bool perPopMap);
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool KEEP_MONOMORPHIC, bool PHASED);
 
 //counts the number of "fields" in a string
 //where a field is defined as a contiguous set of non whitespace

@@ -261,8 +261,7 @@ int main(int argc, char *argv[])
     map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED, (FILTER_LEVEL < 2));
 
     if(FILTER_LEVEL > 0){
-      hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, PHASED);
-      if(!KEEP_MONO) hapDataByPop = filterHaplotypeDataMonomorphic(hapDataByPop, popData, FILTER_LEVEL, PHASED);
+      hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, KEEP_MONO, PHASED);
     } 
 
     LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);

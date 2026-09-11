@@ -99,269 +99,182 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
     return avgSpecByPop;
 }
 
-map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED){
-    if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
-        int nOriginalLoci = 0;
-        int totHaps = 0;
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            totHaps += hapDataByPop->at(popData->popOrder[p])->nhaps;
-            if(p == 0) nOriginalLoci = hapDataByPop->at(popData->popOrder[p])->nloci;
+//Per-locus allele and missing-genotype counts, accumulated over one population.
+//The genotype matrix is haplotype-major, so the haplotype index has to be the
+//outer loop: with l outer, the inner loop strides by nloci bytes and touches a
+//new cache line on every iteration.
+void accumulateLocusCounts(HaplotypeData *hapData, int *count, int *count2, int *nmissing){
+    for(int h = 0; h < hapData->nhaps; h++){
+        const char *row = hapData->data[h];
+        for(int l = 0; l < hapData->nloci; l++){
+            char a = row[l];
+            if(a == '1') count[l]++;
+            else if(a == '2') count2[l]++;
+            else if(a == MISSING_ALLELE) nmissing[l]++;
         }
-        int *count = new int[nOriginalLoci];
-        int *count2 = new int[nOriginalLoci];
-        int *nmissing = new int[nOriginalLoci];
-        for(int i = 0; i < nOriginalLoci; i++){
-            count[i] = 0;
-            count2[i] = 0;
-            nmissing[i] = 0;
-        }
-
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            HaplotypeData *hapData = hapDataByPop->at(popName);
-            for(int l = 0; l < hapData->nloci; l++){
-                for(int h = 0; h < hapData->nhaps; h++){
-                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
-                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
-                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
-                }
-            }
-        }
-        int keepLoci = 0;
-        for(int i = 0; i < nOriginalLoci; i++){
-            if(double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
-        }
-
-        cerr << "Filtering " << nOriginalLoci - keepLoci << " loci with missing data fraction >" << FILTER_LMISS << ".\n";
-
-        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
-        MapData *oldMapData = hapDataByPop->begin()->second->map;
-        MapData *newMapData = initMapData(keepLoci);
-        newMapData->chr = oldMapData->chr;
-        int l0 = 0;
-        for(int l = 0; l < oldMapData->nloci; l++){
-            if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
-                newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
-                newMapData->locusName[l0] = oldMapData->locusName[l];
-                l0++;
-            }
-        }
-
-        releaseMapData(oldMapData);
-
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            HaplotypeData *hapData = hapDataByPop->at(popName);
-            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
-            l0 = 0;
-            for(int l = 0; l < hapData->nloci; l++){
-                if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
-                    for(int h = 0; h < hapData->nhaps; h++){
-                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
-                    }
-                    l0++;
-                }
-            }
-            newHapDataByPop->at(popName)->map = newMapData;
-            hapData->map = NULL;
-            releaseHapData(hapData);
-        }
-
-        delete [] count;
-        delete [] count2;
-        delete [] nmissing;
-        delete hapDataByPop;
-        return newHapDataByPop;
-
     }
-    else{//FILTER_LEVEL == 2, filter sites monomorphic within pops
-        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
-
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            HaplotypeData *hapData = hapDataByPop->at(popName);
-            
-            int nOriginalLoci = hapDataByPop->at(popName)->nloci;
-            int totHaps = hapDataByPop->at(popName)->nhaps;
-
-            int *count = new int[nOriginalLoci];
-            int *count2 = new int[nOriginalLoci];
-            int *nmissing = new int[nOriginalLoci];
-            for(int i = 0; i < nOriginalLoci; i++){
-                count[i] = 0;
-                count2[i] = 0;
-                nmissing[i] = 0;
-            }
-
-            for(int l = 0; l < hapData->nloci; l++){
-                for(int h = 0; h < hapData->nhaps; h++){
-                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
-                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
-                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
-                }
-            }
-            
-            int keepLoci = 0;
-            for(int i = 0; i < nOriginalLoci; i++){
-                //cerr << count[i] << " " << totHaps << " " << nmissing[i] << " " << FILTER_LMISS << endl;
-                if(double(nmissing[i])/double(totHaps) <= FILTER_LMISS) keepLoci++;
-            }
-
-            cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
-            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
-            newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
-            int l0 = 0;
-            for(int l = 0; l < hapData->nloci; l++){
-                if(double(nmissing[l])/double(totHaps) <= FILTER_LMISS){
-                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
-                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
-                    for(int h = 0; h < hapData->nhaps; h++){
-                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
-                    }
-                    l0++;
-                }
-            }
-            releaseHapData(hapData);
-            delete [] count;
-            delete [] count2;
-            delete [] nmissing;
-        }
-        delete hapDataByPop;
-        return newHapDataByPop;
-
-    }
+    return;
 }
 
-map< string, HaplotypeData* > *filterHaplotypeDataMonomorphic(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, bool PHASED){
-    if(FILTER_LEVEL == 1){//filter sites monomorphic across all pops
-        int nOriginalLoci = 0;
-        int totHaps = 0;
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            totHaps += hapDataByPop->at(popData->popOrder[p])->nhaps;
-            if(p == 0) nOriginalLoci = hapDataByPop->at(popData->popOrder[p])->nloci;
-        }
-        int *count = new int[nOriginalLoci];
-        int *count2 = new int[nOriginalLoci];
-        int *nmissing = new int[nOriginalLoci];
-        for(int i = 0; i < nOriginalLoci; i++){
-            count[i] = 0;
-            count2[i] = 0;
-            nmissing[i] = 0;
-        }
+//Copy the loci flagged in keep into a freshly sized matrix. perPopMap selects
+//between one MapData shared by every population (FILTER_LEVEL 1, where all
+//populations keep the same loci) and one MapData per population (FILTER_LEVEL 2).
+map< string, HaplotypeData* > *compactLoci(map< string, HaplotypeData* > *hapDataByPop, PopData *popData,
+                                           const char *keep, int keepLoci, bool perPopMap){
+    map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+    MapData *newMapData = NULL;
 
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            HaplotypeData *hapData = hapDataByPop->at(popName);
-            for(int l = 0; l < hapData->nloci; l++){
-                for(int h = 0; h < hapData->nhaps; h++){
-                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
-                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
-                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
-                }
-            }
-        }
-        int keepLoci = 0;
-        for(int i = 0; i < nOriginalLoci; i++){
-            if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i]) keepLoci++;
-        }
-
-        cerr << "Filtering " << nOriginalLoci - keepLoci << " monomorphic loci.\n";
-
-        map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
+    if(!perPopMap){
         MapData *oldMapData = hapDataByPop->begin()->second->map;
-        MapData *newMapData = initMapData(keepLoci);
+        newMapData = initMapData(keepLoci);
         newMapData->chr = oldMapData->chr;
         int l0 = 0;
         for(int l = 0; l < oldMapData->nloci; l++){
-            if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
+            if(keep[l]){
                 newMapData->physicalPos[l0] = oldMapData->physicalPos[l];
                 newMapData->locusName[l0] = oldMapData->locusName[l];
                 l0++;
             }
         }
-
         releaseMapData(oldMapData);
+    }
 
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            HaplotypeData *hapData = hapDataByPop->at(popName);
-            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,false);
-            l0 = 0;
+    for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+        string popName = popData->popOrder[p];
+        HaplotypeData *hapData = hapDataByPop->at(popName);
+        HaplotypeData *newHapData = initHaplotypeData(hapData->nhaps, keepLoci, perPopMap);
+        newHapDataByPop->operator[](popName) = newHapData;
+
+        if(perPopMap){
+            newHapData->map->chr = hapData->map->chr;
+            int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
-                    for(int h = 0; h < hapData->nhaps; h++){
-                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
-                    }
+                if(keep[l]){
+                    newHapData->map->physicalPos[l0] = hapData->map->physicalPos[l];
+                    newHapData->map->locusName[l0] = hapData->map->locusName[l];
                     l0++;
                 }
             }
-            newHapDataByPop->at(popName)->map = newMapData;
-            hapData->map = NULL;
-            releaseHapData(hapData);
+        }
+        else{
+            newHapData->map = newMapData;
         }
 
+        for(int h = 0; h < hapData->nhaps; h++){
+            const char *src = hapData->data[h];
+            char *dst = newHapData->data[h];
+            int l0 = 0;
+            for(int l = 0; l < hapData->nloci; l++){
+                if(keep[l]) dst[l0++] = src[l];
+            }
+        }
+
+        if(!perPopMap) hapData->map = NULL;
+        releaseHapData(hapData);
+    }
+
+    delete hapDataByPop;
+    return newHapDataByPop;
+}
+
+//Drop loci whose missing-genotype fraction exceeds FILTER_LMISS and, unless
+//KEEP_MONOMORPHIC, loci that carry no variation. Both criteria are evaluated on
+//the input matrix -- removing one locus cannot change whether another is
+//monomorphic -- so they are applied in a single compaction rather than the two
+//full copies of the genotype matrix this used to take.
+//
+//FILTER_LEVEL 1 pools every population and keeps one locus set; FILTER_LEVEL 2
+//evaluates each population separately and lets them keep different loci.
+map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData,
+                                                   int FILTER_LEVEL, double FILTER_LMISS, bool KEEP_MONOMORPHIC, bool PHASED){
+    if(FILTER_LEVEL == 1){
+        int nOriginalLoci = hapDataByPop->begin()->second->nloci;
+        int totHaps = 0;
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            totHaps += hapDataByPop->at(popData->popOrder[p])->nhaps;
+        }
+
+        int *count = new int[nOriginalLoci]();
+        int *count2 = new int[nOriginalLoci]();
+        int *nmissing = new int[nOriginalLoci]();
+        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
+            accumulateLocusCounts(hapDataByPop->at(popData->popOrder[p]), count, count2, nmissing);
+        }
+
+        char *keep = new char[nOriginalLoci];
+        int nDroppedMissing = 0, nDroppedMono = 0, keepLoci = 0;
+        for(int l = 0; l < nOriginalLoci; l++){
+            bool passMiss = (double(nmissing[l])/double(totHaps) <= FILTER_LMISS);
+            bool polymorphic = (count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]);
+            if(!passMiss) nDroppedMissing++;
+            else if(!KEEP_MONOMORPHIC && !polymorphic) nDroppedMono++;
+            keep[l] = (passMiss && (KEEP_MONOMORPHIC || polymorphic)) ? 1 : 0;
+            keepLoci += keep[l];
+        }
+
+        cerr << "Filtering " << nDroppedMissing << " loci with missing data fraction >" << FILTER_LMISS << ".\n";
+        if(!KEEP_MONOMORPHIC) cerr << "Filtering " << nDroppedMono << " monomorphic loci.\n";
+
+        map< string, HaplotypeData* > *out = compactLoci(hapDataByPop, popData, keep, keepLoci, false);
         delete [] count;
         delete [] count2;
         delete [] nmissing;
-        delete hapDataByPop;
-        return newHapDataByPop;
-
+        delete [] keep;
+        return out;
     }
-    else{//FILTER_LEVEL == 2, filter sites monomorphic within pops
+    else{//FILTER_LEVEL == 2: evaluate, and report, each population separately
         map< string, HaplotypeData* > *newHapDataByPop = new map< string, HaplotypeData* >;
 
         for(unsigned int p = 0; p < popData->popOrder.size(); p++){
             string popName = popData->popOrder[p];
             HaplotypeData *hapData = hapDataByPop->at(popName);
-            
-            int nOriginalLoci = hapDataByPop->at(popName)->nloci;
-            int totHaps = hapDataByPop->at(popName)->nhaps;
+            int nOriginalLoci = hapData->nloci;
+            int totHaps = hapData->nhaps;
 
-            int *count = new int[nOriginalLoci];
-            int *count2 = new int[nOriginalLoci];
-            int *nmissing = new int[nOriginalLoci];
-            for(int i = 0; i < nOriginalLoci; i++){
-                count[i] = 0;
-                count2[i] = 0;
-                nmissing[i] = 0;
-            }
+            int *count = new int[nOriginalLoci]();
+            int *count2 = new int[nOriginalLoci]();
+            int *nmissing = new int[nOriginalLoci]();
+            accumulateLocusCounts(hapData, count, count2, nmissing);
 
-            for(int l = 0; l < hapData->nloci; l++){
-                for(int h = 0; h < hapData->nhaps; h++){
-                    count[l] += (hapData->data[h][l] == '1') ? 1 : 0;
-                    count2[l] += (hapData->data[h][l] == '2') ? 1 : 0;
-                    nmissing[l] += (hapData->data[h][l] == MISSING_ALLELE) ? 1 : 0;
-                }
-            }
-            
+            char *keep = new char[nOriginalLoci];
             int keepLoci = 0;
-            for(int i = 0; i < nOriginalLoci; i++){
-                //cerr << count[i] << " " << totHaps << " " << nmissing[i] << " " << FILTER_LMISS << endl;
-                if(count[i]+count2[i] > 0 && count[i]+count2[i] < totHaps - nmissing[i]) keepLoci++;
+            for(int l = 0; l < nOriginalLoci; l++){
+                bool passMiss = (double(nmissing[l])/double(totHaps) <= FILTER_LMISS);
+                bool polymorphic = (count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]);
+                keep[l] = (passMiss && (KEEP_MONOMORPHIC || polymorphic)) ? 1 : 0;
+                keepLoci += keep[l];
             }
 
             cerr << "Filtering " << nOriginalLoci - keepLoci << " loci in " << popName << ".\n";
-            newHapDataByPop->operator[](popName) = initHaplotypeData(hapData->nhaps,keepLoci,true);
-            newHapDataByPop->at(popName)->map->chr = hapData->map->chr;
+
+            HaplotypeData *newHapData = initHaplotypeData(hapData->nhaps, keepLoci, true);
+            newHapDataByPop->operator[](popName) = newHapData;
+            newHapData->map->chr = hapData->map->chr;
             int l0 = 0;
-            for(int l = 0; l < hapData->nloci; l++){
-                if(count[l]+count2[l] > 0 && count[l]+count2[l] < totHaps - nmissing[l]){
-                    newHapDataByPop->at(popName)->map->physicalPos[l0] = hapData->map->physicalPos[l];
-                    newHapDataByPop->at(popName)->map->locusName[l0] = hapData->map->locusName[l];
-                    for(int h = 0; h < hapData->nhaps; h++){
-                        newHapDataByPop->at(popName)->data[h][l0] = hapData->data[h][l];
-                    }
+            for(int l = 0; l < nOriginalLoci; l++){
+                if(keep[l]){
+                    newHapData->map->physicalPos[l0] = hapData->map->physicalPos[l];
+                    newHapData->map->locusName[l0] = hapData->map->locusName[l];
                     l0++;
                 }
             }
+            for(int h = 0; h < hapData->nhaps; h++){
+                const char *src = hapData->data[h];
+                char *dst = newHapData->data[h];
+                l0 = 0;
+                for(int l = 0; l < nOriginalLoci; l++){
+                    if(keep[l]) dst[l0++] = src[l];
+                }
+            }
+
             releaseHapData(hapData);
             delete [] count;
             delete [] count2;
             delete [] nmissing;
+            delete [] keep;
         }
         delete hapDataByPop;
         return newHapDataByPop;
-
     }
 }
 
