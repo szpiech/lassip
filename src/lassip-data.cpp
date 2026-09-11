@@ -1204,77 +1204,134 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
 
     //HaplotypeData *data = initHaplotypeData(nhaps, nloci);
 
-    string chr, name, ref, alt, qual, filter, info, format, alleleStr1, alleleStr2;
-    unsigned int pos;
-    char allele1, allele2;
+    //Resolve each VCF sample column to the rows it writes, once. The loop below
+    //used to look up ind2pop (twice), pop2indIndex and dataByPop for every
+    //genotype of every locus -- five red-black-tree lookups keyed on a string,
+    //all of them determined by the column index alone.
+    char **row1 = new char*[nfields];
+    char **row2 = new char*[nfields];
+    for (int field = 0; field < nfields; field++){
+        row1[field] = NULL;
+        row2[field] = NULL;
+        if (popData->ind2pop.count(inds[field]) == 0) continue;
+        string p = popData->ind2pop[inds[field]];
+        int f = pop2indIndex[p]++;
+        HaplotypeData *hd = dataByPop->at(p);
+        if (PHASED){
+            row1[field] = hd->data[2*f];
+            row2[field] = hd->data[2*f + 1];
+        }
+        else{
+            row1[field] = hd->data[f];
+        }
+    }
 
+    MapData **popMaps = new MapData*[popData->npops];
+    for (int i = 0; i < popData->npops; i++) popMaps[i] = dataByPop->at(popData->popOrder[i])->map;
+
+    string chr, name;
+    unsigned int pos;
 
     for (int locus = 0; locus < nloci; locus++)
     {
-        //for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
+        if(!getline(fin, line)){
+            cerr << "ERROR: " << filename << " ended after " << locus << " of " << nloci << " loci.\n";
+            throw 0;
+        }
+        const char *c = line.c_str();
+        const char *lineEnd = c + line.size();
 
-        fin >> chr >> pos >> name >> ref >> alt >> qual >> filter >> info >> format;
+        //CHROM
+        const char *tok = c;
+        while (c < lineEnd && *c != '\t' && *c != ' ') c++;
+        chr.assign(tok, c - tok);
+        while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
+        //POS
+        pos = 0;
+        while (c < lineEnd && *c >= '0' && *c <= '9'){ pos = pos*10 + (*c - '0'); c++; }
+        while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
+        //ID
+        tok = c;
+        while (c < lineEnd && *c != '\t' && *c != ' ') c++;
+        name.assign(tok, c - tok);
+        //REF ALT QUAL FILTER INFO FORMAT
+        for (int skip = 0; skip < 6; skip++){
+            while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
+            while (c < lineEnd && *c != '\t' && *c != ' ') c++;
+        }
+
         if(SHARED_MAP){
-            for (int i = 0; i < popData->npops; i++) pop2indIndex[popData->popOrder[i]] = 0;
             if (locus == 0) mapData->chr = chr;
+            else if (chr != mapData->chr){
+                cerr << "ERROR: " << filename << " contains more than one chromosome ("
+                     << mapData->chr << " and " << chr << " at " << name
+                     << "). lassip expects one contig per file.\n";
+                throw 0;
+            }
             mapData->locusName[locus] = name;
             mapData->physicalPos[locus] = pos;
         }
         else{
             for (int i = 0; i < popData->npops; i++){
-                string popName = popData->popOrder[i];
-                pop2indIndex[popName] = 0;
-                if (locus == 0) dataByPop->at(popName)->map->chr = chr;
-                dataByPop->at(popName)->map->locusName[locus] = name;
-                dataByPop->at(popName)->map->physicalPos[locus] = pos;
-            }
-        }
-        //cerr << mapData->physicalPos[locus] << " ";
-        for (int field = 0; field < nfields; field++)
-        {
-            fin >> junk;
-            //cerr << junk << " ";
-            if (junk == "."){
-                allele1 = VCF_MISSING;
-                allele2 = VCF_MISSING;                
-            }
-            else{
-                allele1 = junk[0];
-                allele2 = junk[2];
-            }
-            //cerr << allele1 << " " << allele2 << endl;
-            if (popData->ind2pop.count(inds[field]) != 0){
-                if((allele1 != '1' && allele1 != '0' && allele1 != VCF_MISSING) || 
-                    (allele2 != '1' && allele2 != '0' && allele2 != VCF_MISSING)){
-                    cerr << "ERROR: Alleles must be coded 0/1/. only.\n";
+                if (locus == 0) popMaps[i]->chr = chr;
+                else if (chr != popMaps[i]->chr){
+                    cerr << "ERROR: " << filename << " contains more than one chromosome ("
+                         << popMaps[i]->chr << " and " << chr << " at " << name
+                         << "). lassip expects one contig per file.\n";
                     throw 0;
                 }
+                popMaps[i]->locusName[locus] = name;
+                popMaps[i]->physicalPos[locus] = pos;
+            }
+        }
 
-                string p = popData->ind2pop[inds[field]];
-                int f = pop2indIndex[p];
-                if(PHASED){
-                    if (allele1 == VCF_MISSING) dataByPop->at(p)->data[2 * f][locus] = MISSING_ALLELE;
-                    else dataByPop->at(p)->data[2 * f][locus] = allele1;
-                    if (allele2 == VCF_MISSING) dataByPop->at(p)->data[2 * f + 1][locus] = MISSING_ALLELE;
-                    else dataByPop->at(p)->data[2 * f + 1][locus] = allele2;
-                }
-                else if (!PHASED){
-                    if(allele1 == '1'){
-                        if(allele2 == '1') dataByPop->at(p)->data[f][locus] = '2';
-                        else if(allele2 == '0') dataByPop->at(p)->data[f][locus] = '1';
-                        else if(allele2 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
-                    }
-                    else if (allele1 == '0'){
-                        if(allele2 == '1') dataByPop->at(p)->data[f][locus] = '1';
-                        else if(allele2 == '0') dataByPop->at(p)->data[f][locus] = '0';
-                        else if(allele2 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
-                    }
-                    else if (allele1 == VCF_MISSING) dataByPop->at(p)->data[f][locus] = MISSING_ALLELE;
-                }
-                pop2indIndex[p]++;
+        for (int field = 0; field < nfields; field++)
+        {
+            while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
+            const char *gt = c;
+            while (c < lineEnd && *c != '\t' && *c != ' ') c++;
+            size_t gtlen = c - gt;
+            if (gtlen == 0){
+                cerr << "ERROR: " << filename << " has fewer genotype fields than samples at "
+                     << chr << ":" << pos << ".\n";
+                throw 0;
+            }
+            if (row1[field] == NULL) continue;
+
+            char allele1, allele2;
+            if (gtlen == 1 && gt[0] == VCF_MISSING){
+                allele1 = VCF_MISSING;
+                allele2 = VCF_MISSING;
+            }
+            else{
+                allele1 = gt[0];
+                //a haploid or truncated GT has no second allele; treat it as missing
+                //rather than reading past the end of the field
+                allele2 = (gtlen > 2) ? gt[2] : VCF_MISSING;
+            }
+
+            if((allele1 != '1' && allele1 != '0' && allele1 != VCF_MISSING) ||
+               (allele2 != '1' && allele2 != '0' && allele2 != VCF_MISSING)){
+                cerr << "ERROR: Alleles must be coded 0/1/. only.\n";
+                throw 0;
+            }
+
+            if(PHASED){
+                row1[field][locus] = (allele1 == VCF_MISSING) ? MISSING_ALLELE : allele1;
+                row2[field][locus] = (allele2 == VCF_MISSING) ? MISSING_ALLELE : allele2;
+            }
+            else{
+                if (allele1 == VCF_MISSING || allele2 == VCF_MISSING) row1[field][locus] = MISSING_ALLELE;
+                else if (allele1 == '1' && allele2 == '1') row1[field][locus] = '2';
+                else if (allele1 == '0' && allele2 == '0') row1[field][locus] = '0';
+                else row1[field][locus] = '1';
             }
         }
     }
+
+    delete [] row1;
+    delete [] row2;
+    delete [] popMaps;
 
     fin.close();
 
