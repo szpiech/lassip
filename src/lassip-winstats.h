@@ -38,6 +38,8 @@ double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED);
 double calcH2H1(HaplotypeFrequencySpectrum *hfs);
 double **calcF(int type, int K);
 
+int nEpsGrid(int K, double U);
+double epsAt(int ei, int K);
 void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w);
 void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
 

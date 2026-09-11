@@ -32,16 +32,29 @@ double getDMin(vector<SpectrumData *> *specDataByChr){
    return dmin;
 }
 
+//Number of points on the epsilon grid. initQ, releaseQ, calcQ and calcMTA must
+//all agree on this: the array is allocated to this size and indexed by the loops
+//below, and the previous code derived it two different ways -- int(U*100*K) for
+//the allocation, and by accumulating e += epsStep for the loops -- so rounding
+//could in principle have given the loops one iteration more than the allocation.
+int nEpsGrid(int K, double U){
+   int n = int(U * 100.0 * double(K));
+   return (n > 0) ? n : 0;
+}
+
+//The epsilon grid point at index ei (0-based), i.e. the ei+1'th step of 1/(100K).
+double epsAt(int ei, int K){
+   return double(ei + 1) / (100.0 * double(K));
+}
+
 void calcQ(double ***q, SpectrumData *avgSpec, double **f, int w){
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
-   double epsStep = 1.0/(100.0*double(K));
-   int ei = 0;
-   for (double e = epsStep; e <= U; e += epsStep){
+   int nEps = nEpsGrid(K, U);
+   for (int ei = 0; ei < nEps; ei++){
       for (int m = 1; m < K; m++){
-         calcQ(q[ei][m-1], avgSpec, f, U, m, e, w);
+         calcQ(q[ei][m-1], avgSpec, f, U, m, epsAt(ei, K), w);
       }
-      ei++;
    }
    return;
 }
@@ -114,7 +127,6 @@ double calcH2H1(HaplotypeFrequencySpectrum *hfs){
 
 
 void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, SpectrumData *avgSpec, int w, double dmin,double MAX_EXTEND){
-   //int MAX_EXTEND = 2500000;
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
@@ -135,21 +147,52 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
       }
    }
    rightLim = d;
-   
-   double nullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,rightLim,leftLim);
-   //cerr << "null: " << nullLikelihood << endl;
+
    int K = avgSpec->K;
    double U = avgSpec->freq[0][K-1];
+   int nEps = nEpsGrid(K, U);
+   int nloc = leftLim - rightLim + 1;
 
-   //for (int i = 0; i < K; i++) cerr << avgSpec->freq[0][i] << " ";
-   //cerr << endl;
+   //The likelihood being maximised is
+   //   L(A,e,m) = sum_win [ Pr(A,win)*sum_i n_win f_win,i log q_e,m,i
+   //                        + (1-Pr(A,win))*sum_i n_win f_win,i log p_i ]
+   //Neither logarithm depends on A, and q does not depend on the window, so the
+   //grid search below only needs the per-window sums, not the logs themselves.
+   //Computing them inside the (A,m,e) loops, as this function used to, evaluates
+   //log() ~10^8 times per window where a few thousand distinct values exist.
 
-   int maxM = -1;
-   //double maxE = -1;
-   double maxA = -1;
-   double maxAltLikelihood = -99999999;
-   double altLikelihood = -99999999;
-   double epsStep = 1.0/(100.0*double(K));
+   //log of the null spectrum
+   double *logp = new double[K];
+   for (int i = 0; i < K; i++) logp[i] = log(avgSpec->freq[0][i]);
+
+   //null contribution of each window in the flanking region
+   double *P = new double[nloc];
+   double nullLikelihood = 0;
+   for (int j = 0; j < nloc; j++){
+      int win = rightLim + j;
+      double n = double(specData->nhaps[win]);
+      double s = 0;
+      for (int i = 0; i < K; i++) s += n*specData->freq[win][i]*logp[i];
+      P[j] = s;
+      nullLikelihood += s;
+   }
+
+   //sweep contribution of each window, for every (eps, m), minus the null one
+   double *Q = new double[(size_t)nEps*(K-1)*nloc];
+   double *lq = new double[K];
+   for (int e = 0; e < nEps; e++){
+      for (int m = 0; m < K-1; m++){
+         for (int i = 0; i < K; i++) lq[i] = log(q[w][e][m][i]);
+         double *Qem = Q + ((size_t)e*(K-1) + m)*nloc;
+         for (int j = 0; j < nloc; j++){
+            int win = rightLim + j;
+            double n = double(specData->nhaps[win]);
+            double s = 0;
+            for (int i = 0; i < K; i++) s += n*specData->freq[win][i]*lq[i];
+            Qem[j] = s - P[j];
+         }
+      }
+   }
 
    double Amin = -log(0.99999)/dmin;
    double Amax = -log(0.00001)/dmin;
@@ -157,27 +200,39 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    double lAmax = log(Amax);
    double lstep = (lAmax-lAmin)/100;
 
-   //cerr << "lAmax " << lAmax << " lAmin " << lAmin << " lstep " << lstep << endl;
+   int maxM = -1;
+   double maxA = -1;
+   double maxAltLikelihood = -99999999;
+   double *Pr = new double[nloc];
 
-   //double p = 0-log(1e-8);
-   //double d;
-
+   //NOTE: where the likelihood ridge in A is flat -- which it is for a few percent
+   //of windows -- which of two adjacent grid points attains the maximum is decided
+   //by rounding, so the reported A moves under any change to summation order,
+   //compiler or optimisation level. The maximised likelihood itself, and with it
+   //m and T, are unaffected. Reporting the interval of A within some delta of the
+   //optimum, or an explicit tie-breaking rule, would remove the arbitrariness.
    for (double A = lAmin; A <= lAmax; A += lstep){
-      //cerr << "p " << p << " A " << A << " d " << d << endl;
-      //double currNullLikelihood = calcSALTINullLikelihood(specData,avgSpec,w,d);
+      double expA = exp(A);
+      for (int j = 0; j < nloc; j++) Pr[j] = exp(-expA*abs(dist[w]-dist[rightLim+j]));
       for (int m = 1; m <= K; m++){
-         int ei = 0;
-         for (double e = epsStep; e <= U; e += epsStep){
-            altLikelihood = calcSALTIAltLikelihood(specData, avgSpec, q, ei, m-1, exp(A), w, rightLim, leftLim);
-            //cerr << "A " << A << " m " << m << " e " << " alt " << altLikelihood << endl;
-            if(altLikelihood > maxAltLikelihood){
-               maxAltLikelihood = altLikelihood;
-               //nullLikelihood = currNullLikelihood;
+         if(m == K){
+            //a sweep involving all K classes is the neutral background
+            if(nullLikelihood > maxAltLikelihood){
+               maxAltLikelihood = nullLikelihood;
                maxM = m;
-               //maxE = e;
-               maxA = 1.0/exp(A);
+               maxA = 1.0/expA;
             }
-            ei++;
+            continue;
+         }
+         for (int e = 0; e < nEps; e++){
+            double *Qem = Q + ((size_t)e*(K-1) + (m-1))*nloc;
+            double alt = nullLikelihood;
+            for (int j = 0; j < nloc; j++) alt += Pr[j]*Qem[j];
+            if(alt > maxAltLikelihood){
+               maxAltLikelihood = alt;
+               maxM = m;
+               maxA = 1.0/expA;
+            }
          }
       }
    }
@@ -191,9 +246,14 @@ void calcMTA(LASSIResults *results, double ****q, SpectrumData *specData, Spectr
    results->A[w] = maxA;
    results->m[w] = maxM;
    results->T[w] = 2.0 * (maxAltLikelihood - nullLikelihood);
+
+   delete [] logp;
+   delete [] P;
+   delete [] Q;
+   delete [] lq;
+   delete [] Pr;
    return;
 }
-
 
 double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int w,int rightLim, int leftLim){
    double res = 0;
