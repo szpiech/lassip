@@ -73,6 +73,5 @@ void calc_LASSI_stats(void *work_order);
 void calc_SALTI_stats1(void *order);
 void calc_SALTI_stats2(void *order);
 
-string int2str(int i);
 
 #endif

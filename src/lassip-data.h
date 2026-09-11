@@ -77,15 +77,6 @@ struct MapData
   //int g;
 };
 
-struct FreqData
-{
-  map<char,unsigned int> *count;
-  //vector<char> alleles;
-  //int *nmissing;
-  int nloci;
-  int nhaps;
-};
-
 struct HaplotypeData
 {
   //map<char, double> *Q;
@@ -198,11 +189,6 @@ map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames);
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr);
 map<string, SpectrumData* > *averageSpec(map<string, vector<SpectrumData *>* > *specDataByPopByChr);
 map<string, SpectrumData* > *averageSpec(string nullSpecFile);
-//map<string,char> storeMap();
-
-//void extractAlleleStrs(string gt, string &string1, string &string2);
-//void codeAlleles(string string1, string string2, char &allele1, char &allele2);
-
 HaplotypeFrequencySpectrum *initHaplotypeFrequencySpectrum();
 void releaseHaplotypeFrequencySpectrum(HaplotypeFrequencySpectrum *data);
 
@@ -218,32 +204,13 @@ void checkK(PopData *data, double K);
 MapData *initMapData(int nloci);
 void releaseMapData(MapData *data);
 
-//allocates the arrays and populates them with MISSING
-FreqData *initFreqData(int nloci);
-//FreqData *initFreqData(HaplotypeData* data);
-void releaseFreqData(FreqData *data);
-
-//reads in map data and also does basic checks on integrity of format
-//returns a populated MapData structure if successful
-//throws an exception otherwise
-//MapData *readMapData(string filename, int expected_loci);
-//MapData *readMapDataTPED(string filename, int expected_loci, int expected_haps);
-//MapData *readMapDataVCF(string filename, int expected_loci); //Physical positions only
-
 //allocates the 2-d array and populated it with -9
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap = true);
 void releaseHapData(HaplotypeData *data);
 
-//reads in haplotype data and also does basic checks on integrity of format
-//returns a populated HaplotypeData structure if successful
-//throws an exception otherwise
-//HaplotypeData *readHaplotypeData(string filename);
-//HaplotypeData *readHaplotypeDataTPED(string filename);
-HaplotypeData *readHaplotypeDataVCF(string filename);
-
-//vector< HaplotypeData* > *readHaplotypeDataTPED(string filename, PopData *data);
+//reads haplotype data from a VCF, splitting samples into the populations named
+//in the pop file; throws on malformed input
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED, bool SHARED_MAP);
-//void findAllAlleles(map< string, HaplotypeData* > *hapDataByPop, PopData *popData);
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool PHASED);
 map< string, HaplotypeData* > *filterHaplotypeDataMonomorphic(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, bool PHASED);
 

@@ -207,75 +207,7 @@ void calc_SALTI_stats1(void *order) {
 
 
 
-string int2str(int i) {
-	char buffer[10];
-	sprintf(buffer, "%d", i);
-	return string(buffer);
-}
 
-/*
-vector< pair_t* > *getPartitionWindows(int snpStart, int winStart, vector<int> &PARTITIONS, MapData *mapData, bool USE_BP) {
-	vector< pair_t* > *partition_windows = new vector< pair_t* >;
-	if (USE_BP){
-		int partitionSnpIndexStart = snpStart;
-		int partitionCurrWinStart = winStart;
-		for (int i = 0; i < PARTITIONS.size(); i++) {
-			pair_t *partition_snps = findInclusiveSNPIndicies(partitionSnpIndexStart, partitionCurrWinStart, PARTITIONS[i], mapData);
-			partition_windows->push_back(partition_snps);
-			partitionSnpIndexStart = partition_snps->end;
-			partitionCurrWinStart += PARTITIONS[i];
-		}
-	}
-	else{//USE_SITES
-		int numSnps = mapData->nloci;
-		int currStart = snpStart;
-		int currEnd = -1;
-		for (int i = 0; i < PARTITIONS.size(); i++){
-			pair_t *partition_snps = new pair_t;
-			currEnd = currStart + PARTITIONS[i] - 1;
-			partition_snps->start = currStart;
-			partition_snps->end = (currEnd >= numSnps) ? numSnps -1 : currEnd;
-			partition_windows->push_back(partition_snps);
-			currStart = currEnd + 1;
-		}
-	}
-	return partition_windows;
-}
-*/
-/*
-vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData, bool USE_BP) {
-	vector< pair_t* > *ehh_windows = new vector< pair_t* >;
-	if(USE_BP){
-		int currWinStart = winStart;
-		for (int i = 0; i < EHH_WINS.size(); i++) {
-			pair_t *snps = findInclusiveSNPIndicies(snpStart, ( winStart + (WINSIZE * 0.5) - (EHH_WINS[i] * 0.5) ) , EHH_WINS[i], mapData);
-			ehh_windows->push_back(snps);
-		}
-	}
-	else{//USE_SITES
-		double mid = (WINSIZE - 1) * 0.5 + snpStart;
-		for (int i = 0; i < EHH_WINS.size(); i++) {
-			pair_t *snps = new pair_t;
-			if (EHH_WINS[i] % 2 == 0){
-				snps->start = int(mid - (EHH_WINS[i] * 0.5) + 0.5);
-				snps->end = int(mid + (EHH_WINS[i] * 0.5));
-			}
-			else{
-				if (WINSIZE % 2 == 0){
-					snps->start = int(mid - (EHH_WINS[i] * 0.5) + 1);
-					snps->end = int(mid + (EHH_WINS[i] * 0.5) - 1);
-				}
-				else{
-					snps->start = int(mid - (EHH_WINS[i] * 0.5) + 0.5);
-					snps->end = int(mid + (EHH_WINS[i] * 0.5));
-				}
-			}
-			ehh_windows->push_back(snps);
-		}
-	}
-	return ehh_windows;
-}
-*/
 
 pair_t* findInclusiveSNPIndicies(unsigned int startSnpIndex, unsigned int currWinStart, int WINSIZE, MapData* mapData) {
 

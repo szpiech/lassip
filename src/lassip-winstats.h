@@ -34,7 +34,6 @@ double calcSALTINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int 
 double calcSALTIAltLikelihood(SpectrumData *specData,SpectrumData *avgSpec,double ****q,int e, int m, double A, int w,int rightLim,int leftLim);
 
 int compare (const void *a, const void *b);
-int *uniqInt(int *array, int size, int &newSize);
 double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED);
 double calcH2H1(HaplotypeFrequencySpectrum *hfs);
 double **calcF(int type, int K);
@@ -48,13 +47,8 @@ double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, dou
 
 unsigned int windowSeed(int seed, int start, int end);
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED);
-void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL);
-void garud_match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL);
 void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed);
-int ndiff(string str1, string str2, int len);
-int ndiff_str(string str1, string str2);
 int garud_ndiff_str(string str1, string str2, string &str3, int MATCH_TOL);
-void printHFS(map<string,double> hap2count);
 int numSitesInDataWin(pair_t* win);
 
 

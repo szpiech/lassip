@@ -398,24 +398,6 @@ double **calcF(int type, int K){
    return f;
 }
 
-
-/*
-distance = 0
-        for i in range(len(s1)):
-            if s1[i] != s2[i]: 
-                if (s2[i] != 'N'):
-                    if (s1[i]!='N'):
-
-                        distance += 1
-                        if distance > distanceThreshold:
-                            return [distance, s1]
-                    else:
-                        
-                        s1 = s1[:i] + s2[i] + s1[i+1:] 
-                        
-        return [distance, s1]
-
-*/
 //This function immediately stops counting differences once MATCH_TOL is exceeded
 //It also combines loci where str1 is missing but str2 is not, stored in str3
 //Intended usage is to use str3 to replace str1 iff ndiff == 0.
@@ -447,89 +429,7 @@ int garud_ndiff_str(string str1, string str2, string &str3, int MATCH_TOL){
    return ndiff;
 }
 
-/*
-    distanceThreshold = int(distanceThreshold)
-    haps_clumped = {} # stored all the clumped haplotypes in this hash. I will pass this into def findClusters later on. 
-    haps_clumped_count = {} # I would like to record the number of different unique haplotypes that are clumped -- will htis help me later to distinguish ancestral haplotypes?
 
-    #  I need to keep track of which key has been compared
-    compared = {}
-
-    # Now calculate the distance between unique clustering haplotypes
-    for key1 in haps:
-        if (key1 in compared) == False:
-            compared[key1]=1
-            haps_clumped[key1] = haps[key1]  # regardless of whether or not key1 matches anything, I need to include it in haps_clumped. Therefore I will initialize it with it's own array.
-            haps_clumped_count[key1] = 1
-
-            
-            for key2 in haps:
-                if ((haps[key2][0] in haps_clumped[key1]) == False) and ((key2 in compared) == False):
-                    [distance, s1]= hamming_distance_clump(key1, key2, distanceThreshold)
-                    
-                    # If I replace an "N" in key1, I will replace the returned key1 in haps_clumped:
-                    if distance == 0 and key1 != s1:
-                        haps_clumped_count[s1] =  haps_clumped_count[key1]
-                        haps_clumped[s1] = haps_clumped[key1]
-                        del haps_clumped_count[key1]
-                        del haps_clumped[key1]
-                        key1 = s1
-                    if distance <= distanceThreshold:
-                        # The reason why this extra if statement is here is so that I do not confuse merging missing data with clumping haplotypes with a min distance threshold
-                        # store into the haps_clumped threshold:
-                        haps_clumped[key1] += haps[key2] # add the array for key2 to key1 array
-                        haps_clumped_count[key1] += 1
-                        compared[key2] = 1 # this means that I won't check this distance again since it has been clumped. 
-    return [haps_clumped, haps_clumped_count]
-
-*/
-
-
-void garud_match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
-
-   map<string, double>::iterator it1;
-   map<string, double>::iterator it2;
-   //map<string, int>::iterator it3;
-   
-   //Combining them, this is a little hacky, as I originally planned to handle them differently
-   map<string, double> hap2countCombined;
-   for (it1 = hap2count.begin(); it1 != hap2count.end(); it1++){
-      hap2countCombined[it1->first] = it1->second;
-   }
-   for (it1 = miss_hap2count.begin(); it1 != miss_hap2count.end(); it1++){
-      hap2countCombined[it1->first] = it1->second;
-   }
-
-   map<string, int> compared;
-   string hap1, hap2, mergedhap;
-   double count1, count2;
-   hap2count.clear();
-
-   for (it1 = hap2countCombined.begin(); it1 != hap2countCombined.end(); it1++){
-      hap1 = it1->first;
-      count1 = it1->second;
-      if(compared.count(hap1) == 0){
-         compared[hap1] = 1;
-         hap2count[hap1] = count1;
-      }
-      for (it2 = hap2countCombined.begin(); it2 != hap2countCombined.end(); it2++){
-         hap2 = it2->first;
-         count2 = it2->second;
-         if(compared.count(hap2) == 0){
-            int d = garud_ndiff_str(hap1,hap2,mergedhap,MATCH_TOL);
-            if(d == 0 && mergedhap.compare(hap1) != 0){
-               hap2count[mergedhap] = hap2count[hap1];
-               hap2count.erase(hap1);
-               hap1 = mergedhap;
-            }
-            if(d < MATCH_TOL){
-               hap2count[hap1] += count2;
-               compared[hap2] = 1;
-            }
-         }
-      }
-   }
-}
 
 //Derive a per-window seed. Mixing the window's SNP boundaries into the user seed
 //makes the shuffle below depend only on the seed and the window itself, so results
@@ -614,235 +514,8 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
    return;
 }
 
-int ndiff_str(string str1, string str2){
-   int ndiff = 0;
-   bool all_missing = true;
-   
-   if(str1.length() != str2.length()){
-      cerr << "WARNING: haplotypes not of same length!\n";
-      return -1;
-   }
 
-   for (size_t i = 0; i < str1.length(); i++){
-      if (str1[i] == MISSING_ALLELE || str2[i] == MISSING_ALLELE) continue;
-      
-      all_missing = false;
 
-      if (str1[i] != str2[i]){
-            ndiff++;
-      }
-   }
-   return all_missing ? -1 : ndiff;
-}
-
-//buggy needs to be fixed if going to be used.
-void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
-   
-   map<string, double>::iterator it1;
-   map<string, double>::iterator it2;
-   map<string, int>::iterator it3;
-   
-   //Combining them, this is a little hacky, as I originally planned to handle them differently
-   map<string, double> hap2countCombined;
-   for (it1 = hap2count.begin(); it1 != hap2count.end(); it1++){
-      hap2countCombined[it1->first] = it1->second;
-   }
-   for (it1 = miss_hap2count.begin(); it1 != miss_hap2count.end(); it1++){
-      hap2countCombined[it1->first] = it1->second;
-   }
-
-   //printHFS(hap2countCombined);
-   //cerr << "++++++++++++++++++++\n";
-
-   map<string, int> group;//holds cluster IDs
-   int currGroup = 0;
-   for (it1 = hap2countCombined.begin(); it1 != hap2countCombined.end(); it1++){
-      for (it2 = it1; it2 != hap2countCombined.end(); it2++){
-         int d = ndiff_str(it2->first,it1->first);
-         //cerr << d << endl;
-         if(d <= MATCH_TOL && d >= 0){
-            //neither hap is seen before, cluster them with same ID
-            if(group.count(it1->first) == 0 && group.count(it2->first) == 0){
-               group[it1->first] = currGroup;
-               group[it2->first] = currGroup;
-               currGroup++;
-            }
-            //One is seen the other is not, cluster into the one that has been seen
-            else if (group.count(it1->first) > 0 && group.count(it2->first) == 0){
-               group[it2->first] = group[it1->first];
-            }
-            //Same
-            else if (group.count(it1->first) == 0 && group.count(it2->first) > 0){
-               group[it1->first] = group[it2->first];
-            }
-            //Both have been seen
-            else if (group.count(it1->first) > 0 && group.count(it2->first) > 0){
-               //The haps have been clustered into different groups already, but we need to combine
-               if (group[it1->first] != group[it2->first]){
-                  int oldID1 = group[it1->first];
-                  int oldID2 = group[it2->first];
-                  
-                  for (it3 = group.begin(); it3 != group.end(); it3++){
-                     if(it3->second == oldID1 || it3->second == oldID2){
-                        it3->second = currGroup;
-                     }
-                  }
-                  currGroup++;
-               }
-            }
-         }
-         else{
-            group[it1->first] = currGroup;
-            currGroup++;
-            group[it2->first] = currGroup;
-            currGroup++;
-         }
-      }
-   }
-   
-   /*
-   cerr << "group";
-   map<string,int>::iterator it;
-   for (it = group.begin(); it != group.end(); it++){
-      cout << it->first << "\t" << it->second << endl;
-   }
-
-   cerr << "endgroup"; 
-   */
-   hap2count.clear();
-   for (it3 = group.begin(); it3 != group.end(); it3++){
-      string id = to_string(it3->second);
-      string hap = it3->first;
-
-      if(hap2count.count(id) == 0){
-         hap2count[id] = hap2countCombined[hap];
-      }
-      else{
-         hap2count[id] += hap2countCombined[hap];  
-      }
-   }
-
-   //printHFS(hap2count);
-   //cerr << "====================\n";
-
-   //printHFS(hap2count);
-
-//   for (it1 = hap2count.begin(); it1 != hap2count.end(); it1++){
-//      cerr << it1->first << " " << it1->second << endl;
-//   }
-
-   return;
-
-}
-
-//This approach only clusters haps with missing into haps with no missing, and match tol only has meaning for those clusterings
-/*
-void match_haps_w_missing(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL){
-   map<string, double>::iterator it1;
-   map<string, double>::iterator it2;
-   
-   vector<string> best_matches;
-   vector<string> to_delete;
-   int mindiff = len+1;
-
-   for (it2 = miss_hap2count.begin(); it2 != miss_hap2count.end(); it2++){
-      for (it1 = hap2count.begin(); it1 != hap2count.end(); it1++){
-         
-         int d = ndiff_str(it2->first,it1->first);
-
-         if(d <= MATCH_TOL && d >= 0){
-            if(d == mindiff){
-               best_matches.push_back(it1->first);
-            }
-            else if (d < mindiff){
-               mindiff = d;
-               best_matches.clear();
-               best_matches.push_back(it1->first);
-            }
-         }
-         else{
-            continue;
-         }
-      
-      }
-   
-      if(best_matches.size() > 0){
-         for (int i = 0; i < best_matches.size(); i++){
-            hap2count[best_matches[i]] += (it2->second/double(best_matches.size()));
-         }
-         to_delete.push_back(it2->first);
-      }
-      best_matches.clear();
-      mindiff = len+1;
-   }
-
-   for (int i = 0; i < to_delete.size(); i++){
-      miss_hap2count.erase(to_delete[i]);
-   }
-
-   if (miss_hap2count.empty()) return;
-
-   //naive clustering of incomplete haplotypes with each other
-   //In principle results could be dependent on order processed and clusters may not strictly conform to MATCH_TOL
-   //Can be improved at the expense of computational burden
-
-   map<string,double> miss_hap2count2 = miss_hap2count;
-   map<string,double> miss_clustered2count;
-   best_matches.clear();
-   //to_delete.clear();
-   mindiff = len+1;
-   
-   int i0 = 0;
-   int j0 = 0;
-   for (it2 = miss_hap2count2.begin(); it2 != miss_hap2count2.end(); it2++){
-      for (it1 = miss_hap2count.begin(); it1 != miss_hap2count.end(); it1++){
-         
-         if (i0 == j0) continue;
-
-         int d = ndiff_str(it2->first,it1->first);
-
-         if(d <= MATCH_TOL && d >= 0){
-            if(d == mindiff){
-               best_matches.push_back(it1->first);
-            }
-            else if (d < mindiff){
-               mindiff = d;
-               best_matches.clear();
-               best_matches.push_back(it1->first);
-            }
-         }
-         else{
-            continue;
-         }
-         j0++;
-      }
-      
-      if(best_matches.size() > 0){
-         for (int i = 0; i < best_matches.size(); i++){
-            miss_clustered2count[best_matches[i]] = hap2count[best_matches[i]];
-            miss_clustered2count[best_matches[i]] += (it2->second/double(best_matches.size()));
-         }
-         miss_hap2count.erase(it2->first);
-      }
-      best_matches.clear();
-      mindiff = len+1;
-      i0++;
-   }
-
-   for (it2 = miss_clustered2count.begin(); it2 != miss_clustered2count.end(); it2++){
-      hap2count[it2->first] = it2->second;
-   }
-
-   return;
-
-}
-*/
-void printHFS(map<string,double> hap2count){
-   map<string,double>::iterator it;
-   for (it = hap2count.begin(); it != hap2count.end(); it++){
-      cout << it->first << "\t" << it->second << endl;
-   }
-}
 
 HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
@@ -902,10 +575,8 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       }
    }
 
-   //printHFS(miss_hap2count);
    garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
                                       windowSeed(SEED, snpIndex->start, snpIndex->end));
-   //printHFS(hfs->hap2count);
 
    if(hfs->hap2count.size() == 0) return NULL;
 
@@ -921,35 +592,13 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    }
 
    qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);//sorted but with possible duplicates
-   //hfs->sortedCount = uniqInt(sortedCount, hfs->numClasses, hfs->size);//remove duplicates
    hfs->sortedCount = sortedCount;
    //delete [] sortedCount;
 
-   //printHFS(hfs->hap2count);
 
    return hfs;
 }
 
-int *uniqInt(int *array, int size, int &newSize) {
-   map<int, int> uniq;
-   for (int i = 0; i < size; i++) {
-      uniq[array[i]] = 1;
-   }
-   newSize = uniq.size();
-   int *newArray = new int[newSize];
-   int prev = array[0];
-   int j = 0;
-   newArray[j] = prev;
-   j++;
-   for (int i = 1; i < size; i++) {
-      if (array[i] != prev) {
-         prev = array[i];
-         newArray[j] = prev;
-         j++;
-      }
-   }
-   return newArray;
-}
 
 int compare (const void *a, const void *b)
 {
