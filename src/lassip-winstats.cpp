@@ -548,18 +548,12 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
 
       nmissing = 0;
       
-      for (int site = snpIndex->start; site <= snpIndex->end; site++) {
-         if (hapData->data[hap][site] == MISSING_ALLELE){
-            //skip = true;
-            //break;
-            nmissing++;
-         }
-         if (site == snpIndex->start) {
-            haplotype = hapData->data[hap][site];
-         }
-         else {
-            haplotype += hapData->data[hap][site];
-         }
+      const unsigned char *row = hapData->data[hap];
+      haplotype.resize(haplen);
+      for (int site = snpIndex->start, i = 0; site <= snpIndex->end; site++, i++) {
+         unsigned char code = getGT(row, site);
+         if (code == GT_MISS) nmissing++;
+         haplotype[i] = gtChar(code);
       }
 
       skip = (double(nmissing)/double(haplen) > FILTER_HMISS);

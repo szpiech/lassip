@@ -77,14 +77,74 @@ struct MapData
   //int g;
 };
 
+//Genotypes are drawn from a four-symbol alphabet, so they are stored two bits
+//per locus rather than one char: 60 MB becomes 15 MB for the YRI chr22 example,
+//and a 2,000-haplotype x 5M-locus dataset needs 2.5 GB instead of 10 GB.
+//Rows are haplotype-major and padded by one byte so that a window extraction
+//straddling the end of a row can read row[b+1] unconditionally.
+const unsigned char GT_0    = 0;
+const unsigned char GT_1    = 1;
+const unsigned char GT_2    = 2;
+const unsigned char GT_MISS = 3;
+
+inline unsigned char gtCode(char allele){
+  if (allele == '0') return GT_0;
+  if (allele == '1') return GT_1;
+  if (allele == '2') return GT_2;
+  return GT_MISS;
+}
+
+inline char gtChar(unsigned char code){
+  if (code == GT_0) return '0';
+  if (code == GT_1) return '1';
+  if (code == GT_2) return '2';
+  return MISSING_ALLELE;
+}
+
+inline int gtStride(int nloci){ return (nloci + 3) >> 2; }
+
+inline unsigned char getGT(const unsigned char *row, int locus){
+  return (row[locus >> 2] >> ((locus & 3) << 1)) & 3;
+}
+
+inline void setGT(unsigned char *row, int locus, unsigned char code){
+  int shift = (locus & 3) << 1;
+  row[locus >> 2] = (unsigned char)((row[locus >> 2] & ~(3u << shift)) | ((unsigned int)code << shift));
+}
+
+//Copy haplen genotypes starting at locus `start` into `out`, itself packed two
+//bits per locus, with the unused codes of the final byte cleared so that two
+//equal windows always give equal bytes.
+inline void extractWindow(const unsigned char *row, int start, int haplen, string &out){
+  int nb = (haplen + 3) >> 2;
+  out.assign(nb, '\0');
+  const unsigned char *p = row + (start >> 2);
+  int shift = (start & 3) << 1;
+  if (shift == 0){
+    for (int b = 0; b < nb; b++) out[b] = (char)p[b];
+  }
+  else{
+    for (int b = 0; b < nb; b++)
+      out[b] = (char)((p[b] >> shift) | (unsigned int)(p[b + 1] << (8 - shift)));
+  }
+  int used = haplen & 3;
+  if (used) out[nb - 1] = (char)((unsigned char)out[nb - 1] & (unsigned char)((1u << (used * 2)) - 1));
+}
+
+inline int countMissingWindow(const string &packed, int haplen){
+  int n = 0;
+  for (int i = 0; i < haplen; i++)
+    if ((((unsigned char)packed[i >> 2]) >> ((i & 3) << 1) & 3) == GT_MISS) n++;
+  return n;
+}
+
 struct HaplotypeData
 {
-  //map<char, double> *Q;
-  char **data;
+  unsigned char **data;   //packed two bits per locus; index with getGT/setGT
   int nhaps;
   int nloci;
+  int stride;             //bytes per haplotype, excluding the padding byte
   MapData *map;
-  //FreqData *freq;
 };
 
 struct array_t

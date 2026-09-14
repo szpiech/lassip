@@ -105,12 +105,17 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
 //new cache line on every iteration.
 void accumulateLocusCounts(HaplotypeData *hapData, int *count, int *count2, int *nmissing){
     for(int h = 0; h < hapData->nhaps; h++){
-        const char *row = hapData->data[h];
-        for(int l = 0; l < hapData->nloci; l++){
-            char a = row[l];
-            if(a == '1') count[l]++;
-            else if(a == '2') count2[l]++;
-            else if(a == MISSING_ALLELE) nmissing[l]++;
+        const unsigned char *row = hapData->data[h];
+        int l = 0;
+        //one byte holds four genotypes, so the row is read a quarter as often
+        for(int b = 0; b < hapData->stride && l < hapData->nloci; b++){
+            unsigned int packed = row[b];
+            for(int k = 0; k < 4 && l < hapData->nloci; k++, l++, packed >>= 2){
+                unsigned int a = packed & 3;
+                if(a == GT_1) count[l]++;
+                else if(a == GT_2) count2[l]++;
+                else if(a == GT_MISS) nmissing[l]++;
+            }
         }
     }
     return;
@@ -161,11 +166,11 @@ map< string, HaplotypeData* > *compactLoci(map< string, HaplotypeData* > *hapDat
         }
 
         for(int h = 0; h < hapData->nhaps; h++){
-            const char *src = hapData->data[h];
-            char *dst = newHapData->data[h];
+            const unsigned char *src = hapData->data[h];
+            unsigned char *dst = newHapData->data[h];
             int l0 = 0;
             for(int l = 0; l < hapData->nloci; l++){
-                if(keep[l]) dst[l0++] = src[l];
+                if(keep[l]) setGT(dst, l0++, getGT(src, l));
             }
         }
 
@@ -259,11 +264,11 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
                 }
             }
             for(int h = 0; h < hapData->nhaps; h++){
-                const char *src = hapData->data[h];
-                char *dst = newHapData->data[h];
+                const unsigned char *src = hapData->data[h];
+                unsigned char *dst = newHapData->data[h];
                 l0 = 0;
                 for(int l = 0; l < nOriginalLoci; l++){
-                    if(keep[l]) dst[l0++] = src[l];
+                    if(keep[l]) setGT(dst, l0++, getGT(src, l));
                 }
             }
 
@@ -1124,8 +1129,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     //used to look up ind2pop (twice), pop2indIndex and dataByPop for every
     //genotype of every locus -- five red-black-tree lookups keyed on a string,
     //all of them determined by the column index alone.
-    char **row1 = new char*[nfields];
-    char **row2 = new char*[nfields];
+    unsigned char **row1 = new unsigned char*[nfields];
+    unsigned char **row2 = new unsigned char*[nfields];
     for (int field = 0; field < nfields; field++){
         row1[field] = NULL;
         row2[field] = NULL;
@@ -1233,14 +1238,16 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
             }
 
             if(PHASED){
-                row1[field][locus] = (allele1 == VCF_MISSING) ? MISSING_ALLELE : allele1;
-                row2[field][locus] = (allele2 == VCF_MISSING) ? MISSING_ALLELE : allele2;
+                setGT(row1[field], locus, (allele1 == VCF_MISSING) ? GT_MISS : gtCode(allele1));
+                setGT(row2[field], locus, (allele2 == VCF_MISSING) ? GT_MISS : gtCode(allele2));
             }
             else{
-                if (allele1 == VCF_MISSING || allele2 == VCF_MISSING) row1[field][locus] = MISSING_ALLELE;
-                else if (allele1 == '1' && allele2 == '1') row1[field][locus] = '2';
-                else if (allele1 == '0' && allele2 == '0') row1[field][locus] = '0';
-                else row1[field][locus] = '1';
+                unsigned char code;
+                if (allele1 == VCF_MISSING || allele2 == VCF_MISSING) code = GT_MISS;
+                else if (allele1 == '1' && allele2 == '1') code = GT_2;
+                else if (allele1 == '0' && allele2 == '0') code = GT_0;
+                else code = GT_1;
+                setGT(row1[field], locus, code);
             }
         }
     }
@@ -1270,14 +1277,13 @@ HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool do
     data->nhaps = nhaps;
     data->nloci = nloci;
 
-    data->data = new char *[nhaps];
+    data->stride = gtStride(nloci);
+    data->data = new unsigned char *[nhaps];
     for (unsigned int i = 0; i < nhaps; i++)
     {
-        data->data[i] = new char[nloci];
-        for (unsigned int j = 0; j < nloci; j++)
-        {
-            data->data[i][j] = MISSING_CHAR;
-        }
+        //one padding byte so extractWindow can read one byte past the last
+        data->data[i] = new unsigned char[data->stride + 1];
+        for (int j = 0; j <= data->stride; j++) data->data[i][j] = 0xFF;  //all missing
     }
 
     if (domap) data->map = initMapData(nloci);
@@ -1302,6 +1308,7 @@ void releaseHapData(HaplotypeData *data)
     data->data = NULL;
     data->nhaps = -9;
     data->nloci = -9;
+    data->stride = -9;
     delete data;
     data = NULL;
     return;
