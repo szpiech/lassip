@@ -264,6 +264,16 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   map<string,T*> keyed by population name, looked up by name inside the window
   loops; they are now fields of one struct per population, held in a vector.
 
+  Genetic map handling. On the --dist-type cm path, getMapInfo could
+  interpolate between two uninitialised indices when its forward scan found no
+  bracketing pair, and it dereferenced a null pointer -- a segfault -- when the
+  spectra named a contig the map does not. It now brackets by binary search and
+  returns false when it cannot place a window. fillCMDistance had been ignoring
+  that return value and writing the previous window's genetic position instead:
+  with a map holding a 6 Mb hole, 3,951 windows of the YRI example came out
+  sharing two genetic positions. Unplaced windows are now counted and reported,
+  and the run stops.
+
   Bug fixes. The null-spectrum check at the --spectra stage used the K from the
   command line rather than from the spectra file, so its threshold was wrong
   unless you repeated the same --k. --calc-spec --dist-type cm wrote a column

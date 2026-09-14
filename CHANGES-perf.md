@@ -31,8 +31,8 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 
 ## Commits
 
-Every commit on the branch, oldest first, except the one that added this
-sentence.
+Every commit on the branch, oldest first, except the docs commit that last
+revised this file.
 
 | commit | change |
 |---|---|
@@ -64,6 +64,8 @@ sentence.
 | `11e95aa` | split main into registration, config, validation and the two stages |
 | `638aab8` | one struct per population instead of seven parallel maps |
 | `2a3a5db` | docs: record the structural work |
+| `9af93b2` | docs: list every commit in the branch summary table |
+| `f041c2f` | GMapData: bracket by binary search, and stop ignoring the placement failure |
 
 ## Behavioural differences
 
@@ -103,9 +105,14 @@ changed.
    data, 70 for an unexpected exception; `--help` and `--version` exit 0. An
    error raised inside a reader previously escaped `main` and aborted the
    process.
-9. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
+9. **A genetic map that cannot place a window is an error.** Previously
+   `--dist-type cm` wrote the previous window's genetic position for any
+   window in a map gap (3,951 windows sharing two positions in a test with a
+   6 Mb hole) and segfaulted outright when the map named a contig the spectra
+   do not use. Both now exit 65 naming the count and the first position.
+10. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
    property of the input, like the `checkNull` failure beside it.
-10. **`--match-tol` groups at `<=` the given number of differences**, as its
+11. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
 
@@ -133,13 +140,9 @@ Resolved since the first version of this file:
 Nothing remains from the original review list. Items noticed along the way and
 not acted on:
 
-- `GMapData`'s query loop leaves `startIndex`/`endIndex` uninitialised when the
-  loop condition is false on entry (`-Wall` reports it); that is the
-  `--dist-type cm` path.
 - I/O errors are still not distinguished from data errors (both exit 65)
   because roughly 30 sites in the data layer throw untyped ints. `EXIT_IOERR`
   is defined for when they are typed.
-- `param_t` uses `sprintf`; `-Wall` deprecates it in favour of `snprintf`.
 
 Done since the first version of this file: genotypes packed two bits per locus
 (`d004ac4`), the VCF read once rather than twice (`03e8d51`), `hfs_window`
