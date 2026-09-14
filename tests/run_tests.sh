@@ -155,8 +155,8 @@ selected() {
 # ---------------------------------------------------------------- fixtures
 
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
-       spec_missing spec_missing_tol missing_determinism spec_medium avg_spec
-       lassi lassi_nullspec salti_bp salti_nw salti_cm"
+       spec_missing spec_missing_tol missing_determinism nullwin_threads
+       spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm"
 
 if [ "$LIST" = 1 ]; then for c in $CASES; do echo "$c"; done; exit 0; fi
 
@@ -191,6 +191,13 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print $1, ($3=="."?"locus"NR:$3)
 
 # a 20k-SNP slice of the YRI example for a realistic multi-window stage-1 case
 gzip -dc "$YRI" | awk '/^#/{print;next} {n++; if(n<=20000) print; else exit}' | gzip > "$WORK/yri.slice.vcf.gz"
+
+# every fifth record fully missing: with --max-lmiss 1 --keep-monomorphic those
+# loci survive filtering, and at --max-hmiss 0 every haplotype of every window
+# covering one is dropped, so every window is null. Exercises the null-window
+# counter, which used to be incremented from every thread unsynchronised.
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} /^#/{print;next} \
+    { r++; if (r%5==0) for(i=10;i<=NF;i++) $i="./."; print }' | gzip > "$WORK/small.allmissing.vcf.gz"
 
 echo "lassip regression suite"
 echo "  binary : $BIN"
@@ -345,6 +352,26 @@ if selected salti_cm && [ -f "$SPEC" ]; then
         --map "$WORK/small.map" --max-extend-cm 0.2 --threads "$THREADS" --out "$WORK/sc"; then
         compare_table salti_cm "$WORK/sc.lassip.hap.out.gz" salti_cm 1e-6 "$SALTI_TOL_COLS" "$SALTI_TOL_FRAC"
     else fail salti_cm "run failed"; fi
+fi
+
+if selected nullwin_threads; then
+    # The window count in the spectra header is windows minus null windows, and
+    # the finalize stage reads it to size its arrays. Incrementing nullWins from
+    # every thread without synchronisation made it wrong and different on every
+    # run: four 8-thread runs on this fixture reported 88, 56, 64 and 95 windows
+    # where the answer is 0.
+    ok=1
+    for t in 1 8 8; do
+        run_lassip "$WORK/nullwin_$t.log" --vcf "$WORK/small.allmissing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+            --calc-spec --k 10 --winsize 8 --winstep 1 --max-lmiss 1 --max-hmiss 0 \
+            --keep-monomorphic --threads "$t" --out "$WORK/nw$t" || ok=0
+    done
+    if [ "$ok" = 1 ]; then
+        h1=$(gzip -dc "$WORK/nw1.POP1.lassip.hap.spectra.gz" | head -1)
+        h8=$(gzip -dc "$WORK/nw8.POP1.lassip.hap.spectra.gz" | head -1)
+        if [ "$h1" = "$h8" ]; then pass "nullwin_threads ($(echo "$h1" | grep -o 'wins [0-9]*'))"
+        else fail nullwin_threads "window count differs between 1 and 8 threads: [$h1] vs [$h8]"; fi
+    else fail nullwin_threads "run failed"; fi
 fi
 
 # ---------------------------------------------------------------- summary

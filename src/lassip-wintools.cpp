@@ -19,8 +19,7 @@
 #include "lassip-wintools.h"
 
 
-void calc_LASSI_stats(void *order) {
-	LASSI_work_order_t *p = (LASSI_work_order_t *)order;
+void calc_LASSI_stats(LASSI_work_order_t *p) {
 	map< string, HaplotypeData* > *hapDataByPop = p->hapDataByPop;
 	PopData *popData = p->popData;
 	param_t *params = p->params;
@@ -29,7 +28,6 @@ void calc_LASSI_stats(void *order) {
 	map<string,double **> *results = p->results->data;
 	map<string,double *> *h12ByPop = p->results->h12;
   	map<string,double *> *h2h1ByPop = p->results->h2h1;
-	int id = p->id;
 	int K = p->params->getIntFlag(ARG_K);
 	bool HAPSTATS = p->params->getBoolFlag(ARG_HAPSTATS);
 	bool PHASED = !(p->params->getBoolFlag(ARG_UNPHASED));
@@ -47,11 +45,15 @@ void calc_LASSI_stats(void *order) {
 	for (int pop = 0; pop < popData->npops; pop++){
 		popName = popData->popOrder[pop];
 		vector< pair_t* > *windows = p->results->windows->at(popName);
+		unsigned int nwin = windows->size();
+		unsigned int chunk = chunkFor(nwin, numThreads);
+		unsigned int begin, end;
 
-		for (unsigned int i = id; i < windows->size(); i += numThreads) {
+		while (claimChunk(p->cursor->next[pop], nwin, chunk, begin, end))
+		for (unsigned int i = begin; i < end; i++) {
 			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL, SEED);
-			if(hfs == NULL) p->results->nullWins->operator[](popName)++;
+			if(hfs == NULL) p->nullWins[pop]++;
 			double *h12; 
 			double *h2h1;
 			if(HAPSTATS){
@@ -104,14 +106,11 @@ void calc_LASSI_stats(void *order) {
 }
 
 
-void calc_LASSI_stats2(void *order) {
-	LASSI_work_order2_t *p = (LASSI_work_order2_t *)order;
-
+void calc_LASSI_stats2(LASSI_work_order2_t *p) {
 	map<string, vector<SpectrumData *>* > *specDataByPopByChr = p->specDataByPopByChr;
     map<string, SpectrumData* > *avgSpecByPop = p->avgSpecByPop;
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = p->resultsByPopByChr;
-	param_t *params = p->params;    
-	int id = p->id;
+	param_t *params = p->params;
 	int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	int K = avgSpecByPop->begin()->second->K;
@@ -124,18 +123,21 @@ void calc_LASSI_stats2(void *order) {
 	SpectrumData *avgSpec;
 	string popName;
 
+	unsigned int unit = 0;
 	map<string, vector<SpectrumData *>* >::iterator it;
 	for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
 		popName = it->first;
 		specDataByChr = it->second;
 		resultsByChr = resultsByPopByChr->at(popName);
 		avgSpec = avgSpecByPop->at(popName);
-		for (unsigned int c = 0; c < specDataByChr->size(); c++){
+		for (unsigned int c = 0; c < specDataByChr->size(); c++, unit++){
 			specData = specDataByChr->at(c);
 			results = resultsByChr->at(c);
-			for (int i = id; i < specDataByChr->at(c)->nwins; i += numThreads) {
-				calcMandT(results, specData, avgSpec, f, i);
-			}
+			unsigned int nwin = specData->nwins;
+			unsigned int chunk = chunkFor(nwin, numThreads);
+			unsigned int begin, end;
+			while (claimChunk(p->cursor->next[unit], nwin, chunk, begin, end))
+				for (unsigned int i = begin; i < end; i++) calcMandT(results, specData, avgSpec, f, i);
 		}
 	}
 
@@ -145,14 +147,11 @@ void calc_LASSI_stats2(void *order) {
 	return;
 }
 
-void calc_SALTI_stats(void *order) {
-	SALTI_work_order_t *p = (SALTI_work_order_t *)order;
-
+void calc_SALTI_stats(SALTI_work_order_t *p) {
 	SpectrumData *specData = p->specData;
     SpectrumData *avgSpec = p->avgSpec;
     LASSIResults *results = p->results;
-	param_t *params = p->params;    
-	int id = p->id;
+	param_t *params = p->params;
 	//int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
 	double MAX_EXTEND;
@@ -172,9 +171,12 @@ void calc_SALTI_stats(void *order) {
 	double ***q = p->q;
 	//int width = 100;
 
-	for (int i = id; i < specData->nwins; i += numThreads) {
-		calcMTA(results, q, specData, avgSpec, i, p->dmin, MAX_EXTEND);
-	}
+	unsigned int nwin = specData->nwins;
+	unsigned int chunk = chunkFor(nwin, numThreads);
+	unsigned int begin, end;
+	while (claimChunk(p->cursor->next[0], nwin, chunk, begin, end))
+		for (unsigned int i = begin; i < end; i++)
+			calcMTA(results, q, specData, avgSpec, i, p->dmin, MAX_EXTEND);
 
 	//for(int i = 0; i < K; i++) delete [] f[i];
 	//delete [] f;

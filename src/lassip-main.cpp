@@ -307,23 +307,29 @@ int lassipMain(int argc, char *argv[])
     } 
 
     LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
-    LASSI_work_order_t *order;
-    pthread_t *peer = new pthread_t[numThreads];
-    
+    //One work cursor per population; threads claim chunks of windows from it.
+    WorkCursor cursor;
+    cursor.nunits = popData->npops;
+    cursor.next = new std::atomic<unsigned int>[cursor.nunits];
+    for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
+
+    vector<LASSI_work_order_t> orders(numThreads);
+    vector<std::thread> peer;
     for (int i = 0; i < numThreads; i++){
-      order = new LASSI_work_order_t;
-      order->id = i;
-      order->hapDataByPop = hapDataByPop;
-      order->popData = popData;
-      order->params = &params;
-      order->results = results;
-      pthread_create(&(peer[i]),
-                     NULL,
-                     (void *(*)(void *))calc_LASSI_stats,
-                     (void *)order);
+      orders[i].id = i;
+      orders[i].cursor = &cursor;
+      orders[i].nullWins.assign(popData->npops, 0);
+      orders[i].hapDataByPop = hapDataByPop;
+      orders[i].popData = popData;
+      orders[i].params = &params;
+      orders[i].results = results;
+      peer.push_back(std::thread(calc_LASSI_stats, &orders[i]));
     }
-    for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
-    delete [] peer;
+    for (int i = 0; i < numThreads; i++) peer[i].join();
+    for (int i = 0; i < numThreads; i++)
+      for (int pop = 0; pop < popData->npops; pop++)
+        results->nullWins->operator[](popData->popOrder[pop]) += orders[i].nullWins[pop];
+    delete [] cursor.next;
     cerr << "Done.\n";
     writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);
   }
@@ -363,25 +369,28 @@ int lassipMain(int argc, char *argv[])
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
     if(LASSI){
-      LASSI_work_order2_t *order;
-      pthread_t *peer = new pthread_t[numThreads];
-    
+      //One cursor per population-contig pair, visited in the same order by the
+      //workers as it is counted here.
+      WorkCursor cursor;
+      cursor.nunits = 0;
+      for (map<string, vector<SpectrumData *>* >::iterator u = specDataByPopByChr->begin();
+           u != specDataByPopByChr->end(); u++) cursor.nunits += u->second->size();
+      cursor.next = new std::atomic<unsigned int>[cursor.nunits];
+      for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
+
+      vector<LASSI_work_order2_t> orders(numThreads);
+      vector<std::thread> peer;
       for (int i = 0; i < numThreads; i++){
-        order = new LASSI_work_order2_t;
-        order->id = i;
-        order->specDataByPopByChr = specDataByPopByChr;
-        order->avgSpecByPop = avgSpecByPop;
-        order->resultsByPopByChr = resultsByPopByChr;
-        order->params = &params;
-
-        pthread_create(&(peer[i]),
-                        NULL,
-                       (void *(*)(void *))calc_LASSI_stats2,
-                       (void *)order);      
+        orders[i].id = i;
+        orders[i].cursor = &cursor;
+        orders[i].specDataByPopByChr = specDataByPopByChr;
+        orders[i].avgSpecByPop = avgSpecByPop;
+        orders[i].resultsByPopByChr = resultsByPopByChr;
+        orders[i].params = &params;
+        peer.push_back(std::thread(calc_LASSI_stats2, &orders[i]));
       }
-
-      for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
-      delete [] peer;
+      for (int i = 0; i < numThreads; i++) peer[i].join();
+      delete [] cursor.next;
       cerr << "Done.\n";
     }
     else if (SALTI){
@@ -411,8 +420,6 @@ int lassipMain(int argc, char *argv[])
 
         //chr
         for(unsigned int c = 0; c < specDataByChr->size(); c++){
-          SALTI_work_order_t *order;
-          pthread_t *peer = new pthread_t[numThreads];
           K = specDataByChr->at(c)->K;
           double U = avgSpec->freq[0][K-1];
 
@@ -424,24 +431,26 @@ int lassipMain(int argc, char *argv[])
           for(int i = 0; i < K; i++) delete [] f[i];
           delete [] f;
 
+          WorkCursor cursor;
+          cursor.nunits = 1;
+          cursor.next = new std::atomic<unsigned int>[1];
+          cursor.next[0] = 0;
+
+          vector<SALTI_work_order_t> orders(numThreads);
+          vector<std::thread> peer;
           for (int i = 0; i < numThreads; i++){
-            order = new SALTI_work_order_t;
-            order->id = i;
-            order->specData = specDataByChr->at(c);
-            order->avgSpec = avgSpec;
-            order->results = resultsByChr->at(c);
-            order->params = &params;
-            order->q = q;
-            order->dmin = dmin;
-
-            pthread_create(&(peer[i]),
-                            NULL,
-                           (void *(*)(void *))calc_SALTI_stats,
-                           (void *)order);      
+            orders[i].id = i;
+            orders[i].cursor = &cursor;
+            orders[i].specData = specDataByChr->at(c);
+            orders[i].avgSpec = avgSpec;
+            orders[i].results = resultsByChr->at(c);
+            orders[i].params = &params;
+            orders[i].q = q;
+            orders[i].dmin = dmin;
+            peer.push_back(std::thread(calc_SALTI_stats, &orders[i]));
           }
-
-          for (int i = 0; i < numThreads; i++) pthread_join(peer[i], NULL);
-          delete [] peer;
+          for (int i = 0; i < numThreads; i++) peer[i].join();
+          delete [] cursor.next;
 
           releaseQ(q,K,U);
 

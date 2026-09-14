@@ -537,9 +537,16 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    int haplen = snpIndex->end - snpIndex->start + 1;
 
    //Extract each haplotype's window in packed form: a quarter of the bytes of
-   //the char form, and it is the key itself on the common path below.
-   vector<string> packed(hapData->nhaps);
-   vector<int> nmiss(hapData->nhaps);
+   //the char form, and it is the key itself on the common path below. The
+   //buffers are per-thread and kept across windows, so the string and map
+   //allocations this used to make for every haplotype of every window -- all
+   //of them hitting one allocator arena from every thread -- are gone.
+   static thread_local vector<string> packed;
+   static thread_local vector<int> nmiss;
+   if ((int)packed.size() < hapData->nhaps){
+      packed.resize(hapData->nhaps);
+      nmiss.resize(hapData->nhaps);
+   }
 
    bool anyMissing = false;
    for (int hap = 0; hap < hapData->nhaps; hap++) {
@@ -553,7 +560,8 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    //needed. Tally the packed windows directly -- no char strings, no ordered
    //map, and the keys are exact, so this is not a hashing approximation.
    if (!anyMissing && MATCH_TOL == 0){
-      unordered_map<string,double> counts;
+      static thread_local unordered_map<string,double> counts;
+      counts.clear();
       for (int hap = 0; hap < hapData->nhaps; hap++) {
          if (double(nmiss[hap])/double(haplen) > FILTER_HMISS) continue;
          counts[packed[hap]]++;

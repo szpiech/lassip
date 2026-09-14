@@ -16,10 +16,11 @@ CC = g++
 #   make ARCHFLAGS="-march=native"              # tuned for this machine
 #   make OPTFLAGS="-O0 -g" WARNFLAGS="-Wall -Wextra"   # debugging
 #   make check                                  # build, then run tests/run_tests.sh
+STDFLAG   ?= -std=c++11
 OPTFLAGS  ?= -O3
 ARCHFLAGS ?=
 WARNFLAGS ?=
-G++FLAG   ?= $(OPTFLAGS) $(ARCHFLAGS) $(WARNFLAGS)
+G++FLAG   ?= $(STDFLAG) $(OPTFLAGS) $(ARCHFLAGS) $(WARNFLAGS)
 
 # -MMD -MP makes the compiler emit a .d file per object listing the headers it
 # included, so that editing a header rebuilds what depends on it. Without this,

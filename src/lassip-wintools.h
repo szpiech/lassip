@@ -22,6 +22,8 @@
 #include <vector>
 #include <map>
 #include <sstream>
+#include <atomic>
+#include <thread>
 #include "lassip-data.h"
 #include "lassip-winstats.h"
 #include "param_t.h"
@@ -29,9 +31,45 @@
 
 using namespace std;
 
+//Work is claimed dynamically: each thread takes the next chunk of windows with
+//one atomic fetch_add rather than walking a fixed stride (i = id; i += nthreads).
+//Window cost varies with the number of SNPs, the number of unique haplotypes and
+//the size of the flanking set, so a fixed stride leaves threads idle at the tail.
+//One cursor per unit of work: a population in stage 1, a population-contig pair
+//in stage 2. Workers visit units in the same order as the caller allocated them.
+struct WorkCursor
+{
+    std::atomic<unsigned int> *next;
+    unsigned int nunits;
+};
+
+//Enough chunks per thread to balance, few enough that the atomic is amortised.
+inline unsigned int chunkFor(unsigned int total, int numThreads)
+{
+    if (numThreads <= 1) return (total > 0) ? total : 1;
+    unsigned int c = total / (unsigned int)(numThreads * 16);
+    if (c < 1) c = 1;
+    if (c > 64) c = 64;
+    return c;
+}
+
+inline bool claimChunk(std::atomic<unsigned int> &cursor, unsigned int total,
+                       unsigned int chunk, unsigned int &begin, unsigned int &end)
+{
+    begin = cursor.fetch_add(chunk);
+    if (begin >= total) return false;
+    end = begin + chunk;
+    if (end > total) end = total;
+    return true;
+}
+
 struct LASSI_work_order_t
 {
     int id;
+    WorkCursor *cursor;
+    //counted per thread and merged after the join; incrementing the shared
+    //results->nullWins map from every thread was a data race
+    vector<int> nullWins;
     map< string, HaplotypeData* > *hapDataByPop;
     PopData *popData;
     LASSIInitialResults *results;    
@@ -41,6 +79,7 @@ struct LASSI_work_order_t
 struct LASSI_work_order2_t
 {
     int id;
+    WorkCursor *cursor;
     map<string, vector<SpectrumData *>* > *specDataByPopByChr;
     map<string, SpectrumData* > *avgSpecByPop;
     map<string, vector<LASSIResults *>* > *resultsByPopByChr;
@@ -51,6 +90,7 @@ struct LASSI_work_order2_t
 struct SALTI_work_order_t
 {
     int id;
+    WorkCursor *cursor;
     SpectrumData *specData;
     SpectrumData *avgSpec;
     double ***q; //e->m->i
@@ -67,10 +107,10 @@ pair_t* findInclusiveSNPIndicies(unsigned int startSnpIndex, unsigned int currWi
 
 //vector< pair_t* > *getEHHWindows(int snpStart, int winStart, int WINSIZE, vector<int> &EHH_WINS, MapData *mapData, bool USE_BP);
 
-void calc_LASSI_stats2(void *work_order);
-void calc_LASSI_stats(void *work_order);
+void calc_LASSI_stats2(LASSI_work_order2_t *p);
+void calc_LASSI_stats(LASSI_work_order_t *p);
 
-void calc_SALTI_stats(void *order);
+void calc_SALTI_stats(SALTI_work_order_t *p);
 
 
 #endif
