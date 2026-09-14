@@ -21,6 +21,7 @@
 
 #include "lassip-data.h"
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <cstdlib>
 #include <cmath>

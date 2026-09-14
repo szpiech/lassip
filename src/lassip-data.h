@@ -146,6 +146,14 @@ inline int countMissingWindow(const string &packed, int haplen){
   return n;
 }
 
+//Expand a packed window back to one char per genotype, for the clustering
+//path, which compares and rewrites haplotypes site by site.
+inline void unpackWindow(const string &packed, int haplen, string &out){
+  out.resize(haplen);
+  for (int i = 0; i < haplen; i++)
+    out[i] = gtChar((((unsigned char)packed[i >> 2]) >> ((i & 3) << 1)) & 3);
+}
+
 struct HaplotypeData
 {
   unsigned char **data;   //packed two bits per locus; index with getGT/setGT

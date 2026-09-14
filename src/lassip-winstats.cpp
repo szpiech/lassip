@@ -534,80 +534,74 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
-
-   bool skip = false;
-   //Generate haplotypes and populate hap2count
-
-   //map<string,double> nomiss_hap2count;
-   map<string,double> miss_hap2count;
-   int nmissing = 0;
    int haplen = snpIndex->end - snpIndex->start + 1;
-   
+
+   //Extract each haplotype's window in packed form: a quarter of the bytes of
+   //the char form, and it is the key itself on the common path below.
+   vector<string> packed(hapData->nhaps);
+   vector<int> nmiss(hapData->nhaps);
+
+   bool anyMissing = false;
    for (int hap = 0; hap < hapData->nhaps; hap++) {
-      string haplotype;
-
-      nmissing = 0;
-      
-      const unsigned char *row = hapData->data[hap];
-      haplotype.resize(haplen);
-      for (int site = snpIndex->start, i = 0; site <= snpIndex->end; site++, i++) {
-         unsigned char code = getGT(row, site);
-         if (code == GT_MISS) nmissing++;
-         haplotype[i] = gtChar(code);
-      }
-
-      skip = (double(nmissing)/double(haplen) > FILTER_HMISS);
-
-      if (!skip){
-         if(nmissing == 0){
-            if (hfs->hap2count.count(haplotype) == 0) {
-               hfs->hap2count[haplotype] = 1;
-            }
-            else {
-               hfs->hap2count[haplotype]++;
-            }
-         }
-         else{
-            if(miss_hap2count.count(haplotype) == 0){
-               miss_hap2count[haplotype] = 1;
-            }
-            else{
-               miss_hap2count[haplotype]++;
-            }
-         }
-      }
-      else{
-         //haplotype exceeded --max-hmiss and is left out of this window's spectrum
-         skip = false;
-      }
+      extractWindow(hapData->data[hap], snpIndex->start, haplen, packed[hap]);
+      nmiss[hap] = countMissingWindow(packed[hap], haplen);
+      if (nmiss[hap] > 0 && double(nmiss[hap])/double(haplen) <= FILTER_HMISS) anyMissing = true;
    }
 
-   //With no missing genotypes in the window and no match tolerance there is
-   //nothing for the clustering to merge, but the routine would still copy both
-   //count maps, shuffle the key vector and run an O(u^2) comparison over unique
-   //haplotypes. On the YRI chr22 example that pass was ~65% of stage-1 runtime.
-   if(!miss_hap2count.empty() || MATCH_TOL > 0){
-      garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
-                                         windowSeed(SEED, snpIndex->start, snpIndex->end));
+   //Common path: no haplotype in this window carries missing data and no match
+   //tolerance was asked for, so nothing can be merged and only the counts are
+   //needed. Tally the packed windows directly -- no char strings, no ordered
+   //map, and the keys are exact, so this is not a hashing approximation.
+   if (!anyMissing && MATCH_TOL == 0){
+      unordered_map<string,double> counts;
+      for (int hap = 0; hap < hapData->nhaps; hap++) {
+         if (double(nmiss[hap])/double(haplen) > FILTER_HMISS) continue;
+         counts[packed[hap]]++;
+      }
+      if (counts.size() == 0) return NULL;
+
+      int *sortedCount = new int[counts.size()];
+      hfs->numClasses = counts.size();
+      int i = 0;
+      for (unordered_map<string,double>::iterator it = counts.begin(); it != counts.end(); it++, i++) {
+         sortedCount[i] = it->second;
+         hfs->size += it->second;
+      }
+      qsort(sortedCount, hfs->numClasses, sizeof(int), compare);
+      hfs->sortedCount = sortedCount;
+      return hfs;
    }
+
+   //Clustering path: haplotypes have to be compared and rewritten site by site,
+   //so unpack the windows and proceed exactly as before.
+   map<string,double> miss_hap2count;
+   string haplotype;
+
+   for (int hap = 0; hap < hapData->nhaps; hap++) {
+      unpackWindow(packed[hap], haplen, haplotype);
+
+      if (double(nmiss[hap])/double(haplen) > FILTER_HMISS) continue;
+
+      if (nmiss[hap] == 0) hfs->hap2count[haplotype]++;
+      else miss_hap2count[haplotype]++;
+   }
+
+   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
+                                      windowSeed(SEED, snpIndex->start, snpIndex->end));
 
    if(hfs->hap2count.size() == 0) return NULL;
 
-   //Populate count2hap and sortedCounts
-   int *sortedCount = new int[hfs->hap2count.size()]; //could contain duplicates
+   int *sortedCount = new int[hfs->hap2count.size()];
    hfs->numClasses = hfs->hap2count.size();
    map<string, double>::iterator it;
    int i = 0;
    for (it = hfs->hap2count.begin(); it != hfs->hap2count.end(); it++, i++) {
-      sortedCount[i] = it->second;//unsorted
+      sortedCount[i] = it->second;
       hfs->size += it->second;
-      //hfs->count2hap.insert(pair<int, string>(it->second, it->first));
    }
 
-   qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);//sorted but with possible duplicates
+   qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);
    hfs->sortedCount = sortedCount;
-   //delete [] sortedCount;
-
 
    return hfs;
 }

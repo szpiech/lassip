@@ -82,7 +82,9 @@ void calc_LASSI_stats(void *order) {
 			}
 			else{
 				x[i][K] = hfs->size;
-				x[i][K+1] = hfs->hap2count.size();
+				//numClasses is the number of distinct haplotypes after any clustering;
+				//hap2count is only populated when the clustering path runs
+				x[i][K+1] = hfs->numClasses;
 			}
 			if(HAPSTATS){
 				if(hfs == NULL){
