@@ -1354,6 +1354,10 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
 {
     bool success = true;
 
+    //map<>::operator[] would insert a null entry for a contig the map does not
+    //cover, and the branches below would then dereference it
+    if (nloci.count(c) == 0 || nloci[c] < 2) return false;
+
     if (queryPos < physicalPos[c][0])
     {
         gPos = this->interpolate(physicalPos[c][0], geneticPos[c][0],
@@ -1367,7 +1371,7 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
                                  physicalPos[c][nloci[c] - 1], geneticPos[c][nloci[c] - 1],
                                  queryPos);
         char buffer[50];
-        sprintf(buffer, "chr%s:%f", c.c_str(), queryPos);
+        snprintf(buffer, sizeof(buffer), "chr%s:%f", c.c_str(), queryPos);
         locName = buffer;
     }
     else if (ppos2index[c].count(queryPos) > 0)
@@ -1378,17 +1382,26 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
     }
     else
     {
-        int startIndex;
-        int endIndex;
-        for (/*current_index*/; current_index < nloci[c] - 1; current_index++)
+        //Map positions are sorted, so find the bracketing pair by binary search.
+        //This used to scan forward from current_index, and if the scan found
+        //nothing -- which happens whenever a query arrives below where a
+        //previous one left the cursor -- it fell through with startIndex and
+        //endIndex uninitialised and interpolated between two arbitrary indices
+        //of physicalPos.
+        int lo = 0;
+        int hi = nloci[c] - 1;
+        while (hi - lo > 1)
         {
-            if (queryPos > physicalPos[c][current_index] && queryPos < physicalPos[c][current_index + 1])
-            {
-                startIndex = current_index;
-                endIndex = current_index + 1;
-                break;
-            }
+            int mid = lo + (hi - lo) / 2;
+            if (physicalPos[c][mid] <= queryPos) lo = mid;
+            else hi = mid;
         }
+
+        if (!(queryPos > physicalPos[c][lo] && queryPos < physicalPos[c][hi])) return false;
+
+        int startIndex = lo;
+        int endIndex = hi;
+        current_index = startIndex;
 
         if (physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP) return false;
 
@@ -1396,7 +1409,7 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
                                  physicalPos[c][endIndex], geneticPos[c][endIndex],
                                  queryPos);
         char buffer[50];
-        sprintf(buffer, "chr%s:%f", c.c_str(), queryPos);
+        snprintf(buffer, sizeof(buffer), "chr%s:%f", c.c_str(), queryPos);
         locName = buffer;
     }
     return success;
@@ -1566,6 +1579,14 @@ void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, G
     double gPos;
     int current_locus;
 
+    //getMapInfo returns false when it cannot place a window: the contig is not
+    //in the map, or the window falls in a gap wider than MAXGAP. Its gPos is
+    //then untouched, and this loop used to write it anyway -- the previous
+    //window's genetic position, or an uninitialised double for the first.
+    long unplaced = 0;
+    string firstBadChr;
+    double firstBadPos = 0;
+
     map<string, vector<SpectrumData *>* >::iterator it;
     for(it = specDataByPopByChr->begin(); it != specDataByPopByChr->end(); it++){
         vector<SpectrumData *> *specDataByChr = it->second;
@@ -1573,10 +1594,27 @@ void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, G
             current_locus = 0;
             for (int w = 0; w < specDataByChr->at(i)->nwins; w++){
                 c = specDataByChr->at(i)->info[w][0];
-                geneticMap.getMapInfo(specDataByChr->at(i)->dist[w],gPos,locName,c,current_locus);
+                gPos = 0;
+                if(!geneticMap.getMapInfo(specDataByChr->at(i)->dist[w],gPos,locName,c,current_locus)){
+                    if(unplaced == 0){
+                        firstBadChr = c;
+                        firstBadPos = specDataByChr->at(i)->dist[w];
+                    }
+                    unplaced++;
+                    continue;
+                }
                 specDataByChr->at(i)->dist[w] = gPos;
             }
         }
     }
+
+    if(unplaced > 0){
+        cerr << "ERROR: the genetic map does not place " << unplaced << " window(s), the first at "
+             << firstBadChr << ":" << firstBadPos << ".\n";
+        cerr << "\tThe map must cover every contig in the spectra, and gaps wider than "
+             << geneticMap.maxGap() << " bp are not interpolated across.\n";
+        throw 0;
+    }
+
     return;
 }

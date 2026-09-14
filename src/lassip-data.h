@@ -43,7 +43,10 @@ class GMapData
 public:
     GMapData(string filename, double mGap);
     ~GMapData();
+    //false when the window cannot be placed: the contig is absent from the map,
+    //or the window falls in a gap wider than maxGap(). gPos is untouched then.
     bool getMapInfo(double queryPos, double &gPos, string &locName, string c, int &current_locus);
+    double maxGap() const { return MAXGAP; }
 
 private:
     map<string,int * > physicalPos;

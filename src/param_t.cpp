@@ -48,7 +48,7 @@ bool param_t::addFlag(string flag, double value, string label, string descriptio
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%.2f", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%.2f", value);
         buffer = charBuffer;
         argd[flag] = value;
         help[flag] = "<double>: " + description + "\n\tDefault: " + buffer;
@@ -70,7 +70,7 @@ bool param_t::addFlag(string flag, int value, string label, string description)
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%d", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%d", value);
         buffer = charBuffer;
         argi[flag] = value;
         help[flag] = "<int>: " + description + "\n\tDefault: " + buffer;
@@ -92,7 +92,7 @@ bool param_t::addFlag(string flag, char value, string label, string description)
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%c", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%c", value);
         buffer = charBuffer;
         argch[flag] = value;
         help[flag] = "<char>: " + description + "\n\tDefault: " + buffer;
@@ -137,7 +137,7 @@ bool param_t::addListFlag(string flag, double value, string label, string descri
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%f", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%f", value);
         buffer = charBuffer;
         listargd[flag].push_back(value);
         help[flag] = "<double1> ... <doubleN>: " + description + "\n\tDefault: " + buffer;
@@ -158,7 +158,7 @@ bool param_t::addListFlag(string flag, char value, string label, string descript
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%c", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%c", value);
         buffer = charBuffer;
         listargch[flag].push_back(value);
         help[flag] = "<char1> ... <charN>: " + description + "\n\tDefault: " + buffer;
@@ -180,7 +180,7 @@ bool param_t::addListFlag(string flag, int value, string label, string descripti
     {
         string buffer;
         char charBuffer[100];
-        sprintf(charBuffer, "%d", value);
+        snprintf(charBuffer, sizeof(charBuffer), "%d", value);
         buffer = charBuffer;
         listargi[flag].push_back(value);
         help[flag] = "<int1> ... <intN>: " + description + "\n\tDefault: " + buffer;

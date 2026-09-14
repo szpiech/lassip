@@ -156,7 +156,8 @@ selected() {
 
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
-       spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm"
+       spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
+       cm_map_mismatch"
 
 if [ "$LIST" = 1 ]; then for c in $CASES; do echo "$c"; done; exit 0; fi
 
@@ -188,6 +189,10 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
 
 # genetic map for the --dist-type cm path: 1 cM per Mb over the small fixture
 gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print $1, ($3=="."?"locus"NR:$3), $2/1000000.0, $2}' > "$WORK/small.map"
+
+# the same map under a contig name the spectra do not use: getMapInfo used to
+# index a map<> entry it had just default-created and dereference a null pointer
+awk 'BEGIN{OFS="\t"} {$1="nosuchchr"; print}' "$WORK/small.map" > "$WORK/small.badchr.map"
 
 # a 20k-SNP slice of the YRI example for a realistic multi-window stage-1 case
 gzip -dc "$YRI" | awk '/^#/{print;next} {n++; if(n<=20000) print; else exit}' | gzip > "$WORK/yri.slice.vcf.gz"
@@ -372,6 +377,24 @@ if selected nullwin_threads; then
         if [ "$h1" = "$h8" ]; then pass "nullwin_threads ($(echo "$h1" | grep -o 'wins [0-9]*'))"
         else fail nullwin_threads "window count differs between 1 and 8 threads: [$h1] vs [$h8]"; fi
     else fail nullwin_threads "run failed"; fi
+fi
+
+if selected cm_map_mismatch && [ -f "$SPEC" ]; then
+    # A genetic map that does not cover the spectra must be reported, not
+    # crashed on: before the fix this segfaulted (exit 139) because the contig
+    # lookup default-created a null entry and then dereferenced it. Windows in
+    # a gap wider than the map's MAXGAP take the same path; they used to be
+    # silently assigned the last successfully placed window's genetic position.
+    # run the binary directly: run_lassip flattens every failure to 1, and the
+    # exit code is the thing under test
+    "$BIN" --spectra "$SPEC" --salti --dist-type cm --map "$WORK/small.badchr.map" \
+        --max-extend-cm 0.2 --threads "$THREADS" --out "$WORK/cmbad" > "$WORK/cm_mismatch.log" 2>&1
+    rc=$?
+    if [ "$rc" = 65 ] && grep -q "does not place" "$WORK/cm_mismatch.log"; then
+        pass "cm_map_mismatch (exit 65, reported)"
+    else
+        fail cm_map_mismatch "expected exit 65 with a 'does not place' error, got exit $rc"
+    fi
 fi
 
 # ---------------------------------------------------------------- summary
