@@ -31,31 +31,39 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 
 ## Commits
 
+Every commit on the branch, oldest first, except the one that added this
+sentence.
+
 | commit | change |
 |---|---|
-| `94158f0` | regression suite: 17 checks over both stages, `tests/run_tests.sh` |
-| `8d8eaaf` | Makefile: header dependencies, `ARCHFLAGS`, `make check` |
-| `6539db8` | `--seed`: make runs on data with missing genotypes reproducible |
-| `2aa0f19` | remove 1,357 lines of unreachable code |
-| `fecd9d9` | saltiLASSI: hoist `log`/`exp` out of the (A, m, eps) grid search |
-| `fc93ed5` | saltiLASSI: one sweep-spectrum table per contig, not per window |
-| `380d7f8` | `hfs_window`: skip the clustering pass when it cannot merge anything |
-| `03cda7c` | VCF reader: no per-genotype map lookups |
+| `94158f0` | tests: add golden-file regression suite covering both lassip stages |
+| `8d8eaaf` | build: track header dependencies, split arch flags, add make check |
+| `6539db8` | make runs on data with missing genotypes reproducible: add --seed |
+| `2aa0f19` | remove unreachable code (1357 lines) |
+| `fecd9d9` | salti: hoist log/exp out of the (A, m, eps) grid search |
+| `fc93ed5` | salti: one sweep-spectrum table per contig instead of one per window |
+| `380d7f8` | hfs_window: skip the clustering pass when it cannot merge anything |
+| `03cda7c` | readHaplotypeDataVCF: parse genotypes without per-field map lookups |
 | `dd18692` | filter loci in one pass instead of two matrix copies |
-| `15bc273` | drop the leftover per-haplotype debug write |
-| `faeb0c6` | CLI: help on stdout and exit 0, `--version`, usage, exit codes |
-| `18da792` | CLI: group the help by topic |
-| `f05ea0b` | CLI: `isFlagSet` instead of sentinel default strings |
-| `50ecaa2` | CLI: validate `--dist-type` at both stages, fix its label, use the file's K |
-| `1954260` | docs: refresh README, fix `example/do_lassip_YRI.bash` |
-| `46a1e42` | `--match-tol`: group at `<= MATCH_TOL` differences, as documented |
-| `edeae4f` | example: regenerate the committed outputs, fix the second command |
+| `15bc273` | hfs_window: drop the leftover per-haplotype debug write |
+| `faeb0c6` | cli: help on stdout and exit 0, --version, usage line, distinct exit codes |
+| `18da792` | cli: group the help by topic instead of alphabetically |
+| `f05ea0b` | cli: ask param_t whether a flag was supplied instead of comparing sentinels |
+| `50ecaa2` | cli: validate --dist-type at both stages, fix its column label, use the file's K |
+| `1954260` | docs: refresh README and fix the example script |
+| `cae6da1` | docs: branch summary with the before/after benchmark |
+| `46a1e42` | match-tol: group at <= MATCH_TOL differences, as the flag documents |
+| `edeae4f` | example: regenerate the committed outputs and fix the second command |
+| `f3a5988` | docs: fold the match-tol and example fixes into the branch summary |
 | `d004ac4` | store genotypes two bits per locus instead of one char |
 | `03e8d51` | read the VCF once instead of twice |
-| `a2f7bed` | `hfs_window`: tally packed windows instead of building char strings |
-| `da5b22c` | threading: `std::thread`, dynamic claiming, null-window race fixed |
-| `11e95aa` | split `main` into registration, config, validation and the two stages |
+| `a2f7bed` | hfs_window: tally packed windows instead of building char strings |
+| `92cb365` | docs: record the representation, reader and HFS work |
+| `da5b22c` | threading: std::thread, dynamic work claiming, and fix the null-window race |
+| `c02ccfc` | docs: record the threading work |
+| `11e95aa` | split main into registration, config, validation and the two stages |
 | `638aab8` | one struct per population instead of seven parallel maps |
+| `2a3a5db` | docs: record the structural work |
 
 ## Behavioural differences
 
