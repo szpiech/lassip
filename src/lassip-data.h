@@ -220,14 +220,22 @@ struct LASSIResults {
   bool HAPSTATS;
 };
 
+//One population's stage-1 results. These were seven maps keyed by population
+//name, each looked up by name inside the window loops; they are now fields of
+//one struct, held in popOrder order so a population is an index.
+struct PopResults{
+  string name;
+  vector< pair_t* > *windows;
+  double **data;        //per window: K frequencies, then nhaps and uhaps
+  double *h12;          //NULL unless --hapstats
+  double *h2h1;         //NULL unless --hapstats
+  double *dist;
+  string header;        //this population's spectrum column names
+  int nullWins;
+};
+
 struct LASSIInitialResults{
-  map<string,vector< pair_t* > *> *windows;
-  map<string,int> *nullWins;
-  map<string,double ** > *data;
-  map<string,string> *names;
-  map<string,double *> *h12;
-  map<string,double *> *h2h1;
-  map<string,double *> *dist;
+  vector<PopResults> pops;   //indexed as popData->popOrder
 };
 
 void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop);

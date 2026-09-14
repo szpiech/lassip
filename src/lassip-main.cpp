@@ -434,7 +434,7 @@ int runSpectra(const Config &cfg)
     for (int i = 0; i < numThreads; i++) peer[i].join();
     for (int i = 0; i < numThreads; i++)
       for (int pop = 0; pop < popData->npops; pop++)
-        results->nullWins->operator[](popData->popOrder[pop]) += orders[i].nullWins[pop];
+        results->pops[pop].nullWins += orders[i].nullWins[pop];
     delete [] cursor.next;
     cerr << "Done.\n";
     writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);

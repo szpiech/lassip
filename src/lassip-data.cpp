@@ -426,16 +426,15 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             throw 1;
         }
         
-        vector< pair_t* > *windows = results->windows->begin()->second;
+        //below filter level 2 every population shares one map and one set of
+        //windows, so the first population's are the file's
+        vector< pair_t* > *windows = results->pops[0].windows;
         MapData *mapData = hapDataByPop->begin()->second->map;
 
         //get max missing windows across pops
-        int maxNullWins = results->nullWins->begin()->second;
-        for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
-            if(results->nullWins->operator[](popName) > maxNullWins){
-                maxNullWins = results->nullWins->operator[](popName);
-            }
+        int maxNullWins = results->pops[0].nullWins;
+        for(unsigned int p = 0; p < results->pops.size(); p++){
+            if(results->pops[p].nullWins > maxNullWins) maxNullWins = results->pops[p].nullWins;
         }
 
         if (SPECFILE){
@@ -447,18 +446,16 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
         for(unsigned int p = 0; p < popData->popOrder.size(); p++){
             fout << "\t" << popData->popOrder[p] << "_nhaps\t" << popData->popOrder[p] << "_uhaps\t";
             if(HAPSTATS) fout << popData->popOrder[p] << "_" << h12 << "\t" << popData->popOrder[p] << "_" << h2h1 << "\t";
-            if(SPECFILE) fout << results->names->at(popData->popOrder[p]);
+            if(SPECFILE) fout << results->pops[p].header;
         }
         fout << endl;
     
-        double *dist = results->dist->begin()->second;
+        double *dist = results->pops[0].dist;
         
         for (unsigned int w = 0; w < windows->size(); w++) {
             bool skip = false;
-            for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-                string popName = popData->popOrder[p];
-                double **x = results->data->at(popName);
-                if(x[w][K] == 0) skip = true;
+            for(unsigned int p = 0; p < results->pops.size(); p++){
+                if(results->pops[p].data[w][K] == 0) skip = true;
             }
 
             if(skip) continue;
@@ -472,15 +469,10 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
                 << setprecision(10) 
                 << dist[w]
                 << setprecision(6);
-            for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-                string popName = popData->popOrder[p];
-                double **x = results->data->at(popName);
-                double *h12;
-                double *h2h1;
-                if(HAPSTATS){
-                    h12 = results->h12->at(popName);
-                    h2h1 = results->h2h1->at(popName);
-                }
+            for(unsigned int p = 0; p < results->pops.size(); p++){
+                double **x = results->pops[p].data;
+                double *h12 = results->pops[p].h12;
+                double *h2h1 = results->pops[p].h2h1;
                 fout << "\t" << x[w][K];
                 fout << "\t" << x[w][K+1];
                 if(HAPSTATS){
@@ -497,10 +489,10 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
     }
     else{
         for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = popData->popOrder[p];
+            string popName = results->pops[p].name;
             MapData *mapData = hapDataByPop->at(popName)->map;
-            vector< pair_t* > *windows = results->windows->at(popName);
-            int nullWins = results->nullWins->operator[](popName);
+            vector< pair_t* > *windows = results->pops[p].windows;
+            int nullWins = results->pops[p].nullWins;
 
             if(SPECFILE) outfile = outfileBase + "." + popName + ending + "spectra.gz";
             if(!SPECFILE && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
@@ -520,17 +512,13 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             fout << "chr\tstart\tend\tnSNPs\t" << distStr;
             fout << "\t" << popName << "_nhaps\t" << popName << "_uhaps\t";
             if(HAPSTATS) fout << popName << "_" << h12 << "\t" << popName << "_" << h2h1 << "\t";
-            if(SPECFILE) fout << results->names->at(popName);
+            if(SPECFILE) fout << results->pops[p].header;
             fout << endl;
             
-            double *dist = results->dist->at(popName);
-            double *h12;
-            double *h2h1;
-            if(HAPSTATS){
-                h12 = results->h12->at(popName);
-                h2h1 = results->h2h1->at(popName);
-            }
-            double **x = results->data->at(popName);
+            double *dist = results->pops[p].dist;
+            double *h12 = results->pops[p].h12;
+            double *h2h1 = results->pops[p].h2h1;
+            double **x = results->pops[p].data;
 
             for (unsigned int w = 0; w < windows->size(); w++) {
                 if(x[w][K] == 0) continue;
@@ -564,56 +552,35 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
 
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K, bool HAPSTATS, string DIST_TYPE){
-    
 
     LASSIInitialResults *results = new LASSIInitialResults;
-    results->windows = new map<string,vector< pair_t* > *>;
-    results->names = new map<string,string>;
-    results->data = new map<string,double ** >;
-    results->nullWins = new map<string,int>;
+    results->pops.resize(popData->popOrder.size());
 
-    if(HAPSTATS){
-        results->h12 = new map<string,double *>;
-        results->h2h1 = new map<string,double *>;
+    for(unsigned int j = 0; j < popData->popOrder.size(); j++){
+        PopResults &pr = results->pops[j];
+        pr.name = popData->popOrder[j];
+        MapData *mapData = hapDataByPop->at(pr.name)->map;
+
+        pr.windows = findAllWindows(mapData, WINSIZE, WINSTEP);
+        unsigned int nwin = pr.windows->size();
+        cerr << "Calculating haplotype frequency spectra in " << nwin << " windows ";
+        cerr << "in pop " << pr.name << ".\n";
+
+        pr.data = new double*[nwin];
+        pr.dist = new double[nwin];
+        pr.h12 = HAPSTATS ? new double[nwin] : NULL;
+        pr.h2h1 = HAPSTATS ? new double[nwin] : NULL;
+        pr.header = "";
+        pr.nullWins = 0;
+
+        for (unsigned int i = 0; i < nwin; i++){
+            pr.data[i] = new double[K+2];
+            int st = pr.windows->at(i)->start;
+            int en = pr.windows->at(i)->end;
+            pr.dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
+        }
     }
-    results->dist = new map<string,double *>;
 
-    for(unsigned int j = 0;j < popData->popOrder.size(); j++){
-        string popName = popData->popOrder[j];
-        MapData *mapData = hapDataByPop->at(popName)->map;
-
-        results->windows->operator[](popName) = findAllWindows(mapData, WINSIZE, WINSTEP);
-        cerr << "Calculating haplotype frequency spectra in " << results->windows->at(popName)->size() << " windows ";
-        cerr << "in pop " << popName << ".\n";
-
-        double ** x = new double*[results->windows->at(popName)->size()];
-        double *h12;
-        double *h2h1;
-        double *dist = new double[results->windows->at(popName)->size()];;
-
-        if(HAPSTATS){
-            h12 = new double[results->windows->at(popName)->size()];
-            h2h1 = new double[results->windows->at(popName)->size()];
-        }
-        
-        vector< pair_t* > *wins = results->windows->at(popName);
-        for (unsigned int i = 0; i < results->windows->at(popName)->size(); i++){
-            x[i] = new double[K+2];
-            int st = wins->at(i)->start;
-            int en = wins->at(i)->end;
-            dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
-        }
-
-        results->data->operator[](popName) = x;
-        results->names->operator[](popName) = "";
-        results->nullWins->operator[](popName) = 0;
-
-        if(HAPSTATS){
-            results->h12->operator[](popName) = h12;
-            results->h2h1->operator[](popName) = h2h1;
-        }
-        results->dist->operator[](popName) = dist;
-    }
     return results;
 }
 

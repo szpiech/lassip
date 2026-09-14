@@ -25,13 +25,9 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 	param_t *params = p->params;
 	
 	//int WINSIZE = params->getIntFlag(ARG_WINSIZE);
-	map<string,double **> *results = p->results->data;
-	map<string,double *> *h12ByPop = p->results->h12;
-  	map<string,double *> *h2h1ByPop = p->results->h2h1;
 	int K = p->params->getIntFlag(ARG_K);
 	bool HAPSTATS = p->params->getBoolFlag(ARG_HAPSTATS);
 	bool PHASED = !(p->params->getBoolFlag(ARG_UNPHASED));
-	map<string,string> *names = p->results->names;
 
 	double FILTER_HMISS = p->params->getDoubleFlag(ARG_FILTER_HMISS);
 	int MATCH_TOL = p->params->getIntFlag(ARG_MATCH_TOL);
@@ -44,7 +40,8 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 	string popName;
 	for (int pop = 0; pop < popData->npops; pop++){
 		popName = popData->popOrder[pop];
-		vector< pair_t* > *windows = p->results->windows->at(popName);
+		PopResults &pr = p->results->pops[pop];
+		vector< pair_t* > *windows = pr.windows;
 		unsigned int nwin = windows->size();
 		unsigned int chunk = chunkFor(nwin, numThreads);
 		unsigned int begin, end;
@@ -54,13 +51,7 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 			snps = windows->at(i);		
 			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL, SEED);
 			if(hfs == NULL) p->nullWins[pop]++;
-			double *h12; 
-			double *h2h1;
-			if(HAPSTATS){
-				h12 = h12ByPop->at(popName);
-				h2h1 = h2h1ByPop->at(popName);
-			}
-			double **x = results->at(popName);
+			double **x = pr.data;
 			double tot = 0;
 			for (int s = 0; s < K; s++){
 				if(hfs == NULL) break;
@@ -71,8 +62,8 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 				if (i == 0){
 					stringstream ss;
 					ss << s+1;
-					names->at(popName) += popName + "_hfs_" + ss.str(); 
-					if (s != K-1) names->at(popName) += "\t";
+					pr.header += popName + "_hfs_" + ss.str(); 
+					if (s != K-1) pr.header += "\t";
 				}
 				if(hfs == NULL) x[i][s] = 0;
 				else if(s < hfs->numClasses) x[i][s] = double(hfs->sortedCount[s])/tot;
@@ -90,12 +81,12 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 			}
 			if(HAPSTATS){
 				if(hfs == NULL){
-					h12[i] = 0;
-					h2h1[i] = 0;
+					pr.h12[i] = 0;
+					pr.h2h1[i] = 0;
 				}
 				else{
-					h12[i] = calcH12(hfs, PHASED);
-					h2h1[i] = calcH2H1(hfs);
+					pr.h12[i] = calcH12(hfs, PHASED);
+					pr.h2h1[i] = calcH2H1(hfs);
 				}
 			}
 			releaseHaplotypeFrequencySpectrum(hfs);
