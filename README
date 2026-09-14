@@ -257,6 +257,13 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   -std=c++11 explicitly (override with make STDFLAG=...); the code has used
   C++11 library features since 1.2.0 but compiled as C++98 by default.
 
+  Structure. main() was 440 lines holding flag registration, flag unpacking,
+  165 lines of validation and both pipelines; it is now 23 lines reading
+  registerFlags -> parseCommandLine -> readConfig -> validate -> run, with the
+  flags unpacked once into a Config struct. Stage-1 results were seven
+  map<string,T*> keyed by population name, looked up by name inside the window
+  loops; they are now fields of one struct per population, held in a vector.
+
   Bug fixes. The null-spectrum check at the --spectra stage used the K from the
   command line rather than from the spectra file, so its threshold was wrong
   unless you repeated the same --k. --calc-spec --dist-type cm wrote a column

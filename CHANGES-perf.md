@@ -54,6 +54,8 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 | `03e8d51` | read the VCF once instead of twice |
 | `a2f7bed` | `hfs_window`: tally packed windows instead of building char strings |
 | `da5b22c` | threading: `std::thread`, dynamic claiming, null-window race fixed |
+| `11e95aa` | split `main` into registration, config, validation and the two stages |
+| `638aab8` | one struct per population instead of seven parallel maps |
 
 ## Behavioural differences
 
@@ -93,7 +95,9 @@ changed.
    data, 70 for an unexpected exception; `--help` and `--version` exit 0. An
    error raised inside a reader previously escaped `main` and aborted the
    process.
-9. **`--match-tol` groups at `<=` the given number of differences**, as its
+9. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
+   property of the input, like the `checkNull` failure beside it.
+10. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
 
@@ -118,13 +122,22 @@ Resolved since the first version of this file:
 
 ## Not done
 
-- `main` is still one long function; population data is still threaded through
-  half a dozen parallel `map<string, T*>`.
+Nothing remains from the original review list. Items noticed along the way and
+not acted on:
+
+- `GMapData`'s query loop leaves `startIndex`/`endIndex` uninitialised when the
+  loop condition is false on entry (`-Wall` reports it); that is the
+  `--dist-type cm` path.
+- I/O errors are still not distinguished from data errors (both exit 65)
+  because roughly 30 sites in the data layer throw untyped ints. `EXIT_IOERR`
+  is defined for when they are typed.
+- `param_t` uses `sprintf`; `-Wall` deprecates it in favour of `snprintf`.
 
 Done since the first version of this file: genotypes packed two bits per locus
 (`d004ac4`), the VCF read once rather than twice (`03e8d51`), `hfs_window`
-tallying packed windows rather than rebuilding a char string per haplotype per
-window (`a2f7bed`), and the threading rework (`da5b22c`).
+tallying packed windows (`a2f7bed`), the threading rework (`da5b22c`), `main`
+split into named stages (`11e95aa`), and per-population results in one struct
+rather than seven parallel maps (`638aab8`).
 
 One tradeoff to know about: reading the file once costs about 22 MB more peak
 memory than the two-pass reader did on this dataset, because the growable copy
