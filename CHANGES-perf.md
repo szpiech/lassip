@@ -12,11 +12,12 @@ architecture flags).
 
 | | v1.2.2 | this branch |
 |---|---|---|
-| stage 1 (`--calc-spec --hapstats`), 1 thread | 29.9 s | **4.4 s** |
-| stage 1, 8 threads | 12.4 s wall / 41.8 s CPU | **2.2 s wall / 5.5 s CPU** |
+| stage 1 (`--calc-spec --hapstats`), 1 thread | 30.2 s | **1.9 s** |
+| stage 1, 8 threads | 12.6 s | **1.4 s** |
+| stage 1, peak memory | 229 MB | **87 MB** |
 | stage 2 `--lassi`, 8 threads | 0.34 s | 0.34 s |
-| stage 2 `--salti`, 8 threads | ≈48 min wall / ≈6.4 h CPU | **15.5 s wall / 118 s CPU** |
-| stage 2 `--salti`, peak memory | 1,009 MB | **48 MB** |
+| stage 2 `--salti`, 8 threads | ≈48 min wall / ≈6.4 h CPU | **18 s / 118 s** |
+| stage 2 `--salti`, peak memory | 1,009 MB | **53 MB** |
 
 Stage-1 spectra are byte-identical to v1.2.2 in every configuration tested.
 
@@ -49,6 +50,9 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 | `1954260` | docs: refresh README, fix `example/do_lassip_YRI.bash` |
 | `46a1e42` | `--match-tol`: group at `<= MATCH_TOL` differences, as documented |
 | `edeae4f` | example: regenerate the committed outputs, fix the second command |
+| `d004ac4` | store genotypes two bits per locus instead of one char |
+| `03e8d51` | read the VCF once instead of twice |
+| `a2f7bed` | `hfs_window`: tally packed windows instead of building char strings |
 
 ## Behavioural differences
 
@@ -108,14 +112,20 @@ Resolved since the first version of this file:
 
 ## Not done
 
-- The VCF is still decompressed and scanned twice (once to count loci, once to
-  parse); removing the counting pass needs a growable genotype matrix.
-- Genotypes are still one `char` per haplotype per locus for a 2-bit alphabet;
-  packing would cut memory 4× and make comparisons word-parallel.
-- `hfs_window` still rebuilds each haplotype string from scratch, so with
-  `--winsize 117 --winstep 12` every site is re-read into a new `std::string`
-  about ten times; an incremental or rolling-hash HFS would remove that.
 - Threading still uses one `pthread_t` per thread per stage with a static
   stride and a cast-to-`void*(*)(void*)` worker, and work orders are leaked.
 - `main` is still one long function; population data is still threaded through
   half a dozen parallel `map<string, T*>`.
+
+Done since the first version of this file (commits `d004ac4`, `03e8d51`,
+`a2f7bed`): genotypes are packed two bits per locus, the VCF is read once
+rather than twice, and `hfs_window` tallies packed windows rather than
+rebuilding a char string per haplotype per window. Stage 1 went from 4.4 s to
+1.9 s over those three commits, and peak memory from 152 MB to 87 MB, with
+byte-identical output.
+
+One tradeoff to know about: reading the file once costs about 22 MB more peak
+memory than the two-pass reader did on this dataset, because the growable copy
+and the locus metadata coexist briefly. That transient is bounded by the size
+of the packed matrix rather than by a second decompression pass, and `03e8d51`
+is the single commit to revert if peak memory ever matters more than read time.
