@@ -47,6 +47,8 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 | `f05ea0b` | CLI: `isFlagSet` instead of sentinel default strings |
 | `50ecaa2` | CLI: validate `--dist-type` at both stages, fix its label, use the file's K |
 | `1954260` | docs: refresh README, fix `example/do_lassip_YRI.bash` |
+| `46a1e42` | `--match-tol`: group at `<= MATCH_TOL` differences, as documented |
+| `edeae4f` | example: regenerate the committed outputs, fix the second command |
 
 ## Behavioural differences
 
@@ -81,21 +83,28 @@ changed.
    data, 70 for an unexpected exception; `--help` and `--version` exit 0. An
    error raised inside a reader previously escaped `main` and aborted the
    process.
+8. **`--match-tol` groups at `<=` the given number of differences**, as its
+   help text says, instead of `<`. The new `--match-tol t` reproduces the old
+   `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
 
 ## Left for you to decide
 
-- **`--match-tol` semantics.** The merge test is `d < MATCH_TOL`, while the
-  help text says "≤ this many pairwise differences". With the default 0 nothing
-  merges either way, but `--match-tol 1` behaves as documented for 0. Left
-  unchanged.
 - **Order-dependence of haplotype clustering.** `--seed` makes the order
   reproducible; it does not remove the dependence. Merging into the *most
   frequent* compatible haplotype, or union-find over the ≤tol graph, would
   remove the arbitrariness, but both change the method.
-- **Example outputs.** `example/YRI.chr22.lassip.hap.spectra.gz` and `.out.gz`
-  date from v1.0.0 and predate the `ppos` column, so they no longer match what
-  `do_lassip_YRI.bash` writes. Regenerating them adds ~1.6 MB of binaries to
-  history, so I left them and said so in the README.
+
+Resolved since the first version of this file:
+
+- **`--match-tol` semantics** (commit `46a1e42`). The merge test is now
+  `d <= MATCH_TOL`, matching the flag's help text. Every setting previously
+  behaved as the one below it; the new `--match-tol t` reproduces the old
+  `t+1` exactly. Unchanged at `--match-tol 0` without missing genotypes.
+  Note the README's 06FEB2025 entry states the old rule and so disagreed with
+  the flag help; the help was taken as the intent.
+- **Example outputs** (commit `edeae4f`). Regenerated, and the script's second
+  command corrected to read the per-population filename the first command
+  writes at the default `--filter-level 2`.
 
 ## Not done
 
