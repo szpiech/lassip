@@ -26,16 +26,50 @@
 
 using namespace std;
 
-//The body of the program. main() at the bottom of this file is a thin wrapper
-//that turns the exceptions thrown from here and from the data layer into
-//distinct exit codes.
-int lassipMain(int argc, char *argv[])
-{
-  param_t params;
-  params.setPreamble(PREAMBLE);
-  params.setUsage(USAGE);
-  params.setVersion("lassip v" + VERSION);
+namespace {
 
+//Everything the command line said, unpacked once. INIT selects the stage:
+//--vcf computes spectra from genotypes, --spectra computes statistics from
+//spectra, and most flags are meaningful in only one of them.
+struct Config
+{
+    int numThreads;
+    string mapFilename;
+    bool MAP;
+    string vcfFilename;
+    bool VCF;
+    string outfileBase;
+    string popFilename;
+    bool POP;
+    vector<string> spectraFiles;
+    int WINSIZE;
+    int WINSTEP;
+    bool LASSI;
+    int LASSI_CHOICE;
+    bool HAPSTATS;
+    bool SALTI;
+    bool CALC_SPEC;
+    bool AVG_SPEC;
+    string nullSpecFile;
+    int K;
+    bool PHASED;
+    int FILTER_LEVEL;
+    bool KEEP_MONO;
+    string DIST_TYPE;
+    double FILTER_LMISS;
+    double FILTER_HMISS;
+    int MATCH_TOL;
+    double MAX_EXTEND_BP;
+    double MAX_EXTEND_NW;
+    double MAX_EXTEND_CM;
+    bool INIT;
+    param_t *params;
+};
+
+//Flags are registered in the order they should appear under their help
+//section; the section name is the label passed to addFlag.
+void registerFlags(param_t &params)
+{
   params.addFlag(ARG_THREADS, DEFAULT_THREADS, "General", HELP_THREADS);
 
   // I/O flags
@@ -71,17 +105,10 @@ int lassipMain(int argc, char *argv[])
   params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "saltiLASSI", HELP_MAX_EXTEND_CM);
   params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "saltiLASSI", HELP_MAX_EXTEND_NW);
   params.addFlag(ARG_KEEP_MONO, DEFAULT_KEEP_MONO, "Filtering", HELP_KEEP_MONO);
+}
 
-  if (argc == 1){
-    cerr << USAGE << "\n";
-    cerr << "Run lassip --help for the full list of options.\n";
-    return EXIT_USAGE;
-  }
-
-  params.parseCommandLine(argc, argv);
-
-  cerr << "lassip v" + VERSION + "\n";
-
+Config readConfig(param_t &params)
+{
   int numThreads = params.getIntFlag(ARG_THREADS);
 
   // I/O
@@ -121,11 +148,100 @@ int lassipMain(int argc, char *argv[])
   double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
   double MAX_EXTEND_CM = params.getDoubleFlag(ARG_MAX_EXTEND_CM);
 
-  // Check for consistency errors within flags
-  bool ERROR = false;
+  Config cfg;
+  cfg.numThreads = numThreads;
+  cfg.mapFilename = mapFilename;
+  cfg.MAP = MAP;
+  cfg.vcfFilename = vcfFilename;
+  cfg.VCF = VCF;
+  cfg.outfileBase = outfileBase;
+  cfg.popFilename = popFilename;
+  cfg.POP = POP;
+  cfg.spectraFiles = spectraFiles;
+  cfg.WINSIZE = WINSIZE;
+  cfg.WINSTEP = WINSTEP;
+  cfg.LASSI = LASSI;
+  cfg.LASSI_CHOICE = LASSI_CHOICE;
+  cfg.HAPSTATS = HAPSTATS;
+  cfg.SALTI = SALTI;
+  cfg.CALC_SPEC = CALC_SPEC;
+  cfg.AVG_SPEC = AVG_SPEC;
+  cfg.nullSpecFile = nullSpecFile;
+  cfg.K = K;
+  cfg.PHASED = PHASED;
+  cfg.FILTER_LEVEL = FILTER_LEVEL;
+  cfg.KEEP_MONO = KEEP_MONO;
+  cfg.DIST_TYPE = DIST_TYPE;
+  cfg.FILTER_LMISS = FILTER_LMISS;
+  cfg.FILTER_HMISS = FILTER_HMISS;
+  cfg.MATCH_TOL = MATCH_TOL;
+  cfg.MAX_EXTEND_BP = MAX_EXTEND_BP;
+  cfg.MAX_EXTEND_NW = MAX_EXTEND_NW;
+  cfg.MAX_EXTEND_CM = MAX_EXTEND_CM;
+  cfg.INIT = VCF;
+  cfg.params = &params;
+  return cfg;
+}
 
-  bool INIT = VCF;
-  bool FINALIZE = !VCF;
+//Flags that belong to the other stage are warned about rather than ignored.
+void warnCrossStageFlags(const Config &cfg)
+{
+  param_t &params = *cfg.params;
+  const bool INIT = cfg.INIT;
+  //Flags are shared by both stages but most only act in one of them. Silence
+  //here is how example/do_lassip_YRI.bash came to pass --lassi to stage 1,
+  //where it does nothing, and stopped reproducing the file committed beside it.
+  if(INIT){
+    const string stage2Only[] = {ARG_LASSI, ARG_SALTI, ARG_AVG_SPEC, ARG_NULL_SPEC,
+                                 ARG_LASSI_CHOICE, ARG_MAX_EXTEND_BP, ARG_MAX_EXTEND_CM,
+                                 ARG_MAX_EXTEND_NW};  //--map already draws a hard error here
+    for (unsigned int i = 0; i < sizeof(stage2Only)/sizeof(stage2Only[0]); i++){
+      if(params.isFlagSet(stage2Only[i])){
+        cerr << "WARNING: " << stage2Only[i] << " has no effect with --vcf; it applies to the --spectra stage.\n";
+      }
+    }
+  }
+  else{
+    const string stage1Only[] = {ARG_CALC_SPEC, ARG_HAPSTATS, ARG_WINSIZE, ARG_WINSTEP,
+                                 ARG_K, ARG_UNPHASED, ARG_FILENAME_POPFILE, ARG_FILTER_LEVEL,
+                                 ARG_FILTER_LMISS, ARG_FILTER_HMISS, ARG_KEEP_MONO,
+                                 ARG_MATCH_TOL, ARG_SEED};
+    for (unsigned int i = 0; i < sizeof(stage1Only)/sizeof(stage1Only[0]); i++){
+      if(params.isFlagSet(stage1Only[i])){
+        cerr << "WARNING: " << stage1Only[i] << " has no effect with --spectra; it applies to the --vcf stage.\n";
+      }
+    }
+  }
+}
+
+//True if the command line is usable. Every problem is reported, not just the
+//first, so one run tells the user everything that is wrong.
+bool validate(const Config &cfg)
+{
+  const int numThreads = cfg.numThreads;
+  const bool MAP = cfg.MAP;
+  const bool POP = cfg.POP;
+  const int WINSIZE = cfg.WINSIZE;
+  const int WINSTEP = cfg.WINSTEP;
+  const bool LASSI = cfg.LASSI;
+  const int LASSI_CHOICE = cfg.LASSI_CHOICE;
+  const bool HAPSTATS = cfg.HAPSTATS;
+  const bool SALTI = cfg.SALTI;
+  const bool CALC_SPEC = cfg.CALC_SPEC;
+  const bool AVG_SPEC = cfg.AVG_SPEC;
+  const int K = cfg.K;
+  const int FILTER_LEVEL = cfg.FILTER_LEVEL;
+  const string &DIST_TYPE = cfg.DIST_TYPE;
+  const double FILTER_LMISS = cfg.FILTER_LMISS;
+  const double FILTER_HMISS = cfg.FILTER_HMISS;
+  const int MATCH_TOL = cfg.MATCH_TOL;
+  const double MAX_EXTEND_BP = cfg.MAX_EXTEND_BP;
+  const double MAX_EXTEND_NW = cfg.MAX_EXTEND_NW;
+  const double MAX_EXTEND_CM = cfg.MAX_EXTEND_CM;
+  param_t &params = *cfg.params;
+  const bool INIT = cfg.INIT;
+  const bool FINALIZE = !cfg.INIT;
+  bool ERROR = false;
 
   //--dist-type selects the coordinate the statistics are reported and extended
   //along; it is meaningful at both stages, and used to be checked only at the
@@ -203,30 +319,7 @@ int lassipMain(int argc, char *argv[])
     }
   }
 
-  //Flags are shared by both stages but most only act in one of them. Silence
-  //here is how example/do_lassip_YRI.bash came to pass --lassi to stage 1,
-  //where it does nothing, and stopped reproducing the file committed beside it.
-  if(INIT){
-    const string stage2Only[] = {ARG_LASSI, ARG_SALTI, ARG_AVG_SPEC, ARG_NULL_SPEC,
-                                 ARG_LASSI_CHOICE, ARG_MAX_EXTEND_BP, ARG_MAX_EXTEND_CM,
-                                 ARG_MAX_EXTEND_NW};  //--map already draws a hard error here
-    for (unsigned int i = 0; i < sizeof(stage2Only)/sizeof(stage2Only[0]); i++){
-      if(params.isFlagSet(stage2Only[i])){
-        cerr << "WARNING: " << stage2Only[i] << " has no effect with --vcf; it applies to the --spectra stage.\n";
-      }
-    }
-  }
-  else{
-    const string stage1Only[] = {ARG_CALC_SPEC, ARG_HAPSTATS, ARG_WINSIZE, ARG_WINSTEP,
-                                 ARG_K, ARG_UNPHASED, ARG_FILENAME_POPFILE, ARG_FILTER_LEVEL,
-                                 ARG_FILTER_LMISS, ARG_FILTER_HMISS, ARG_KEEP_MONO,
-                                 ARG_MATCH_TOL, ARG_SEED};
-    for (unsigned int i = 0; i < sizeof(stage1Only)/sizeof(stage1Only[0]); i++){
-      if(params.isFlagSet(stage1Only[i])){
-        cerr << "WARNING: " << stage1Only[i] << " has no effect with --spectra; it applies to the --vcf stage.\n";
-      }
-    }
-  }
+  warnCrossStageFlags(cfg);
 
   if(FINALIZE){
     if(!params.isFlagSet(ARG_FILENAME_SPECFILES)){
@@ -286,15 +379,28 @@ int lassipMain(int argc, char *argv[])
     }
   }
 
-  if (ERROR) {
-    return EXIT_USAGE;
-  }
+  return !ERROR;
+}
 
-  string ending;
-  
+//Stage 1: genotypes in, one haplotype frequency spectrum per window out.
+int runSpectra(const Config &cfg)
+{
+  const int numThreads = cfg.numThreads;
+  const string &vcfFilename = cfg.vcfFilename;
+  const string &outfileBase = cfg.outfileBase;
+  const string &popFilename = cfg.popFilename;
+  const int WINSIZE = cfg.WINSIZE;
+  const int WINSTEP = cfg.WINSTEP;
+  const bool HAPSTATS = cfg.HAPSTATS;
+  const bool CALC_SPEC = cfg.CALC_SPEC;
+  const int K = cfg.K;
+  const bool PHASED = cfg.PHASED;
+  const int FILTER_LEVEL = cfg.FILTER_LEVEL;
+  const bool KEEP_MONO = cfg.KEEP_MONO;
+  const string &DIST_TYPE = cfg.DIST_TYPE;
+  const double FILTER_LMISS = cfg.FILTER_LMISS;
+  param_t &params = *cfg.params;
 
- 
-  if(INIT){
     PopData *popData = readPopData(popFilename);
 
     if(PHASED) checkK(popData,double(K)/2.0);
@@ -332,9 +438,27 @@ int lassipMain(int argc, char *argv[])
     delete [] cursor.next;
     cerr << "Done.\n";
     writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);
-  }
-  else{//finalize
-    
+
+  return 0;
+}
+
+//Stage 2: spectra in, LASSI or saltiLASSI statistics out.
+int runStatistics(const Config &cfg)
+{
+  const int numThreads = cfg.numThreads;
+  const string &mapFilename = cfg.mapFilename;
+  const string &outfileBase = cfg.outfileBase;
+  const vector<string> &spectraFiles = cfg.spectraFiles;
+  const bool LASSI = cfg.LASSI;
+  const int LASSI_CHOICE = cfg.LASSI_CHOICE;
+  const bool SALTI = cfg.SALTI;
+  const bool AVG_SPEC = cfg.AVG_SPEC;
+  const string &nullSpecFile = cfg.nullSpecFile;
+  int K = cfg.K;
+  const string &DIST_TYPE = cfg.DIST_TYPE;
+  param_t &params = *cfg.params;
+  bool ERROR = false;
+  string ending;
 
     map<string, vector<SpectrumData *>* > *specDataByPopByChr = readSpecData(spectraFiles);
     map<string, SpectrumData* > *avgSpecByPop;
@@ -364,7 +488,7 @@ int lassipMain(int argc, char *argv[])
       }
     }
 
-    if(ERROR) return EXIT_USAGE;
+    if(ERROR) return EXIT_DATAERR;
 
     map<string, vector<LASSIResults *>* > *resultsByPopByChr = initResults(specDataByPopByChr, SALTI);
 
@@ -468,10 +592,37 @@ int lassipMain(int argc, char *argv[])
     }
     string outfile = outfileBase + ending + "out.gz";
     writeLASSIFinalResults(outfile, resultsByPopByChr, specDataByPopByChr, SALTI);
-  
-  }
 
   return 0;
+}
+
+} // namespace
+
+//The body of the program. main() at the bottom of this file is a thin wrapper
+//that turns the exceptions thrown from here and from the data layer into
+//distinct exit codes.
+int lassipMain(int argc, char *argv[])
+{
+  param_t params;
+  params.setPreamble(PREAMBLE);
+  params.setUsage(USAGE);
+  params.setVersion("lassip v" + VERSION);
+  registerFlags(params);
+
+  if (argc == 1){
+    cerr << USAGE << "\n";
+    cerr << "Run lassip --help for the full list of options.\n";
+    return EXIT_USAGE;
+  }
+
+  params.parseCommandLine(argc, argv);
+
+  cerr << "lassip v" + VERSION + "\n";
+
+  Config cfg = readConfig(params);
+  if (!validate(cfg)) return EXIT_USAGE;
+
+  return cfg.INIT ? runSpectra(cfg) : runStatistics(cfg);
 }
 
 int main(int argc, char *argv[])
