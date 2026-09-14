@@ -12,8 +12,8 @@ architecture flags).
 
 | | v1.2.2 | this branch |
 |---|---|---|
-| stage 1 (`--calc-spec --hapstats`), 1 thread | 30.2 s | **1.9 s** |
-| stage 1, 8 threads | 12.6 s | **1.4 s** |
+| stage 1 (`--calc-spec --hapstats`), 1 thread | 30.2 s | **1.8 s** |
+| stage 1, 8 threads | 12.6 s | **1.3 s** |
 | stage 1, peak memory | 229 MB | **87 MB** |
 | stage 2 `--lassi`, 8 threads | 0.34 s | 0.34 s |
 | stage 2 `--salti`, 8 threads | ≈48 min wall / ≈6.4 h CPU | **18 s / 118 s** |
@@ -53,6 +53,7 @@ saturated 1.0 s/window gives ≈6.4 h of CPU for the full contig, i.e. about
 | `d004ac4` | store genotypes two bits per locus instead of one char |
 | `03e8d51` | read the VCF once instead of twice |
 | `a2f7bed` | `hfs_window`: tally packed windows instead of building char strings |
+| `da5b22c` | threading: `std::thread`, dynamic claiming, null-window race fixed |
 
 ## Behavioural differences
 
@@ -83,11 +84,16 @@ changed.
    population instead of two (missingness and monomorphism are now one pass).
 6. **Flags belonging to the other stage now print a warning** instead of being
    silently ignored.
-7. **Exit codes**: 64 for a command line or validation error, 65 for bad input
+7. **The spectra header's window count is correct under `--threads > 1`.**
+   It is windows minus null windows, and the null count was incremented from
+   every thread without synchronisation, so any run with a null window and
+   more than one thread wrote a wrong, non-reproducible number -- which the
+   finalize stage then reads. See `tests/run_tests.sh::nullwin_threads`.
+8. **Exit codes**: 64 for a command line or validation error, 65 for bad input
    data, 70 for an unexpected exception; `--help` and `--version` exit 0. An
    error raised inside a reader previously escaped `main` and aborted the
    process.
-8. **`--match-tol` groups at `<=` the given number of differences**, as its
+9. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
 
@@ -112,20 +118,24 @@ Resolved since the first version of this file:
 
 ## Not done
 
-- Threading still uses one `pthread_t` per thread per stage with a static
-  stride and a cast-to-`void*(*)(void*)` worker, and work orders are leaked.
 - `main` is still one long function; population data is still threaded through
   half a dozen parallel `map<string, T*>`.
 
-Done since the first version of this file (commits `d004ac4`, `03e8d51`,
-`a2f7bed`): genotypes are packed two bits per locus, the VCF is read once
-rather than twice, and `hfs_window` tallies packed windows rather than
-rebuilding a char string per haplotype per window. Stage 1 went from 4.4 s to
-1.9 s over those three commits, and peak memory from 152 MB to 87 MB, with
-byte-identical output.
+Done since the first version of this file: genotypes packed two bits per locus
+(`d004ac4`), the VCF read once rather than twice (`03e8d51`), `hfs_window`
+tallying packed windows rather than rebuilding a char string per haplotype per
+window (`a2f7bed`), and the threading rework (`da5b22c`).
 
 One tradeoff to know about: reading the file once costs about 22 MB more peak
 memory than the two-pass reader did on this dataset, because the growable copy
 and the locus metadata coexist briefly. That transient is bounded by the size
 of the packed matrix rather than by a second decompression pass, and `03e8d51`
 is the single commit to revert if peak memory ever matters more than read time.
+
+One review claim did not survive measurement: the static stride schedule was
+said to leave cores idle at the tail. It does not. saltiLASSI parallel
+efficiency on the YRI contig is 99% at 2 and 4 threads and 85% at 8 under
+either schedule, the 8-thread figure being this machine's efficiency cores.
+The dynamic schedule is kept because it costs nothing measurable and bounds
+the tail when window costs are skewed, but it is not why `da5b22c` exists --
+the data race, the undefined-behaviour cast and the leak are.

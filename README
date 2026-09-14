@@ -245,6 +245,18 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   Note that the 06FEB2025 entry below describes the old rule ("< MATCH_TOL");
   the flag help was the correct description of the intent.
 
+  Threading. The workers ran through a cast to void *(*)(void *), which is
+  undefined behaviour, their work orders were never freed, and the null-window
+  counter was incremented from every thread without synchronisation -- so the
+  window count in the spectra header, which the finalize stage reads, was
+  wrong and irreproducible whenever a run had null windows and --threads > 1.
+  Workers now run as std::thread with their real signatures, work orders are
+  owned by the caller, and each thread counts null windows into its own slot.
+  Windows are claimed from an atomic cursor rather than by a fixed stride, and
+  per-window scratch buffers are per-thread and reused. The build now passes
+  -std=c++11 explicitly (override with make STDFLAG=...); the code has used
+  C++11 library features since 1.2.0 but compiled as C++98 by default.
+
   Bug fixes. The null-spectrum check at the --spectra stage used the K from the
   command line rather than from the spectra file, so its threshold was wrong
   unless you repeated the same --k. --calc-spec --dist-type cm wrote a column
