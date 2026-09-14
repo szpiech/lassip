@@ -501,7 +501,10 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
                hap2count.erase(hap1);
                hap1 = mergedhap;
             }
-            if(d < MATCH_TOL){
+            //<= , not < : --match-tol is documented as "<= this many pairwise
+            //differences". With < , --match-tol 0 pooled nothing and every
+            //setting behaved as the one below it.
+            if(d <= MATCH_TOL){
                hap2count[hap1] += count2;
                compared[hap2] = 1;
             }

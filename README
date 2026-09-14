@@ -230,6 +230,17 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   there and which grid point wins is decided by rounding -- v1.2.2 has the same
   instability, not a stable value that has been perturbed.
 
+  --match-tol now matches its documentation. The help says haplotypes are
+  grouped when they have "<= this many pairwise differences", but the test was
+  d < MATCH_TOL, so every setting behaved as the one below it and the default
+  --match-tol 0 pooled nothing at all. It is now d <= MATCH_TOL. On data with
+  missing genotypes the new --match-tol t reproduces the old --match-tol t+1
+  exactly (mean unique haplotypes per window on a test fixture: old 81.0 / 77.1
+  / 48.8 at t = 0 / 1 / 2, new 77.1 / 48.8 / 30.7). Output is unchanged for
+  --match-tol 0 on data without missing genotypes, which is the default path.
+  Note that the 06FEB2025 entry below describes the old rule ("< MATCH_TOL");
+  the flag help was the correct description of the intent.
+
   Bug fixes. The null-spectrum check at the --spectra stage used the K from the
   command line rather than from the spectra file, so its threshold was wrong
   unless you repeated the same --k. --calc-spec --dist-type cm wrote a column
