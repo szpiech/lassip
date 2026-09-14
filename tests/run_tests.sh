@@ -157,7 +157,7 @@ selected() {
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
-       cm_map_mismatch"
+       cm_map_mismatch cm_max_gap"
 
 if [ "$LIST" = 1 ]; then for c in $CASES; do echo "$c"; done; exit 0; fi
 
@@ -395,6 +395,24 @@ if selected cm_map_mismatch && [ -f "$SPEC" ]; then
     else
         fail cm_map_mismatch "expected exit 65 with a 'does not place' error, got exit $rc"
     fi
+fi
+
+if selected cm_max_gap && [ -f "$SPEC" ]; then
+    # --max-gap bounds how far --dist-type cm will interpolate. A tiny value
+    # puts every window in an over-wide gap, which must be reported rather than
+    # guessed; 0 means no limit and must reproduce the default run, since this
+    # map has no gap anywhere near the 3 Mb default.
+    "$BIN" --spectra "$SPEC" --salti --dist-type cm --map "$WORK/small.map" \
+        --max-extend-cm 0.2 --max-gap 100 --threads "$THREADS" --out "$WORK/gapsmall" \
+        > "$WORK/cm_max_gap.log" 2>&1
+    rc=$?
+    if [ "$rc" != 65 ] || ! grep -q "does not place" "$WORK/cm_max_gap.log"; then
+        fail cm_max_gap "--max-gap 100 should exit 65 with a 'does not place' error, got exit $rc"
+    elif run_lassip "$WORK/cm_max_gap0.log" --spectra "$SPEC" --salti --dist-type cm \
+            --map "$WORK/small.map" --max-extend-cm 0.2 --max-gap 0 --threads "$THREADS" \
+            --out "$WORK/gapnone"; then
+        compare_table cm_max_gap "$WORK/gapnone.lassip.hap.out.gz" salti_cm 1e-6 "$SALTI_TOL_COLS" "$SALTI_TOL_FRAC"
+    else fail cm_max_gap "--max-gap 0 run failed"; fi
 fi
 
 # ---------------------------------------------------------------- summary

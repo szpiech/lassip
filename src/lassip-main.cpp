@@ -59,6 +59,7 @@ struct Config
     double FILTER_LMISS;
     double FILTER_HMISS;
     int MATCH_TOL;
+    double MAX_GAP;
     double MAX_EXTEND_BP;
     double MAX_EXTEND_NW;
     double MAX_EXTEND_CM;
@@ -101,6 +102,7 @@ void registerFlags(param_t &params)
   params.addFlag(ARG_MATCH_TOL, DEFAULT_MATCH_TOL, "Filtering", HELP_MATCH_TOL);
   params.addFlag(ARG_SEED, DEFAULT_SEED, "General", HELP_SEED);
   params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "saltiLASSI", HELP_DIST_TYPE);
+  params.addFlag(ARG_MAX_GAP, DEFAULT_MAX_GAP, "saltiLASSI", HELP_MAX_GAP);
   params.addFlag(ARG_MAX_EXTEND_BP, DEFAULT_MAX_EXTEND_BP, "saltiLASSI", HELP_MAX_EXTEND_BP);
   params.addFlag(ARG_MAX_EXTEND_CM, DEFAULT_MAX_EXTEND_CM, "saltiLASSI", HELP_MAX_EXTEND_CM);
   params.addFlag(ARG_MAX_EXTEND_NW, DEFAULT_MAX_EXTEND_NW, "saltiLASSI", HELP_MAX_EXTEND_NW);
@@ -144,6 +146,7 @@ Config readConfig(param_t &params)
   double FILTER_HMISS = params.getDoubleFlag(ARG_FILTER_HMISS);
   int MATCH_TOL = params.getIntFlag(ARG_MATCH_TOL);
   //string DIST_TYPE = "bp";
+  double MAX_GAP = params.getDoubleFlag(ARG_MAX_GAP);
   double MAX_EXTEND_BP = params.getDoubleFlag(ARG_MAX_EXTEND_BP);
   double MAX_EXTEND_NW = params.getDoubleFlag(ARG_MAX_EXTEND_NW);
   double MAX_EXTEND_CM = params.getDoubleFlag(ARG_MAX_EXTEND_CM);
@@ -175,6 +178,7 @@ Config readConfig(param_t &params)
   cfg.FILTER_LMISS = FILTER_LMISS;
   cfg.FILTER_HMISS = FILTER_HMISS;
   cfg.MATCH_TOL = MATCH_TOL;
+  cfg.MAX_GAP = MAX_GAP;
   cfg.MAX_EXTEND_BP = MAX_EXTEND_BP;
   cfg.MAX_EXTEND_NW = MAX_EXTEND_NW;
   cfg.MAX_EXTEND_CM = MAX_EXTEND_CM;
@@ -194,7 +198,7 @@ void warnCrossStageFlags(const Config &cfg)
   if(INIT){
     const string stage2Only[] = {ARG_LASSI, ARG_SALTI, ARG_AVG_SPEC, ARG_NULL_SPEC,
                                  ARG_LASSI_CHOICE, ARG_MAX_EXTEND_BP, ARG_MAX_EXTEND_CM,
-                                 ARG_MAX_EXTEND_NW};  //--map already draws a hard error here
+                                 ARG_MAX_EXTEND_NW, ARG_MAX_GAP};  //--map already draws a hard error here
     for (unsigned int i = 0; i < sizeof(stage2Only)/sizeof(stage2Only[0]); i++){
       if(params.isFlagSet(stage2Only[i])){
         cerr << "WARNING: " << stage2Only[i] << " has no effect with --vcf; it applies to the --spectra stage.\n";
@@ -235,6 +239,7 @@ bool validate(const Config &cfg)
   const double FILTER_LMISS = cfg.FILTER_LMISS;
   const double FILTER_HMISS = cfg.FILTER_HMISS;
   const int MATCH_TOL = cfg.MATCH_TOL;
+  const double MAX_GAP = cfg.MAX_GAP;
   const double MAX_EXTEND_BP = cfg.MAX_EXTEND_BP;
   const double MAX_EXTEND_NW = cfg.MAX_EXTEND_NW;
   const double MAX_EXTEND_CM = cfg.MAX_EXTEND_CM;
@@ -358,6 +363,15 @@ bool validate(const Config &cfg)
       ERROR = true;
     }
 
+    if(MAX_GAP < 0){
+      cerr << "ERROR: --max-gap must be >= 0 (0 interpolates across any gap).\n";
+      ERROR = true;
+    }
+
+    if(params.isFlagSet(ARG_MAX_GAP) && DIST_TYPE.compare("cm") != 0){
+      cerr << "WARNING: --max-gap has no effect without --dist-type cm.\n";
+    }
+
     if(!MAP && DIST_TYPE.compare("cm") == 0){
       cerr << "ERROR: Must provide a map file when choosing --dist-type cm.\n";
       ERROR = true;
@@ -447,6 +461,7 @@ int runStatistics(const Config &cfg)
 {
   const int numThreads = cfg.numThreads;
   const string &mapFilename = cfg.mapFilename;
+  const double MAX_GAP = cfg.MAX_GAP;
   const string &outfileBase = cfg.outfileBase;
   const vector<string> &spectraFiles = cfg.spectraFiles;
   const bool LASSI = cfg.LASSI;
@@ -526,7 +541,7 @@ int runStatistics(const Config &cfg)
       }
       else if (DIST_TYPE.compare("cm") == 0){
         //load genetic map from file
-        GMapData geneticMap(mapFilename,3000000);
+        GMapData geneticMap(mapFilename,MAX_GAP);
         //populate specDataByPopByChr->chr->pop->dist[] with genetic distances 
         fillCMDistance(specDataByPopByChr,geneticMap);
       }

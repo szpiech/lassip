@@ -149,6 +149,14 @@ const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";
 const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, nw.";
 
+const string ARG_MAX_GAP = "--max-gap";
+const double DEFAULT_MAX_GAP = 3000000;
+const string HELP_MAX_GAP = "Widest gap in basepairs between two genetic map positions that\n\
+--dist-type cm will interpolate across. A window falling in a wider gap cannot be\n\
+placed and lassip stops rather than guess its genetic position. Real maps have\n\
+gaps at centromeres and other low-recombination regions, so raise this if your\n\
+map is sparse where your data are dense. Set 0 to interpolate across any gap.";
+
 const string ARG_MAX_EXTEND_BP = "--max-extend-bp";
 const double DEFAULT_MAX_EXTEND_BP = 100000;
 const string HELP_MAX_EXTEND_BP = "Maximum distance in basepairs from core window to consider for saltiLASSI.";

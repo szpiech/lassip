@@ -1403,7 +1403,8 @@ bool GMapData::getMapInfo(double queryPos, double &gPos, string &locName, string
         int endIndex = hi;
         current_index = startIndex;
 
-        if (physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP) return false;
+        //MAXGAP <= 0 means the user asked for no limit (--max-gap 0)
+        if (MAXGAP > 0 && physicalPos[c][endIndex] - physicalPos[c][startIndex] > MAXGAP) return false;
 
         gPos = this->interpolate(physicalPos[c][startIndex], geneticPos[c][startIndex],
                                  physicalPos[c][endIndex], geneticPos[c][endIndex],
@@ -1612,7 +1613,7 @@ void fillCMDistance(map<string, vector<SpectrumData *>* > *specDataByPopByChr, G
         cerr << "ERROR: the genetic map does not place " << unplaced << " window(s), the first at "
              << firstBadChr << ":" << firstBadPos << ".\n";
         cerr << "\tThe map must cover every contig in the spectra, and gaps wider than "
-             << geneticMap.maxGap() << " bp are not interpolated across.\n";
+             << geneticMap.maxGap() << " bp are not interpolated across (--max-gap).\n";
         throw 0;
     }
 
