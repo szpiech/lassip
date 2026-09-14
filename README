@@ -261,11 +261,16 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   ARCHFLAGS (empty by default, so builds work on arm64), and has a check
   target. tests/ holds a regression suite.
 
-  Note: example/YRI.chr22.lassip.hap.spectra.gz and .out.gz were produced by
-  v1.0.0 and predate the ppos column, so they no longer match what
-  example/do_lassip_YRI.bash writes. The script itself was also passing --lassi
-  to stage 1, where it does nothing, and so wrote .stats.gz rather than the
-  .spectra.gz its second line reads; that is fixed.
+  The example outputs are regenerated. example/YRI.chr22.lassip.hap.spectra.gz
+  dated from v1.0.0 and predated the ppos column; it is replaced by
+  example/YRI.chr22.YRI.lassip.hap.spectra.gz, which is what the script
+  actually writes -- at the default --filter-level 2 each population is
+  filtered separately and gets its own file, <out>.<pop>.lassip.hap.spectra.gz.
+  The script had two faults: it passed --lassi to stage 1, where it does
+  nothing, and without --calc-spec wrote .stats.gz; and its second command read
+  the population-free filename, so it silently consumed the stale 2020 file
+  rather than the one it had just produced. Both are fixed, and running
+  example/do_lassip_YRI.bash now reproduces the committed outputs.
 
 08AUG2025 - v1.2.2. Fixed more bugs under unusual use cases related to filtering monomorphic sites and missing data. Missing data filtering and monomorphic filtering is now done separately, and you will receive a message with the number of sites filtered for each reason. There is a new command line argument --keep-monomorphic, if you wish to skip the monomorphic filtering step.
 

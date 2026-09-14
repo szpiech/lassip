@@ -8,6 +8,8 @@ lassip --vcf YRI.chr22.vcf.gz --pop YRI.ids.pop.txt --calc-spec --hapstats \
        --k 10 --winsize 117 --winstep 12 --out YRI.chr22
 
 # Stage 2: the LASSI likelihood ratio, reading the spectra written above.
-# Pass every contig of a population in one command; --salti runs saltiLASSI
-# instead, and --threads parallelises over windows.
-lassip --spectra YRI.chr22.lassip.hap.spectra.gz --lassi --out YRI.chr22
+# At the default --filter-level 2 each population is filtered separately and
+# gets its own file, named <out>.<pop>.lassip.hap.spectra.gz -- hence the YRI
+# in the middle. Pass every contig of a population in one command; --salti
+# runs saltiLASSI instead, and --threads parallelises over windows.
+lassip --spectra YRI.chr22.YRI.lassip.hap.spectra.gz --lassi --out YRI.chr22
