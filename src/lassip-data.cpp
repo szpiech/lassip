@@ -1037,6 +1037,12 @@ void releaseMapData(MapData *data)
 */
 
 
+//Locate the byte holding a locus inside a block-list row.
+static inline unsigned char *cellPtr(vector<unsigned char*> &blocks, int locus){
+    int idx = locus >> 2;
+    return &blocks[idx / 16384][idx % 16384];
+}
+
 map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData, bool PHASED, bool SHARED_MAP){
     igzstream fin;
     cerr << "Opening " << filename << "...\n";
@@ -1047,27 +1053,15 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         throw 0;
     }
 
+    //Bytes per storage block while reading; a power of two so cellPtr divides
+    //with shifts. 16 KB holds 65,536 loci, so slack is at most 16 KB per row.
+    const int GT_BLOCK = 16384;
+
+    //The file is read once. Genotypes are appended to growable packed rows and
+    //the locus count is whatever the file turns out to hold; lassip used to
+    //decompress and scan the whole VCF a first time just to count records.
     int numMapCols = 9;
     string line;
-    int nloci = 0;
-    //int previous_nhaps = -1;
-    //int current_nhaps = 0;
-    while (getline(fin, line))
-    {
-        if (line[0] == '#') continue;
-        else nloci++;
-    }
-    fin.clear();
-    fin.close();
-
-    fin.open(filename.c_str());
-
-    if (fin.fail())
-    {
-        cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
-    }
-
     string junk;
     map<string,bool> checkInd;
     
@@ -1100,64 +1094,71 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     if(PHASED) nload *= 2;
     cerr << "Loading " << nload << "/" << nhaps << " ";
     if(PHASED) cerr << "phased";
-    else if (!PHASED) cerr << "unphased"; 
-    cerr << " haplotypes with " << nloci << " loci across " << popData->npops << " pops.\n";
+    else if (!PHASED) cerr << "unphased";
+    cerr << " haplotypes across " << popData->npops << " pops.\n";
 
     
-    MapData *mapData;
-    if(SHARED_MAP) mapData = initMapData(nloci);
-
+    //Per-haplotype packed rows that grow as records are read. Row pointers
+    //would go stale on reallocation, so columns are resolved to row indices
+    //and the population each belongs to.
     map<string,int> pop2indIndex;
-    map<string, HaplotypeData* > * dataByPop = new map<string, HaplotypeData* >;
+    map<string,int> pop2nhaps;
     for (int i = 0; i < popData->npops; i++){
         string popName = popData->popOrder[i];
-        if(PHASED) nhaps = (popData->pop2inds[popName].size()) * 2;
-        if(!PHASED) nhaps = (popData->pop2inds[popName].size());
-        if(SHARED_MAP){
-            dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,false);
-            dataByPop->at(popName)->map = mapData;
-        }
-        else{
-            dataByPop->operator[](popName) = initHaplotypeData(nhaps,nloci,true);
-        }
+        pop2nhaps[popName] = (popData->pop2inds[popName].size()) * (PHASED ? 2 : 1);
         pop2indIndex[popName] = 0;
     }
 
-    //HaplotypeData *data = initHaplotypeData(nhaps, nloci);
-
+    //Rows grow as fixed blocks rather than as std::vector: a vector doubling to
+    //hold n bytes peaks at 2n, and with one row per haplotype that overshoot is
+    //the whole genotype matrix again. Blocks are never copied or reallocated.
+    vector< vector<unsigned char*> > rows;
+    vector<string> rowPop;
+    vector<int> rowIndexInPop;
     //Resolve each VCF sample column to the rows it writes, once. The loop below
     //used to look up ind2pop (twice), pop2indIndex and dataByPop for every
     //genotype of every locus -- five red-black-tree lookups keyed on a string,
     //all of them determined by the column index alone.
-    unsigned char **row1 = new unsigned char*[nfields];
-    unsigned char **row2 = new unsigned char*[nfields];
+    int *row1 = new int[nfields];
+    int *row2 = new int[nfields];
     for (int field = 0; field < nfields; field++){
-        row1[field] = NULL;
-        row2[field] = NULL;
+        row1[field] = -1;
+        row2[field] = -1;
         if (popData->ind2pop.count(inds[field]) == 0) continue;
         string p = popData->ind2pop[inds[field]];
         int f = pop2indIndex[p]++;
-        HaplotypeData *hd = dataByPop->at(p);
+        row1[field] = rows.size();
+        rows.push_back(vector<unsigned char*>());
+        rowPop.push_back(p);
+        rowIndexInPop.push_back(PHASED ? 2*f : f);
         if (PHASED){
-            row1[field] = hd->data[2*f];
-            row2[field] = hd->data[2*f + 1];
-        }
-        else{
-            row1[field] = hd->data[f];
+            row2[field] = rows.size();
+            rows.push_back(vector<unsigned char*>());
+            rowPop.push_back(p);
+            rowIndexInPop.push_back(2*f + 1);
         }
     }
 
-    MapData **popMaps = new MapData*[popData->npops];
-    for (int i = 0; i < popData->npops; i++) popMaps[i] = dataByPop->at(popData->popOrder[i])->map;
+    //deque, not vector: a vector doubling to hold one entry per locus copies
+    //and briefly holds two arrays of every locus name
+    deque<string> locusNames;
+    deque<unsigned int> physicalPos;
+    string contig;
 
     string chr, name;
     unsigned int pos;
 
-    for (int locus = 0; locus < nloci; locus++)
+    int nloci = 0;
+    for (; getline(fin, line); nloci++)
     {
-        if(!getline(fin, line)){
-            cerr << "ERROR: " << filename << " ended after " << locus << " of " << nloci << " loci.\n";
-            throw 0;
+        if (line.size() == 0 || line[0] == '#'){ nloci--; continue; }
+        int locus = nloci;
+        //every fourth locus opens a new byte, and every GT_BLOCK bytes a new block
+        if ((locus & 3) == 0 && (((locus >> 2) & (GT_BLOCK - 1)) == 0)){
+            for (unsigned int r = 0; r < rows.size(); r++){
+                rows[r].push_back(new unsigned char[GT_BLOCK]);
+                memset(rows[r].back(), 0xFF, GT_BLOCK);
+            }
         }
         const char *c = line.c_str();
         const char *lineEnd = c + line.size();
@@ -1181,30 +1182,15 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
             while (c < lineEnd && *c != '\t' && *c != ' ') c++;
         }
 
-        if(SHARED_MAP){
-            if (locus == 0) mapData->chr = chr;
-            else if (chr != mapData->chr){
-                cerr << "ERROR: " << filename << " contains more than one chromosome ("
-                     << mapData->chr << " and " << chr << " at " << name
-                     << "). lassip expects one contig per file.\n";
-                throw 0;
-            }
-            mapData->locusName[locus] = name;
-            mapData->physicalPos[locus] = pos;
+        if (locus == 0) contig = chr;
+        else if (chr != contig){
+            cerr << "ERROR: " << filename << " contains more than one chromosome ("
+                 << contig << " and " << chr << " at " << name
+                 << "). lassip expects one contig per file.\n";
+            throw 0;
         }
-        else{
-            for (int i = 0; i < popData->npops; i++){
-                if (locus == 0) popMaps[i]->chr = chr;
-                else if (chr != popMaps[i]->chr){
-                    cerr << "ERROR: " << filename << " contains more than one chromosome ("
-                         << popMaps[i]->chr << " and " << chr << " at " << name
-                         << "). lassip expects one contig per file.\n";
-                    throw 0;
-                }
-                popMaps[i]->locusName[locus] = name;
-                popMaps[i]->physicalPos[locus] = pos;
-            }
-        }
+        locusNames.push_back(name);
+        physicalPos.push_back(pos);
 
         for (int field = 0; field < nfields; field++)
         {
@@ -1217,7 +1203,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                      << chr << ":" << pos << ".\n";
                 throw 0;
             }
-            if (row1[field] == NULL) continue;
+            if (row1[field] < 0) continue;
 
             char allele1, allele2;
             if (gtlen == 1 && gt[0] == VCF_MISSING){
@@ -1238,8 +1224,8 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
             }
 
             if(PHASED){
-                setGT(row1[field], locus, (allele1 == VCF_MISSING) ? GT_MISS : gtCode(allele1));
-                setGT(row2[field], locus, (allele2 == VCF_MISSING) ? GT_MISS : gtCode(allele2));
+                setGTInByte(cellPtr(rows[row1[field]], locus), locus, (allele1 == VCF_MISSING) ? GT_MISS : gtCode(allele1));
+                setGTInByte(cellPtr(rows[row2[field]], locus), locus, (allele2 == VCF_MISSING) ? GT_MISS : gtCode(allele2));
             }
             else{
                 unsigned char code;
@@ -1247,16 +1233,64 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                 else if (allele1 == '1' && allele2 == '1') code = GT_2;
                 else if (allele1 == '0' && allele2 == '0') code = GT_0;
                 else code = GT_1;
-                setGT(row1[field], locus, code);
+                setGTInByte(cellPtr(rows[row1[field]], locus), locus, code);
             }
         }
     }
 
     delete [] row1;
     delete [] row2;
-    delete [] popMaps;
-
     fin.close();
+
+    if (nloci < 1){
+        cerr << "ERROR: " << filename << " contains no variant records.\n";
+        throw 0;
+    }
+    cerr << "Read " << nloci << " loci from " << contig << ".\n";
+
+    MapData *mapData = NULL;
+    if(SHARED_MAP) mapData = initMapData(nloci);
+
+    map<string, HaplotypeData* > *dataByPop = new map<string, HaplotypeData* >;
+    for (int i = 0; i < popData->npops; i++){
+        string popName = popData->popOrder[i];
+        HaplotypeData *hd = initHaplotypeData(pop2nhaps[popName], nloci, !SHARED_MAP, false);
+        if(SHARED_MAP) hd->map = mapData;
+        dataByPop->operator[](popName) = hd;
+    }
+
+    //Hand each grown row to its population and free it immediately, so the
+    //growable copy and the final matrix never both hold the whole dataset.
+    int stride = gtStride(nloci);
+    for (unsigned int r = 0; r < rows.size(); r++){
+        HaplotypeData *hd = dataByPop->at(rowPop[r]);
+        unsigned char *dst = new unsigned char[stride + 1];
+        memset(dst, 0xFF, stride + 1);
+        hd->data[rowIndexInPop[r]] = dst;
+        for (unsigned int b = 0; b < rows[r].size(); b++){
+            int off = b * GT_BLOCK;
+            int n = (stride - off < GT_BLOCK) ? stride - off : GT_BLOCK;
+            if (n > 0) memcpy(dst + off, rows[r][b], n);
+            delete [] rows[r][b];
+        }
+        dst[stride] = 0xFF;
+        vector<unsigned char*>().swap(rows[r]);
+    }
+
+    for (int i = 0; i < popData->npops; i++){
+        MapData *md = dataByPop->at(popData->popOrder[i])->map;
+        if (md->nloci != nloci) continue;
+        md->chr = contig;
+        for (int l = 0; l < nloci; l++){
+            //the last map to be filled can take the names rather than copy them
+            if (SHARED_MAP || i + 1 == popData->npops) md->locusName[l].swap(locusNames[l]);
+            else md->locusName[l] = locusNames[l];
+            md->physicalPos[l] = physicalPos[l];
+        }
+        if (SHARED_MAP) break;
+    }
+    deque<string>().swap(locusNames);
+    deque<unsigned int>().swap(physicalPos);
 
     return dataByPop;
 }
@@ -1266,6 +1300,11 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
 /*
 */
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap)
+{
+    return initHaplotypeData(nhaps, nloci, domap, true);
+}
+
+HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap, bool allocRows)
 {
     if (nhaps < 1 || nloci < 1)
     {
@@ -1279,11 +1318,16 @@ HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool do
 
     data->stride = gtStride(nloci);
     data->data = new unsigned char *[nhaps];
-    for (unsigned int i = 0; i < nhaps; i++)
-    {
-        //one padding byte so extractWindow can read one byte past the last
-        data->data[i] = new unsigned char[data->stride + 1];
-        for (int j = 0; j <= data->stride; j++) data->data[i][j] = 0xFF;  //all missing
+    for (unsigned int i = 0; i < nhaps; i++) data->data[i] = NULL;
+    //allocRows false lets the caller fill rows one at a time and free its own
+    //storage as it goes, so the two copies never coexist
+    if (allocRows){
+        for (unsigned int i = 0; i < nhaps; i++)
+        {
+            //one padding byte so extractWindow can read one byte past the last
+            data->data[i] = new unsigned char[data->stride + 1];
+            for (int j = 0; j <= data->stride; j++) data->data[i][j] = 0xFF;  //all missing
+        }
     }
 
     if (domap) data->map = initMapData(nloci);
@@ -1297,7 +1341,7 @@ void releaseHapData(HaplotypeData *data)
     if (data == NULL) return;
     for (int i = 0; i < data->nhaps; i++)
     {
-        delete [] data->data[i];
+        if (data->data[i] != NULL) delete [] data->data[i];
     }
 
     delete [] data->data;

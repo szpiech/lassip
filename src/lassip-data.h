@@ -24,6 +24,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <deque>
 #include "gzstream.h"
 #include <map>
 #include <cstdio>
@@ -110,6 +111,13 @@ inline unsigned char getGT(const unsigned char *row, int locus){
 inline void setGT(unsigned char *row, int locus, unsigned char code){
   int shift = (locus & 3) << 1;
   row[locus >> 2] = (unsigned char)((row[locus >> 2] & ~(3u << shift)) | ((unsigned int)code << shift));
+}
+
+//Set a genotype given a pointer to the byte that holds it (used while reading,
+//where rows are block lists rather than one contiguous array).
+inline void setGTInByte(unsigned char *byte, int locus, unsigned char code){
+  int shift = (locus & 3) << 1;
+  *byte = (unsigned char)((*byte & ~(3u << shift)) | ((unsigned int)code << shift));
 }
 
 //Copy haplen genotypes starting at locus `start` into `out`, itself packed two
@@ -264,6 +272,7 @@ void releaseMapData(MapData *data);
 
 //allocates the 2-d array and populated it with -9
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap = true);
+HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap, bool allocRows);
 void releaseHapData(HaplotypeData *data);
 
 //reads haplotype data from a VCF, splitting samples into the populations named
