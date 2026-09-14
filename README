@@ -189,6 +189,13 @@ the same class as a haplotype with no missing data if they have <= this many pai
 --dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
 	Default: bp
 
+--max-gap <double>: Widest gap in basepairs between two genetic map positions that
+--dist-type cm will interpolate across. A window falling in a wider gap cannot be
+placed and lassip stops rather than guess its genetic position. Real maps have
+gaps at centromeres and other low-recombination regions, so raise this if your
+map is sparse where your data are dense. Set 0 to interpolate across any gap.
+	Default: 3000000.00
+
 --max-extend-bp <double>: Maximum distance in basepairs from core window to consider for saltiLASSI.
 	Default: 100000.00
 
@@ -272,7 +279,9 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   that return value and writing the previous window's genetic position instead:
   with a map holding a 6 Mb hole, 3,951 windows of the YRI example came out
   sharing two genetic positions. Unplaced windows are now counted and reported,
-  and the run stops.
+  and the run stops. The gap threshold itself, previously hardcoded at 3 Mb,
+  is now --max-gap: raise it for a map that is sparse where the data are
+  dense, or set 0 to interpolate across any gap.
 
   Bug fixes. The null-spectrum check at the --spectra stage used the K from the
   command line rather than from the spectra file, so its threshold was wrong

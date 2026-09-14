@@ -66,6 +66,8 @@ revised this file.
 | `2a3a5db` | docs: record the structural work |
 | `9af93b2` | docs: list every commit in the branch summary table |
 | `f041c2f` | GMapData: bracket by binary search, and stop ignoring the placement failure |
+| `2c741e8` | docs: record the genetic-map fixes |
+| `70c1c7b` | add --max-gap to control how far --dist-type cm interpolates |
 
 ## Behavioural differences
 
@@ -109,7 +111,9 @@ changed.
    `--dist-type cm` wrote the previous window's genetic position for any
    window in a map gap (3,951 windows sharing two positions in a test with a
    6 Mb hole) and segfaulted outright when the map named a contig the spectra
-   do not use. Both now exit 65 naming the count and the first position.
+   do not use. Both now exit 65 naming the count and the first position. The
+   gap threshold, hardcoded at 3 Mb, is now `--max-gap` (same default; 0
+   interpolates across any gap).
 10. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
    property of the input, like the `checkNull` failure beside it.
 11. **`--match-tol` groups at `<=` the given number of differences**, as its
