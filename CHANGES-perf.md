@@ -70,6 +70,8 @@ revised this file.
 | `70c1c7b` | add --max-gap to control how far --dist-type cm interpolates |
 | `aaeecfa` | docs: record --max-gap |
 | `1f8a38e` | add --hap-cluster: best-comp (new default), garud-shuffle, soft-em |
+| `cbb058b` | docs: list the --hap-cluster commit in the branch summary |
+| `59723c1` | portability: include <cstring>, use fabs, initialise MAX_EXTEND |
 
 ## Behavioural differences
 
@@ -129,6 +131,22 @@ changed.
 12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
+
+## Portability
+
+`59723c1` fixes a build break on Linux/libstdc++: `lassip-data.cpp` used
+`memset`/`memcpy` without `<cstring>`, which libc++ supplies transitively and
+libstdc++ does not. Introduced by `03e8d51` on this branch. The same commit
+hardens two things that predate the branch and are latent rather than fatal:
+four unqualified `abs()` calls on doubles became `fabs()` (an integer overload
+would truncate `--dist-type cm` distances silently), and `MAX_EXTEND` in
+`lassip-wintools.cpp` is now initialised with an explicit else rather than left
+indeterminate if `--dist-type` ever admits a fourth value.
+
+The tree compiles under GCC 16 with `-Wall -Wextra` as well as clang; the two
+latent items were found by GCC's diagnostics. Remaining warnings are
+pre-existing unused parameters (`PHASED` in `filterHaplotypeData`, `DIST_TYPE`
+in `initResults`, `len` in the three clustering routines).
 
 ## Left for you to decide
 
