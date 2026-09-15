@@ -80,6 +80,8 @@ revised this file.
 | `fc3cf8b` | linux v1.3.0 |
 | `4eb0255` | macos-arm v1.3.0 |
 | `d6f8942` | tests: cover --unphased with missing genotypes, and stage 2 from .mlg spectra |
+| `9d7d080` | docs: record the unphased coverage work |
+| `8355dd8` | tests: make the phased/unphased coverage matrix symmetric |
 
 ## Behavioural differences
 
@@ -156,11 +158,38 @@ the `.mlg` path), `cluster_unphased` (default rule, `--seed` invariance, and
 count conservation across all three rules) and `salti_unphased` (stage 2 from
 a `#phased 0` spectra file). Suite is 28 checks.
 
-Against the v1.2.2 binary the two missing-data cases fail, since
-`--hap-cluster` does not exist there, so they pin genuinely new behaviour.
-`salti_unphased` passes against it, and should: it uses only flags v1.2.2 has,
-and its input spectra are byte-identical between the two builds. It closes a
-coverage gap rather than pinning a change.
+`8355dd8` then filled the rest of the unphased row, so the matrix is
+symmetric: every combination of {1,2} populations x {clean, missing} x
+{stage 1, stage 2} x {filter 0,1,2} tested for phased data is now tested for
+unphased too, and vice versa -- `cluster_twopop` had to be added because the
+unphased row reached a combination (two populations with missing genotypes)
+that the phased row never had.
+
+| combination | phased | unphased |
+|---|---|---|
+| 1 pop, clean, stage 1, filter 0 | yes | yes |
+| 1 pop, clean, stage 1, filter 2 | yes | yes |
+| 1 pop, clean, stage 2, filter 2 | yes | yes |
+| 1 pop, missing, stage 1, filter 2 | yes | yes |
+| 2 pop, clean, stage 1, filter 1 | yes | yes |
+| 2 pop, clean, stage 1, filter 2 | yes | yes |
+| 2 pop, missing, stage 1, filter 2 | yes | yes |
+
+33 cases, 39 checks; 22 phased, 11 unphased. The useful result: all nine
+checks of the clean unphased cases pass against the v1.2.2 binary, so
+`--unphased` output is byte-identical to 1.2.2 at every filter level, for one
+and two populations, and through `--lassi`, `--avg-spec`, `--null-spec` and
+`--salti`. That is what validates the packed genotype representation, the
+single-pass reader and the single-pass filter on the `{0,1,2,-}` path.
+
+Against the v1.2.2 binary the four missing-data cluster cases fail --
+`spec_unphased_missing`, `cluster_unphased`, `cluster_unphased_twopop` and
+`cluster_twopop` -- since `--hap-cluster` does not exist there, so they pin
+genuinely new behaviour. Every clean case passes against it, including
+`salti_unphased`, `lassi_unphased`, `avg_spec_unphased` and
+`lassi_nullspec_unphased`: they use only flags v1.2.2 has, and their input
+spectra are byte-identical between the two builds. Those close coverage gaps
+rather than pinning changes.
 
 The exercise also produced a result worth knowing: the `--hap-cluster` choice
 matters much less for unphased data. Same VCF, same window, `--match-tol 0` --
