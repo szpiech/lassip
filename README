@@ -177,6 +177,21 @@ with missing data: 0-no filtering, 1-compute freq for all samples, 2-compute fre
 --max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
 	Default: 0.20
 
+--hap-cluster <string>: How haplotypes carrying missing genotypes are grouped into
+classes. Missing sites act as wildcards, so such a haplotype can be compatible with
+several distinct haplotypes and something has to choose. One of:
+  best-comp      (default) each haplotype joins the most frequent class it is
+                 compatible with, taking the best-observed haplotypes first.
+                 Deterministic; --seed has no effect on it.
+  garud-shuffle  the pre-1.3 behaviour: shuffle the haplotypes, then let each in
+                 turn absorb every compatible one not yet claimed. The result
+                 depends on the shuffle, so runs differ unless --seed is fixed.
+  soft-em        EXPERIMENTAL. Divide an ambiguous haplotype's count across the
+                 classes it could belong to in proportion to their frequencies,
+                 iterated to convergence. Class sizes become fractional.
+Without missing genotypes and at --match-tol 0 all three give the same classes.
+	Default: best-comp
+
 --match-tol <int>: Group haplotypes with missing data into
 the same class as a haplotype with no missing data if they have <= this many pairwise differences.
 	Default: 0
@@ -270,6 +285,32 @@ UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
   flags unpacked once into a Config struct. Stage-1 results were seven
   map<string,T*> keyed by population name, looked up by name inside the window
   loops; they are now fields of one struct per population, held in a vector.
+
+  Haplotype clustering is selectable, and the default changed. When a
+  haplotype has missing genotypes it can be compatible with several distinct
+  haplotypes -- missing sites act as wildcards -- and something has to decide
+  which class it joins. That decision used to be made by shuffling the
+  haplotypes and letting each in turn absorb whatever it reached first, so the
+  spectrum depended on the shuffle: on one window of the test data with 5% of
+  genotypes missing, 120 runs differing only in --seed gave H12 between 0.066
+  and 0.100 at --match-tol 0, and between 0.132 and 0.390 at --match-tol 1.
+
+  --hap-cluster now selects the rule:
+
+    best-comp      (default) each haplotype joins the most frequent class it is
+                   compatible with, taking the best-observed haplotypes first.
+                   Deterministic, and in simulation the most accurate of the
+                   hard-assignment rules at every missing rate above 1%.
+    garud-shuffle  the pre-1.3 behaviour, for reproducing earlier output.
+    soft-em        EXPERIMENTAL. Splits an ambiguous haplotype's count across
+                   the classes it could belong to in proportion to their
+                   frequencies. Class sizes become fractional.
+
+  Without missing genotypes and at --match-tol 0 all three produce identical
+  output, so runs on complete data are unaffected. On chr22 of the example with
+  2% of genotypes blanked, best-comp is also 9x faster than garud-shuffle
+  (11.4 s vs 107.8 s at one thread), because it compares each haplotype against
+  the existing classes rather than against every other haplotype.
 
   Genetic map handling. On the --dist-type cm path, getMapInfo could
   interpolate between two uninitialised indices when its forward scan found no

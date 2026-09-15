@@ -16,6 +16,7 @@
    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 */
 #include "lassip-winstats.h"
+#include "lassip-cli.h"  //--hap-cluster values
 #include <algorithm> //shuffle
 #include <random>       // std::default_random_engine
 #include <chrono>       // std::chrono::system_clock
@@ -101,7 +102,7 @@ void calcQ(double *q, SpectrumData *avgSpec, double **f, double U, int m, double
 }
 double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
    double tot = hfs->size;
-   int *c = hfs->sortedCount;
+   const double *c = hfs->sortedCount;
    if(PHASED){
       if(hfs->numClasses == 1){
          return (double(c[0])/tot)*(double(c[0])/tot);
@@ -140,7 +141,7 @@ double calcH12(HaplotypeFrequencySpectrum *hfs, bool PHASED){
 }
 
 double calcH2H1(HaplotypeFrequencySpectrum *hfs){
-   int *c = hfs->sortedCount;
+   const double *c = hfs->sortedCount;
    double tot = hfs->size;
    double first = (double(c[0])/tot)*(double(c[0])/tot);
    double res = first;
@@ -530,7 +531,175 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
 
 
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED) {
+int clusterMethodCode(const string &name){
+   if (name.compare(HAP_CLUSTER_GARUD) == 0) return CLUSTER_GARUD_SHUFFLE;
+   if (name.compare(HAP_CLUSTER_BESTCOMP) == 0) return CLUSTER_BEST_COMP;
+   if (name.compare(HAP_CLUSTER_SOFTEM) == 0) return CLUSTER_SOFT_EM;
+   return -1;
+}
+
+//Number of sites actually called in a window's haplotype.
+static int nObservedSites(const string &hap){
+   int n = 0;
+   for (size_t i = 0; i < hap.length(); i++) if (hap[i] != MISSING_ALLELE) n++;
+   return n;
+}
+
+//Deterministic processing order for the rules below: most sites observed first,
+//then most frequent, then the haplotype itself. Information before
+//arbitrariness -- the best-observed haplotypes establish the classes before the
+//ambiguous ones are placed, and the order is a function of the data alone, so
+//no seed is involved.
+static void clusterOrder(const map<string,double> &combined, vector<string> &order){
+   vector< pair< pair<int,double>, string > > keyed;
+   keyed.reserve(combined.size());
+   for (map<string,double>::const_iterator it = combined.begin(); it != combined.end(); it++)
+      keyed.push_back(make_pair(make_pair(-nObservedSites(it->first), -it->second), it->first));
+   sort(keyed.begin(), keyed.end());
+   order.clear();
+   order.reserve(keyed.size());
+   for (size_t i = 0; i < keyed.size(); i++) order.push_back(keyed[i].second);
+   return;
+}
+
+static void combineCounts(const map<string,double> &hap2count, const map<string,double> &miss_hap2count,
+                          map<string,double> &combined){
+   combined = hap2count;
+   for (map<string,double>::const_iterator it = miss_hap2count.begin(); it != miss_hap2count.end(); it++)
+      combined[it->first] = it->second;
+   return;
+}
+
+//--hap-cluster best-comp. Each haplotype, in the deterministic order above,
+//joins the MOST FREQUENT class it is compatible with rather than whichever one
+//reaches it first, and only ever joins an existing class -- two class
+//representatives are never merged with each other, so nothing chains
+//transitively through a partial observation. Needs no fully observed haplotype
+//to anchor on, which matters because in a long window at even a few percent
+//missing there may not be one.
+void match_haps_best_compatible(map<string,double> &hap2count, map<string,double> &miss_hap2count,
+                                int len, int MATCH_TOL){
+   map<string,double> combined;
+   combineCounts(hap2count, miss_hap2count, combined);
+
+   vector<string> order;
+   clusterOrder(combined, order);
+
+   vector<string> rep;      //class representative, filled in as the class absorbs
+   vector<double> cnt;
+   string merged;
+
+   for (size_t i = 0; i < order.size(); i++){
+      const string &hap = order[i];
+      int best = -1;
+      for (size_t j = 0; j < rep.size(); j++){
+         if (garud_ndiff_str(rep[j], hap, merged, MATCH_TOL) <= MATCH_TOL){
+            //ties broken on the representative, so the choice never depends on
+            //the order the classes happen to sit in
+            if (best < 0 || cnt[j] > cnt[best] ||
+                (cnt[j] == cnt[best] && rep[j].compare(rep[best]) < 0)) best = (int)j;
+         }
+      }
+      if (best < 0){
+         rep.push_back(hap);
+         cnt.push_back(combined[hap]);
+         continue;
+      }
+      //when the two agree at every jointly observed site, the class label takes
+      //on the sites the newcomer fills in
+      if (garud_ndiff_str(rep[best], hap, merged, MATCH_TOL) == 0) rep[best] = merged;
+      cnt[best] += combined[hap];
+   }
+
+   hap2count.clear();
+   for (size_t j = 0; j < rep.size(); j++) hap2count[rep[j]] += cnt[j];
+   return;
+}
+
+//--hap-cluster soft-em (EXPERIMENTAL). Rather than commit an ambiguous
+//haplotype to one class, divide its count across every class it could have come
+//from, in proportion to how common those classes are, and iterate until the
+//frequencies stop moving. This is EM for the spectrum when genotypes are
+//missing at random: for observation i with count c_i and compatible classes
+//C(i), the E step is w_it = pi_t / sum_{t' in C(i)} pi_t' and the M step is
+//pi_t = sum_i c_i w_it.
+//
+//The classes are the filled-in representatives from the deterministic pass, not
+//the raw observed patterns. Letting a partly observed pattern be its own class
+//collapses the estimate: such a pattern is compatible with the most
+//observations, so the likelihood is maximised by putting all the mass on it.
+//
+//Class sizes come out fractional, which is why HaplotypeFrequencySpectrum
+//stores doubles.
+void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_hap2count,
+                        int len, int MATCH_TOL){
+   map<string,double> combined;
+   combineCounts(hap2count, miss_hap2count, combined);
+
+   map<string,double> seedHap = hap2count, seedMiss = miss_hap2count;
+   match_haps_best_compatible(seedHap, seedMiss, len, MATCH_TOL);
+
+   vector<string> types;
+   vector<double> weight;
+   for (map<string,double>::iterator it = seedHap.begin(); it != seedHap.end(); it++){
+      types.push_back(it->first);
+      weight.push_back(it->second);
+   }
+
+   vector<string> obs;
+   vector<double> obsCount;
+   for (map<string,double>::iterator it = combined.begin(); it != combined.end(); it++){
+      obs.push_back(it->first);
+      obsCount.push_back(it->second);
+   }
+
+   vector< vector<int> > compat(obs.size());
+   string merged;
+   double total = 0;
+   for (size_t i = 0; i < obs.size(); i++){
+      total += obsCount[i];
+      for (size_t j = 0; j < types.size(); j++){
+         if (garud_ndiff_str(types[j], obs[i], merged, MATCH_TOL) <= MATCH_TOL)
+            compat[i].push_back((int)j);
+      }
+   }
+
+   const int MAXIT = 200;
+   const double EPS = 1e-12;
+   vector<double> next(types.size(), 0.0);
+   for (int iter = 0; iter < MAXIT; iter++){
+      for (size_t j = 0; j < next.size(); j++) next[j] = 0;
+      for (size_t i = 0; i < obs.size(); i++){
+         if (compat[i].size() == 0) continue;
+         double z = 0;
+         for (size_t k = 0; k < compat[i].size(); k++) z += weight[compat[i][k]];
+         if (z <= 0){
+            double share = obsCount[i]/double(compat[i].size());
+            for (size_t k = 0; k < compat[i].size(); k++) next[compat[i][k]] += share;
+         }
+         else{
+            for (size_t k = 0; k < compat[i].size(); k++)
+               next[compat[i][k]] += obsCount[i]*weight[compat[i][k]]/z;
+         }
+      }
+      double moved = 0;
+      for (size_t j = 0; j < next.size(); j++) moved += fabs(next[j] - weight[j]);
+      weight = next;
+      if (moved < EPS*total) break;
+   }
+
+   hap2count.clear();
+   for (size_t j = 0; j < types.size(); j++)
+      if (weight[j] > 0) hap2count[types[j]] += weight[j];
+   //A haplotype can end up compatible with no class: the class it was placed in
+   //may have had sites filled in afterwards that it disagrees with. It keeps its
+   //own class, so no count is lost.
+   for (size_t i = 0; i < obs.size(); i++)
+      if (compat[i].size() == 0) hap2count[obs[i]] += obsCount[i];
+   return;
+}
+
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED, int CLUSTER) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
@@ -568,14 +737,14 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       }
       if (counts.size() == 0) return NULL;
 
-      int *sortedCount = new int[counts.size()];
+      double *sortedCount = new double[counts.size()];
       hfs->numClasses = counts.size();
       int i = 0;
       for (unordered_map<string,double>::iterator it = counts.begin(); it != counts.end(); it++, i++) {
          sortedCount[i] = it->second;
          hfs->size += it->second;
       }
-      qsort(sortedCount, hfs->numClasses, sizeof(int), compare);
+      qsort(sortedCount, hfs->numClasses, sizeof(double), compare);
       hfs->sortedCount = sortedCount;
       return hfs;
    }
@@ -594,12 +763,17 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       else miss_hap2count[haplotype]++;
    }
 
-   garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
-                                      windowSeed(SEED, snpIndex->start, snpIndex->end));
+   if (CLUSTER == CLUSTER_GARUD_SHUFFLE)
+      garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
+                                         windowSeed(SEED, snpIndex->start, snpIndex->end));
+   else if (CLUSTER == CLUSTER_SOFT_EM)
+      match_haps_soft_em(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+   else
+      match_haps_best_compatible(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
 
    if(hfs->hap2count.size() == 0) return NULL;
 
-   int *sortedCount = new int[hfs->hap2count.size()];
+   double *sortedCount = new double[hfs->hap2count.size()];
    hfs->numClasses = hfs->hap2count.size();
    map<string, double>::iterator it;
    int i = 0;
@@ -608,16 +782,20 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
       hfs->size += it->second;
    }
 
-   qsort(sortedCount, hfs->hap2count.size(), sizeof(int), compare);
+   qsort(sortedCount, hfs->hap2count.size(), sizeof(double), compare);
    hfs->sortedCount = sortedCount;
 
    return hfs;
 }
 
 
+//Descending, for qsort over the class sizes.
 int compare (const void *a, const void *b)
 {
-   return ( *(int *)b - * (int *)a );
+   double x = *(const double *)a, y = *(const double *)b;
+   if (y > x) return 1;
+   if (y < x) return -1;
+   return 0;
 }
 
 int numSitesInDataWin(pair_t* win) {

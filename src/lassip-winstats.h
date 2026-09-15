@@ -49,7 +49,16 @@ double calcLASSINullLikelihood(SpectrumData *specData,SpectrumData *avgSpec,int 
 double calcLASSIAltLikelihood(SpectrumData *specData, SpectrumData *avgSpec, double **f, double U, int m, double e, int w);
 
 unsigned int windowSeed(int seed, int start, int end);
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED);
+
+//--hap-cluster methods; clusterMethodCode maps the flag value to one of these
+//and returns -1 for anything else.
+const int CLUSTER_GARUD_SHUFFLE = 0;
+const int CLUSTER_BEST_COMP = 1;
+const int CLUSTER_SOFT_EM = 2;
+int clusterMethodCode(const string &name);
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED, int CLUSTER);
+void match_haps_best_compatible(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL);
+void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL);
 void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed);
 int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL);
 int numSitesInDataWin(pair_t* win);

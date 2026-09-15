@@ -107,25 +107,35 @@ changed.
    data, 70 for an unexpected exception; `--help` and `--version` exit 0. An
    error raised inside a reader previously escaped `main` and aborted the
    process.
-9. **A genetic map that cannot place a window is an error.** Previously
+9. **Haplotype clustering is selectable and the default changed** to
+   `--hap-cluster best-comp`. `garud-shuffle` reproduces the old behaviour;
+   `soft-em` is experimental and makes class sizes fractional. Output on data
+   without missing genotypes is unchanged at `--match-tol 0` (verified
+   md5-identical across all three on the chr22 example), and the two
+   missing-data regression goldens are pinned to `garud-shuffle` so the old
+   path stays covered. On chr22 with 2% of genotypes blanked, `best-comp` runs
+   in 11.4 s against `garud-shuffle`'s 107.8 s at one thread.
+10. **A genetic map that cannot place a window is an error.** Previously
    `--dist-type cm` wrote the previous window's genetic position for any
    window in a map gap (3,951 windows sharing two positions in a test with a
    6 Mb hole) and segfaulted outright when the map named a contig the spectra
    do not use. Both now exit 65 naming the count and the first position. The
    gap threshold, hardcoded at 3 Mb, is now `--max-gap` (same default; 0
    interpolates across any gap).
-10. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
+11. **A null spectrum too flat to grid-search exits 65, not 64.** It is a
    property of the input, like the `checkNull` failure beside it.
-11. **`--match-tol` groups at `<=` the given number of differences**, as its
+12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
 
 ## Left for you to decide
 
-- **Order-dependence of haplotype clustering.** `--seed` makes the order
-  reproducible; it does not remove the dependence. Merging into the *most
-  frequent* compatible haplotype, or union-find over the ≤tol graph, would
-  remove the arbitrariness, but both change the method.
+- **Whether `soft-em` should stop being experimental.** It is the most accurate
+  rule tested at high missingness and the best behaved for H12, but class sizes
+  come out fractional, which changes what a spectrum is throughout the code
+  (`HaplotypeFrequencySpectrum::sortedCount` is now `double`, so the machinery
+  allows it, but the null-spectrum averaging and the K truncation were designed
+  around counts).
 
 Resolved since the first version of this file:
 

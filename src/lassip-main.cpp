@@ -59,6 +59,7 @@ struct Config
     double FILTER_LMISS;
     double FILTER_HMISS;
     int MATCH_TOL;
+    string HAP_CLUSTER;
     double MAX_GAP;
     double MAX_EXTEND_BP;
     double MAX_EXTEND_NW;
@@ -99,6 +100,7 @@ void registerFlags(param_t &params)
   params.addFlag(ARG_FILTER_LEVEL, DEFAULT_FILTER_LEVEL, "Filtering", HELP_FILTER_LEVEL);
   params.addFlag(ARG_FILTER_LMISS, DEFAULT_FILTER_LMISS, "Filtering", HELP_FILTER_LMISS);
   params.addFlag(ARG_FILTER_HMISS, DEFAULT_FILTER_HMISS, "Filtering", HELP_FILTER_HMISS);
+  params.addFlag(ARG_HAP_CLUSTER, DEFAULT_HAP_CLUSTER, "Filtering", HELP_HAP_CLUSTER);
   params.addFlag(ARG_MATCH_TOL, DEFAULT_MATCH_TOL, "Filtering", HELP_MATCH_TOL);
   params.addFlag(ARG_SEED, DEFAULT_SEED, "General", HELP_SEED);
   params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "saltiLASSI", HELP_DIST_TYPE);
@@ -145,6 +147,7 @@ Config readConfig(param_t &params)
   double FILTER_LMISS = params.getDoubleFlag(ARG_FILTER_LMISS);
   double FILTER_HMISS = params.getDoubleFlag(ARG_FILTER_HMISS);
   int MATCH_TOL = params.getIntFlag(ARG_MATCH_TOL);
+  string HAP_CLUSTER = params.getStringFlag(ARG_HAP_CLUSTER);
   //string DIST_TYPE = "bp";
   double MAX_GAP = params.getDoubleFlag(ARG_MAX_GAP);
   double MAX_EXTEND_BP = params.getDoubleFlag(ARG_MAX_EXTEND_BP);
@@ -178,6 +181,7 @@ Config readConfig(param_t &params)
   cfg.FILTER_LMISS = FILTER_LMISS;
   cfg.FILTER_HMISS = FILTER_HMISS;
   cfg.MATCH_TOL = MATCH_TOL;
+  cfg.HAP_CLUSTER = HAP_CLUSTER;
   cfg.MAX_GAP = MAX_GAP;
   cfg.MAX_EXTEND_BP = MAX_EXTEND_BP;
   cfg.MAX_EXTEND_NW = MAX_EXTEND_NW;
@@ -209,7 +213,7 @@ void warnCrossStageFlags(const Config &cfg)
     const string stage1Only[] = {ARG_CALC_SPEC, ARG_HAPSTATS, ARG_WINSIZE, ARG_WINSTEP,
                                  ARG_K, ARG_UNPHASED, ARG_FILENAME_POPFILE, ARG_FILTER_LEVEL,
                                  ARG_FILTER_LMISS, ARG_FILTER_HMISS, ARG_KEEP_MONO,
-                                 ARG_MATCH_TOL, ARG_SEED};
+                                 ARG_MATCH_TOL, ARG_SEED, ARG_HAP_CLUSTER};
     for (unsigned int i = 0; i < sizeof(stage1Only)/sizeof(stage1Only[0]); i++){
       if(params.isFlagSet(stage1Only[i])){
         cerr << "WARNING: " << stage1Only[i] << " has no effect with --spectra; it applies to the --vcf stage.\n";
@@ -239,6 +243,7 @@ bool validate(const Config &cfg)
   const double FILTER_LMISS = cfg.FILTER_LMISS;
   const double FILTER_HMISS = cfg.FILTER_HMISS;
   const int MATCH_TOL = cfg.MATCH_TOL;
+  const string &HAP_CLUSTER = cfg.HAP_CLUSTER;
   const double MAX_GAP = cfg.MAX_GAP;
   const double MAX_EXTEND_BP = cfg.MAX_EXTEND_BP;
   const double MAX_EXTEND_NW = cfg.MAX_EXTEND_NW;
@@ -302,6 +307,23 @@ bool validate(const Config &cfg)
     if(FILTER_HMISS < 0 || FILTER_HMISS > 1){
       cerr << "ERROR: Missing data halotype filter must be in [0,1].\n";
       ERROR = true;
+    }
+
+    if(clusterMethodCode(HAP_CLUSTER) < 0){
+      cerr << "ERROR: " << ARG_HAP_CLUSTER << " must be one of " << HAP_CLUSTER_BESTCOMP
+           << ", " << HAP_CLUSTER_GARUD << ", " << HAP_CLUSTER_SOFTEM << ".\n";
+      ERROR = true;
+    }
+
+    if(clusterMethodCode(HAP_CLUSTER) == CLUSTER_SOFT_EM){
+      cerr << "WARNING: " << ARG_HAP_CLUSTER << " " << HAP_CLUSTER_SOFTEM
+           << " is experimental: class sizes become fractional.\n";
+    }
+
+    if(params.isFlagSet(ARG_SEED) && clusterMethodCode(HAP_CLUSTER) != CLUSTER_GARUD_SHUFFLE){
+      cerr << "WARNING: " << ARG_SEED << " only affects " << ARG_HAP_CLUSTER << " "
+           << HAP_CLUSTER_GARUD << "; " << HAP_CLUSTER_BESTCOMP << " and "
+           << HAP_CLUSTER_SOFTEM << " are deterministic.\n";
     }
 
     if(MATCH_TOL < 0){

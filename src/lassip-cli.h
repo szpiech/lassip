@@ -141,6 +141,26 @@ const string ARG_FILTER_HMISS = "--max-hmiss";
 const double DEFAULT_FILTER_HMISS = 0.2;
 const string HELP_FILTER_HMISS = "Drop haplotypes with > this proportion of missing data when computing the HFS.";
 
+const string HAP_CLUSTER_GARUD = "garud-shuffle";
+const string HAP_CLUSTER_BESTCOMP = "best-comp";
+const string HAP_CLUSTER_SOFTEM = "soft-em";
+
+const string ARG_HAP_CLUSTER = "--hap-cluster";
+const string DEFAULT_HAP_CLUSTER = HAP_CLUSTER_BESTCOMP;
+const string HELP_HAP_CLUSTER = "How haplotypes carrying missing genotypes are grouped into\n\
+classes. Missing sites act as wildcards, so such a haplotype can be compatible with\n\
+several distinct haplotypes and something has to choose. One of:\n\
+  best-comp      (default) each haplotype joins the most frequent class it is\n\
+                 compatible with, taking the best-observed haplotypes first.\n\
+                 Deterministic; --seed has no effect on it.\n\
+  garud-shuffle  the pre-1.3 behaviour: shuffle the haplotypes, then let each in\n\
+                 turn absorb every compatible one not yet claimed. The result\n\
+                 depends on the shuffle, so runs differ unless --seed is fixed.\n\
+  soft-em        EXPERIMENTAL. Divide an ambiguous haplotype\'s count across the\n\
+                 classes it could belong to in proportion to their frequencies,\n\
+                 iterated to convergence. Class sizes become fractional.\n\
+Without missing genotypes and at --match-tol 0 all three give the same classes.";
+
 const string ARG_MATCH_TOL = "--match-tol";
 const int DEFAULT_MATCH_TOL = 0;
 const string HELP_MATCH_TOL = "Group haplotypes with missing data into\nthe same class as a haplotype with no missing data if they have <= this many pairwise differences.";

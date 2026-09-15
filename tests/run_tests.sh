@@ -156,6 +156,7 @@ selected() {
 
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
+       cluster_bestcomp cluster_softem cluster_conserved
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -258,22 +259,27 @@ if selected spec_filter0; then
 fi
 
 if selected spec_missing; then
+    # Pinned to --hap-cluster garud-shuffle: this golden was recorded under the
+    # pre-1.3 rule and keeping it proves that path is still bit-identical.
     # Deterministic since --seed exists: the per-window shuffle used when clustering
     # haplotypes that carry missing data is seeded from --seed mixed with the
     # window's SNP boundaries, so output no longer depends on the clock or on
     # --threads. Before that, four identical runs of this case gave four files.
     if run_lassip "$WORK/spec_missing.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
         --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
-        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 0 --out "$WORK/ms"; then
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 0 --hap-cluster garud-shuffle \
+        --out "$WORK/ms"; then
         compare_hash spec_missing "$WORK/ms.POP1.lassip.hap.spectra.gz" spec_missing
     else fail spec_missing "run failed"; fi
 fi
 
 if selected spec_missing_tol; then
-    # --match-tol > 0 actively merges haplotypes that differ at missing sites
+    # --match-tol > 0 actively merges haplotypes that differ at missing sites.
+    # Pinned to the pre-1.3 rule, as above.
     if run_lassip "$WORK/spec_missing_tol.log" --vcf "$WORK/small.missing.vcf.gz" \
         --pop "$WORK/small.pop1.txt" --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
-        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --out "$WORK/mt"; then
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --hap-cluster garud-shuffle \
+        --out "$WORK/mt"; then
         compare_hash spec_missing_tol "$WORK/mt.POP1.lassip.hap.spectra.gz" spec_missing_tol
     else fail spec_missing_tol "run failed"; fi
 fi
@@ -300,6 +306,71 @@ if selected spec_medium; then
         --calc-spec --hapstats --k 10 --winsize 117 --winstep 60 --threads "$THREADS" --out "$WORK/med"; then
         compare_hash spec_medium "$WORK/med.YRI.lassip.hap.spectra.gz" spec_medium
     else fail spec_medium "run failed"; fi
+fi
+
+if selected cluster_bestcomp; then
+    # The default rule. Also checks that omitting --hap-cluster selects it, and
+    # that it ignores --seed: three runs, two of them with different seeds, must
+    # all produce the same file.
+    ok=1
+    run_lassip "$WORK/cbc.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --hap-cluster best-comp \
+        --out "$WORK/cbc" || ok=0
+    run_lassip "$WORK/cbc_default.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --out "$WORK/cbc_default" || ok=0
+    run_lassip "$WORK/cbc_seed.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --seed 99 \
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --hap-cluster best-comp \
+        --out "$WORK/cbc_seed" || ok=0
+    if [ "$ok" = 0 ]; then fail cluster_bestcomp "run failed"
+    elif [ "$(hash_gz "$WORK/cbc.POP1.lassip.hap.spectra.gz")" \
+         != "$(hash_gz "$WORK/cbc_default.POP1.lassip.hap.spectra.gz")" ]; then
+        fail cluster_bestcomp "best-comp is not the default"
+    elif [ "$(hash_gz "$WORK/cbc.POP1.lassip.hap.spectra.gz")" \
+         != "$(hash_gz "$WORK/cbc_seed.POP1.lassip.hap.spectra.gz")" ]; then
+        fail cluster_bestcomp "--seed changed a best-comp run"
+    else
+        compare_hash cluster_bestcomp "$WORK/cbc.POP1.lassip.hap.spectra.gz" cluster_bestcomp
+    fi
+fi
+
+if selected cluster_softem; then
+    # Experimental: class sizes are fractional, so the spectrum columns are no
+    # longer integers. Compared with a tolerance rather than by hash.
+    if run_lassip "$WORK/cse.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+        --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --hap-cluster soft-em \
+        --out "$WORK/cse"; then
+        compare_table cluster_softem "$WORK/cse.POP1.lassip.hap.spectra.gz" cluster_softem 1e-9 "" 0
+    else fail cluster_softem "run failed"; fi
+fi
+
+if selected cluster_conserved; then
+    # Clustering decides how haplotypes are GROUPED, never how many there are:
+    # nhaps is the sum of the class sizes, so it must agree across the three
+    # rules window by window, and no window may report more classes than
+    # haplotypes. This catches a rule that drops or double-counts a haplotype.
+    ok=1
+    for m in garud-shuffle best-comp soft-em; do
+        run_lassip "$WORK/cc_$m.log" --vcf "$WORK/small.missing.vcf.gz" --pop "$WORK/small.pop1.txt" \
+            --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+            --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 --hap-cluster "$m" \
+            --out "$WORK/cc_$m" || ok=0
+    done
+    if [ "$ok" = 0 ]; then fail cluster_conserved "run failed"
+    else
+        report=$(for m in garud-shuffle best-comp soft-em; do
+                     gzip -dc "$WORK/cc_$m.POP1.lassip.hap.spectra.gz" | awk -v m="$m" 'NR>2{print m, NR, $6, $7}'
+                 done | awk '{ key=$2; n[key]=n[key]+1; if (n[key]==1) ref[key]=$3;
+                               else if ($3 != ref[key]) mismatch++;
+                               if ($4+0 > $3+0) toomany++ }
+                             END{ printf "%d %d", mismatch+0, toomany+0 }')
+        set -- $report
+        if [ "$1" = 0 ] && [ "$2" = 0 ]; then pass "cluster_conserved (3 rules agree on nhaps)"
+        else fail cluster_conserved "nhaps mismatches: $1, windows with uhaps > nhaps: $2"; fi
+    fi
 fi
 
 # ---------------------------------------------------------------- stage 2

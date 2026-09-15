@@ -185,9 +185,11 @@ struct PopData
 
 struct HaplotypeFrequencySpectrum {
   map<string,double> hap2count;
-  //multimap<int,string> count2hap;
-  int *sortedCount;
-  int size;
+  //Class sizes, largest first. Double rather than int because --hap-cluster
+  //soft-em divides an ambiguous haplotype's count across the classes it could
+  //belong to; every other path puts whole numbers here.
+  double *sortedCount;
+  double size;
   int numClasses;
 };
 
