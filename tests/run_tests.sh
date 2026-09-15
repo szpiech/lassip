@@ -157,7 +157,9 @@ selected() {
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
        cluster_bestcomp cluster_softem cluster_conserved
-       spec_unphased_missing cluster_unphased salti_unphased
+       spec_unphased_missing cluster_unphased cluster_twopop cluster_unphased_twopop
+       spec_unphased_twopop spec_unphased_filter1 spec_unphased_filter0
+       salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -427,6 +429,61 @@ if selected cluster_unphased; then
     else fail cluster_unphased "run failed"; fi
 fi
 
+if selected spec_unphased_twopop; then
+    # two populations on unphased data: --filter-level 2 filters each population
+    # separately, and that filtering was rewritten to a single pass. No missing
+    # data here, so this is comparable byte-for-byte against v1.2.2.
+    if run_lassip "$WORK/spec_unphased_twopop.log" --vcf "$SMALL" --pop "$WORK/small.pop2.txt" \
+        --unphased --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --out "$WORK/utp"; then
+        compare_hash spec_unphased_twopop_a "$WORK/utp.POPA.lassip.mlg.spectra.gz" spec_unphased_twopop_a
+        compare_hash spec_unphased_twopop_b "$WORK/utp.POPB.lassip.mlg.spectra.gz" spec_unphased_twopop_b
+    else fail spec_unphased_twopop "run failed"; fi
+fi
+
+if selected spec_unphased_filter1; then
+    # --filter-level 1 shares one filtered matrix across populations (SHARED_MAP),
+    # a different path through the rewritten filter than level 2
+    if run_lassip "$WORK/spec_unphased_filter1.log" --vcf "$SMALL" --pop "$WORK/small.pop2.txt" \
+        --unphased --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+        --filter-level 1 --out "$WORK/uf1"; then
+        compare_hash spec_unphased_filter1 "$WORK/uf1.lassip.mlg.spectra.gz" spec_unphased_filter1
+    else fail spec_unphased_filter1 "run failed"; fi
+fi
+
+if selected spec_unphased_filter0; then
+    # --filter-level 0 does no filtering at all, so monomorphic MLG columns reach
+    # the spectrum
+    if run_lassip "$WORK/spec_unphased_filter0.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" \
+        --unphased --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 \
+        --filter-level 0 --out "$WORK/uf0"; then
+        compare_hash spec_unphased_filter0 "$WORK/uf0.lassip.mlg.spectra.gz" spec_unphased_filter0
+    else fail spec_unphased_filter0 "run failed"; fi
+fi
+
+if selected cluster_twopop; then
+    # the phased counterpart of cluster_unphased_twopop: two populations,
+    # missing genotypes, so per-population filtering and clustering both run
+    if run_lassip "$WORK/cluster_twopop.log" --vcf "$WORK/small.missing.vcf.gz" \
+        --pop "$WORK/small.pop2.txt" --calc-spec --hapstats --k 5 \
+        --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+        --hap-cluster best-comp --out "$WORK/ctp"; then
+        compare_hash cluster_twopop_a "$WORK/ctp.POPA.lassip.hap.spectra.gz" cluster_twopop_a
+        compare_hash cluster_twopop_b "$WORK/ctp.POPB.lassip.hap.spectra.gz" cluster_twopop_b
+    else fail cluster_twopop "run failed"; fi
+fi
+
+if selected cluster_unphased_twopop; then
+    # the deepest interaction: unphased, two populations, missing genotypes, so
+    # per-population filtering and the clustering both run on MLG strings
+    if run_lassip "$WORK/cluster_unphased_twopop.log" --vcf "$WORK/small.missing.vcf.gz" \
+        --pop "$WORK/small.pop2.txt" --unphased --calc-spec --hapstats --k 5 \
+        --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+        --hap-cluster best-comp --out "$WORK/uctp"; then
+        compare_hash cluster_unphased_twopop_a "$WORK/uctp.POPA.lassip.mlg.spectra.gz" cluster_unphased_twopop_a
+        compare_hash cluster_unphased_twopop_b "$WORK/uctp.POPB.lassip.mlg.spectra.gz" cluster_unphased_twopop_b
+    else fail cluster_unphased_twopop "run failed"; fi
+fi
+
 # ---------------------------------------------------------------- stage 2
 
 # all stage-2 cases read this spectrum
@@ -552,6 +609,27 @@ if selected salti_unphased && [ -f "$SPECU" ]; then
         --max-extend-bp 200000 --threads "$THREADS" --out "$WORK/su2"; then
         compare_table salti_unphased "$WORK/su2.lassip.mlg.out.gz" salti_unphased 1e-6 "$SALTI_TOL_COLS" "$SALTI_TOL_FRAC"
     else fail salti_unphased "run failed"; fi
+fi
+
+if selected avg_spec_unphased && [ -f "$SPECU" ]; then
+    if run_lassip "$WORK/avg_spec_unphased.log" --spectra "$SPECU" --avg-spec --out "$WORK/avu"; then
+        compare_hash avg_spec_unphased "$WORK/avu.lassip.null.spectra.gz" avg_spec_unphased
+    else fail avg_spec_unphased "run failed"; fi
+fi
+
+if selected lassi_unphased && [ -f "$SPECU" ]; then
+    if run_lassip "$WORK/lassi_unphased.log" --spectra "$SPECU" --lassi \
+        --threads "$THREADS" --out "$WORK/lu"; then
+        compare_table lassi_unphased "$WORK/lu.lassip.mlg.out.gz" lassi_unphased 1e-6
+    else fail lassi_unphased "run failed"; fi
+fi
+
+if selected lassi_nullspec_unphased && [ -f "$SPECU" ]; then
+    run_lassip "$WORK/nullspec_make_u.log" --spectra "$SPECU" --avg-spec --out "$WORK/nsrcu" || true
+    if run_lassip "$WORK/lassi_nullspec_unphased.log" --spectra "$SPECU" --lassi \
+        --null-spec "$WORK/nsrcu.lassip.null.spectra.gz" --threads "$THREADS" --out "$WORK/lnu"; then
+        compare_table lassi_nullspec_unphased "$WORK/lnu.lassip.mlg.out.gz" lassi_nullspec_unphased 1e-6
+    else fail lassi_nullspec_unphased "run failed"; fi
 fi
 
 # ---------------------------------------------------------------- summary
