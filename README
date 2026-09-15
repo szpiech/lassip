@@ -313,6 +313,16 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   (11.4 s vs 107.8 s at one thread), because it compares each haplotype against
   the existing classes rather than against every other haplotype.
 
+  Effect on --unphased data. Multilocus genotype strings are drawn from
+  {0,1,2,-} rather than {0,1,-}, so two of them agreeing at every jointly
+  observed site is much less likely. On one 50-locus window with 5% of
+  genotypes missing, the phased reading had 149 distinct haplotypes of which 72
+  were compatible with more than one other, and the three rules returned 83, 82
+  and 82 classes; the unphased reading of the same data had 81 distinct
+  genotype strings of which 3 were ambiguous, and all three rules returned 74.
+  So the default change has much less effect on --unphased runs, at least at
+  --match-tol 0.
+
   Genetic map handling. On the --dist-type cm path, getMapInfo could
   interpolate between two uninitialised indices when its forward scan found no
   bracketing pair, and it dereferenced a null pointer -- a segfault -- when the

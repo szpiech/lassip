@@ -76,6 +76,10 @@ revised this file.
 | `cd72a4b` | help: remove a method and citation that do not exist |
 | `5372bc7` | docs: record the citation correction |
 | `d00eb19` | bump the version to 1.3.0 |
+| `07c3471` | docs: record the version bump |
+| `fc3cf8b` | linux v1.3.0 |
+| `4eb0255` | macos-arm v1.3.0 |
+| `d6f8942` | tests: cover --unphased with missing genotypes, and stage 2 from .mlg spectra |
 
 ## Behavioural differences
 
@@ -135,6 +139,34 @@ changed.
 12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
+
+## Test coverage
+
+`d3b1a61` closes a coverage hole I should have noticed earlier: only 1 of the
+22 cases passed `--unphased`, and it used the fixture with no missing
+genotypes, so the clustering code had never run on multilocus genotype
+strings -- the one path whose alphabet is `{0,1,2,-}` and therefore the only
+one where the packed representation uses all four symbols.
+
+The covered part was verified unchanged first: with no missing data,
+`--unphased` output is byte-identical to v1.2.2 on both `testing/small.vcf.gz`
+and `example/YRI.chr22.vcf.gz` (4750 hom-alt genotypes, so all three symbols
+appear). Three cases added -- `spec_unphased_missing` (legacy rule pinned on
+the `.mlg` path), `cluster_unphased` (default rule, `--seed` invariance, and
+count conservation across all three rules) and `salti_unphased` (stage 2 from
+a `#phased 0` spectra file). Suite is 28 checks.
+
+Against the v1.2.2 binary the two missing-data cases fail, since
+`--hap-cluster` does not exist there, so they pin genuinely new behaviour.
+`salti_unphased` passes against it, and should: it uses only flags v1.2.2 has,
+and its input spectra are byte-identical between the two builds. It closes a
+coverage gap rather than pinning a change.
+
+The exercise also produced a result worth knowing: the `--hap-cluster` choice
+matters much less for unphased data. Same VCF, same window, `--match-tol 0` --
+phased: 149 distinct strings, 72 of them compatible with more than one other,
+rules return 83/82/82 classes. Unphased: 81 distinct strings, 3 ambiguous,
+all three rules return 74.
 
 ## Version
 
