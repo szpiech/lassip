@@ -68,6 +68,8 @@ revised this file.
 | `f041c2f` | GMapData: bracket by binary search, and stop ignoring the placement failure |
 | `2c741e8` | docs: record the genetic-map fixes |
 | `70c1c7b` | add --max-gap to control how far --dist-type cm interpolates |
+| `aaeecfa` | docs: record --max-gap |
+| `1f8a38e` | add --hap-cluster: best-comp (new default), garud-shuffle, soft-em |
 
 ## Behavioural differences
 
