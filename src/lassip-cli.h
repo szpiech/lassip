@@ -19,7 +19,7 @@
 #ifndef __LASSIP_CLI_H__
 #define __LASSIP_CLI_H__
 
-const string VERSION = "1.2.2";
+const string VERSION = "1.3.0";
 
 const string USAGE = "\
 Usage: lassip --vcf <file> --pop <file> --calc-spec [--hapstats] --winsize <int> --winstep <int> --out <prefix>\n\

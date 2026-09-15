@@ -224,7 +224,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 ***CHANGE LOG***
 
-UNRELEASED - performance, reproducibility and CLI work on top of v1.2.2.
+15SEP2026 - v1.3.0. Performance, reproducibility and CLI work on top of v1.2.2.
 
   Reproducibility. Runs on data containing missing genotypes were not
   reproducible: the haplotype shuffle described in the 06FEB2025 entry was
