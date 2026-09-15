@@ -147,7 +147,11 @@ void calc_SALTI_stats(SALTI_work_order_t *p) {
 	param_t *params = p->params;
 	//int LASSI_CHOICE = params->getIntFlag(ARG_LASSI_CHOICE); 
 	int numThreads = params->getIntFlag(ARG_THREADS);
-	double MAX_EXTEND;
+	//validate() rejects any other --dist-type before a thread is started, so the
+	//else below is unreachable -- but left uninitialised the variable is
+	//indeterminate if that ever stops being true, and calcMTA would silently
+	//extend over a garbage distance.
+	double MAX_EXTEND = 0;
 	string DIST_TYPE = params->getStringFlag(ARG_DIST_TYPE);
 	if(DIST_TYPE.compare("bp") == 0){
 		MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_BP);
@@ -157,6 +161,10 @@ void calc_SALTI_stats(SALTI_work_order_t *p) {
 	}
 	else if(DIST_TYPE.compare("cm") == 0){
 		MAX_EXTEND = params->getDoubleFlag(ARG_MAX_EXTEND_CM);
+	}
+	else{
+		cerr << "ERROR: internal: unhandled " << ARG_DIST_TYPE << " " << DIST_TYPE << ".\n";
+		exit(EXIT_INTERNAL);
 	}
 	
 	//int K = avgSpec->K;

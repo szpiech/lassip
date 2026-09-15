@@ -26,7 +26,7 @@ double getDMin(vector<SpectrumData *> *specDataByChr){
 
    for(unsigned int c = 0; c < specDataByChr->size(); c++){
       for(int w = 1; w < specDataByChr->at(c)->nwins; w++){
-         double diff = abs(specDataByChr->at(c)->dist[w]-specDataByChr->at(c)->dist[w-1]);
+         double diff = fabs(specDataByChr->at(c)->dist[w]-specDataByChr->at(c)->dist[w-1]);
          if(dmin > diff && diff > 0) dmin = diff;
       }
    }
@@ -156,7 +156,7 @@ void calcMTA(LASSIResults *results, double ***q, SpectrumData *specData, Spectru
    int rightLim, leftLim;
    double *dist = specData->dist;
    int d = w;
-   while(abs(dist[w] - dist[d]) <= MAX_EXTEND){
+   while(fabs(dist[w] - dist[d]) <= MAX_EXTEND){
       d++;
       if(d >= specData->nwins){
          d--;
@@ -165,7 +165,7 @@ void calcMTA(LASSIResults *results, double ***q, SpectrumData *specData, Spectru
    }
    leftLim = d;
    d = w;
-   while(abs(dist[w] - dist[d]) <= MAX_EXTEND){
+   while(fabs(dist[w] - dist[d]) <= MAX_EXTEND){
       d--;
       if(d < 0){
          d++;
@@ -239,7 +239,7 @@ void calcMTA(LASSIResults *results, double ***q, SpectrumData *specData, Spectru
    //optimum, or an explicit tie-breaking rule, would remove the arbitrariness.
    for (double A = lAmin; A <= lAmax; A += lstep){
       double expA = exp(A);
-      for (int j = 0; j < nloc; j++) Pr[j] = exp(-expA*abs(dist[w]-dist[rightLim+j]));
+      for (int j = 0; j < nloc; j++) Pr[j] = exp(-expA*fabs(dist[w]-dist[rightLim+j]));
       for (int m = 1; m <= K; m++){
          if(m == K){
             //a sweep involving all K classes is the neutral background
@@ -485,14 +485,14 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
    double count1, count2;
    hap2count.clear();
 
-   for (int i = 0; i < hapIDs.size(); i++){
+   for (size_t i = 0; i < hapIDs.size(); i++){
       hap1 = hapIDs[i];
       count1 = hap2countCombined[hap1];
       if(compared.count(hap1) == 0){
          compared[hap1] = 1;
          hap2count[hap1] = count1;
       }
-      for (int j = 0; j < hapIDs.size(); j++){
+      for (size_t j = 0; j < hapIDs.size(); j++){
          hap2 = hapIDs[j];
          count2 = hap2countCombined[hap2];
          if(compared.count(hap2) == 0){

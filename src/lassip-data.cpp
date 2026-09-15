@@ -17,6 +17,7 @@
 */
 #include "lassip-data.h"
 #include "lassip-wintools.h"
+#include <cstring>   //memset, memcpy -- libc++ pulls these in transitively, libstdc++ does not
 
 void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop){
     ogzstream fout;
