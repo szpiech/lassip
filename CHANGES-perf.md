@@ -74,6 +74,8 @@ revised this file.
 | `59723c1` | portability: include <cstring>, use fabs, initialise MAX_EXTEND |
 | `1d23854` | docs: record the portability fixes |
 | `cd72a4b` | help: remove a method and citation that do not exist |
+| `5372bc7` | docs: record the citation correction |
+| `d00eb19` | bump the version to 1.3.0 |
 
 ## Behavioural differences
 
@@ -133,6 +135,20 @@ changed.
 12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
+
+## Version
+
+`d00eb19` sets `VERSION` to `1.3.0` (it was still `1.2.2`, so `--version` and
+the startup banner reported the version the branch was built from). The README
+changelog entry is headed `15SEP2026 - v1.3.0.` following the convention of the
+entries above it -- change the date when you tag, nothing reads it. No output
+file carries a version stamp, so no golden changed.
+
+Two things outside `src/` still refer to older versions and are yours to decide
+on at release: `bin/` holds prebuilt binaries up to `lassip-v1.2.1` (and no
+1.2.2), and the manual PDFs in the repository root are `v1.1.2`-era, so they
+predate `--seed`, `--hap-cluster`, `--max-gap`, `--version` and the grouped
+help.
 
 ## Correction
 
