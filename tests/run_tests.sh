@@ -157,6 +157,7 @@ selected() {
 CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
        cluster_bestcomp cluster_softem cluster_conserved
+       spec_unphased_missing cluster_unphased salti_unphased
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -373,10 +374,68 @@ if selected cluster_conserved; then
     fi
 fi
 
+if selected spec_unphased_missing; then
+    # --unphased was only covered on data with no missing genotypes, so none of
+    # the clustering code was exercised on multilocus genotype strings. Those
+    # are drawn from {0,1,2,-} rather than {0,1,-}, which is the only path where
+    # the packed representation uses all four symbols.
+    if run_lassip "$WORK/spec_unphased_missing.log" --vcf "$WORK/small.missing.vcf.gz" \
+        --pop "$WORK/small.pop1.txt" --unphased --calc-spec --hapstats --k 5 \
+        --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+        --hap-cluster garud-shuffle --seed 3 --out "$WORK/umg"; then
+        compare_hash spec_unphased_missing "$WORK/umg.POP1.lassip.mlg.spectra.gz" spec_unphased_missing
+    else fail spec_unphased_missing "run failed"; fi
+fi
+
+if selected cluster_unphased; then
+    # best-comp on unphased data with missing genotypes, at --match-tol 2 where
+    # the three rules actually differ (at tol 0 they agree here: a 50-locus
+    # three-state string is rarely ambiguous). Also asserts the result does not
+    # move with --seed, and that all three rules conserve the genotype count.
+    if run_lassip "$WORK/cluster_unphased.log" --vcf "$WORK/small.missing.vcf.gz" \
+        --pop "$WORK/small.pop1.txt" --unphased --calc-spec --hapstats --k 5 \
+        --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+        --out "$WORK/umb"; then
+        compare_hash cluster_unphased "$WORK/umb.POP1.lassip.mlg.spectra.gz" cluster_unphased
+        run_lassip "$WORK/cluster_unphased_seed.log" --vcf "$WORK/small.missing.vcf.gz" \
+            --pop "$WORK/small.pop1.txt" --unphased --calc-spec --hapstats --k 5 \
+            --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+            --seed 99 --out "$WORK/umb99"
+        if [ "$(hash_gz "$WORK/umb.POP1.lassip.mlg.spectra.gz")" = \
+             "$(hash_gz "$WORK/umb99.POP1.lassip.mlg.spectra.gz")" ]; then
+            pass "cluster_unphased --seed has no effect"
+        else fail cluster_unphased "--seed changed a best-comp unphased run"; fi
+        ok=1
+        for m in garud-shuffle best-comp soft-em; do
+            run_lassip "$WORK/ucc_$m.log" --vcf "$WORK/small.missing.vcf.gz" \
+                --pop "$WORK/small.pop1.txt" --unphased --calc-spec --hapstats --k 5 \
+                --winsize 50 --winstep 10 --max-lmiss 0.5 --max-hmiss 0.5 --match-tol 2 \
+                --hap-cluster "$m" --out "$WORK/ucc_$m" || ok=0
+        done
+        if [ "$ok" = 0 ]; then fail cluster_unphased "conservation run failed"
+        else
+            report=$(for m in garud-shuffle best-comp soft-em; do
+                         gzip -dc "$WORK/ucc_$m.POP1.lassip.mlg.spectra.gz" | awk -v m="$m" 'NR>2{print m, NR, $6, $7}'
+                     done | awk '{ key=$2; n[key]=n[key]+1; if (n[key]==1) ref[key]=$3;
+                                   else if ($3 != ref[key]) mismatch++;
+                                   if ($4+0 > $3+0) toomany++ }
+                                 END{ printf "%d %d", mismatch+0, toomany+0 }')
+            set -- $report
+            if [ "$1" = 0 ] && [ "$2" = 0 ]; then pass "cluster_unphased (3 rules agree on nhaps)"
+            else fail cluster_unphased "nhaps mismatches: $1, windows with uhaps > nhaps: $2"; fi
+        fi
+    else fail cluster_unphased "run failed"; fi
+fi
+
 # ---------------------------------------------------------------- stage 2
 
 # all stage-2 cases read this spectrum
 SPEC="$WORK/sp.POP1.lassip.hap.spectra.gz"
+
+# an unphased spectra file, so stage 2 is covered on the .mlg path too
+run_lassip "$WORK/spu.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --unphased \
+    --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/spu" >/dev/null 2>&1
+SPECU="$WORK/spu.POP1.lassip.mlg.spectra.gz"
 if [ ! -f "$SPEC" ]; then
     run_lassip "$WORK/spec_for_stage2.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" \
         --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --out "$WORK/sp" || true
@@ -484,6 +543,15 @@ if selected cm_max_gap && [ -f "$SPEC" ]; then
             --out "$WORK/gapnone"; then
         compare_table cm_max_gap "$WORK/gapnone.lassip.hap.out.gz" salti_cm 1e-6 "$SALTI_TOL_COLS" "$SALTI_TOL_FRAC"
     else fail cm_max_gap "--max-gap 0 run failed"; fi
+fi
+
+if selected salti_unphased && [ -f "$SPECU" ]; then
+    # stage 2 reading a '#phased 0' spectra file: writes .mlg.out.gz rather than
+    # .hap.out.gz, and nothing downstream of the header should care otherwise
+    if run_lassip "$WORK/salti_unphased.log" --spectra "$SPECU" --salti --dist-type bp \
+        --max-extend-bp 200000 --threads "$THREADS" --out "$WORK/su2"; then
+        compare_table salti_unphased "$WORK/su2.lassip.mlg.out.gz" salti_unphased 1e-6 "$SALTI_TOL_COLS" "$SALTI_TOL_FRAC"
+    else fail salti_unphased "run failed"; fi
 fi
 
 # ---------------------------------------------------------------- summary
