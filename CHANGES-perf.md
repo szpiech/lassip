@@ -72,6 +72,8 @@ revised this file.
 | `1f8a38e` | add --hap-cluster: best-comp (new default), garud-shuffle, soft-em |
 | `cbb058b` | docs: list the --hap-cluster commit in the branch summary |
 | `59723c1` | portability: include <cstring>, use fabs, initialise MAX_EXTEND |
+| `1d23854` | docs: record the portability fixes |
+| `cd72a4b` | help: remove a method and citation that do not exist |
 
 ## Behavioural differences
 
@@ -131,6 +133,21 @@ changed.
 12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
+
+## Correction
+
+`cd72a4b` removes a method and a citation from the help text that I had
+invented: the PREAMBLE added in `faeb0c6` listed "2-population LASSI (Harris
+and DeGiorgio 2020, Genetics 210:1429)". No such method is implemented and no
+such paper exists -- it came from misreading `calc_LASSI_stats2` as a
+two-population variant (the `2` is a stage suffix) and garbling the G123
+citation already in the README. The remaining citations now follow the README's
+own forms, and the fourth slot names a real thing: `--unphased` writes the two
+haplotype-statistic columns as `g123`/`g2g1`, which is Harris et al. 2018.
+
+If you are reviewing anything else I added to user-facing text, the citations
+are the part to check first -- everything else in the branch is verifiable
+against the code or the test suite, but a reference is not.
 
 ## Portability
 
