@@ -85,6 +85,8 @@ revised this file.
 | `d9d8090` | docs: record the symmetric coverage matrix |
 | `2953ca4` | macos-arm binary |
 | `b31494f` | readHaplotypeDataVCF: skip leading whitespace before the CHROM token |
+| `962ed12` | docs: record the leading-whitespace fix |
+| `add1534` | stage 2: delimit contigs by the chr column, not by the input file |
 
 ## Behavioural differences
 
@@ -149,6 +151,43 @@ changed.
    malformed or shifted record surfaces and the bare message gave nothing to
    look at; a record with no CHROM field is reported instead of being parsed
    onward. Both exit 65 like the other input-data errors.
+
+## Multiple contigs
+
+`add1534` is Phase 0 of multi-contig support (see `multi-contig-proposal.md`):
+stage 2 delimits contigs by the **chr column** rather than by the input file, so
+`--spectra` takes one multi-contig file or N single-contig files
+interchangeably, and the two give byte-identical results.
+
+It is also a live bug fix. `readSpecData` built one `SpectrumData` per file, so
+a file holding several contigs became one block, and `calcMTA` bounds its
+flanking scan only by `SpectrumData::nwins`. Measured on two contigs sharing a
+coordinate range (188 windows, boundary at row 94), merged file vs the same two
+files separately:
+
+| | effect before the fix |
+|---|---|
+| `--dist-type nw` | contig 2's entire `pos` column wrong (94 rows), since stage 2 writes `dist[w] = w`, the index within the block; plus `m`/`A`/`L` differing in 4/5/10 rows inside the 5-window reach of the boundary, `L` by up to 82% |
+| `--dist-type bp` | `m`/`A`/`L` differ across rows 79-95, a contiguous run spanning the boundary's reach; `A` moves by a factor of 38 (6.9e6 -> 1.8e5) |
+| `--dist-type cm` | likewise |
+
+The null spectrum is byte-identical either way, so nothing global is involved --
+but the affected windows are every contig end.
+
+The boundary is now the edge of a block rather than a bounds check, which makes
+`--dist-type nw` correct by construction since its distance is an index into
+the block. A first pass reads only the `chr` and `start` columns to learn the
+layout, and rejects a file that returns to a contig it has left, is not
+ascending within a contig, disagrees with its own window count, or repeats a
+contig another file supplied. The header may carry
+`contigs <n> <name> <nwins> ...` after the population names (D3), validated
+when present and appended rather than inserted so the file stays readable by
+1.2.x. Nothing writes it yet -- stage 1 gains that in Phase 1.
+
+Three cases added; suite is 48 checks. Against the pre-fix binary all three
+`--salti` arms fail, as do both validation cases. The `--lassi` and
+`--avg-spec` arms pass pre-fix and are coverage rather than bug-pinning:
+LASSI uses no flanking windows, and the averaging is order-independent.
 
 ## Test coverage
 

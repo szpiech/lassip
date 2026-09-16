@@ -323,6 +323,23 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   So the default change has much less effect on --unphased runs, at least at
   --match-tol 0.
 
+  Multiple contigs in one spectra file. Stage 2 delimits contigs by the chr
+  column rather than by the input file, so --spectra accepts one file holding
+  several contigs as readily as one file per contig, and the two give identical
+  results. Rows must be grouped by contig and ascending within one; a file that
+  interleaves contigs, repeats one, or disagrees with its own window count is
+  refused. The header may carry an optional 'contigs <n> <name> <nwins> ...'
+  field after the population names, validated against the rows when present.
+
+  This is also a bug fix. Previously a file holding more than one contig was
+  analysed as a single block, and saltiLASSI's flanking-window scan crossed the
+  contig boundary: with --dist-type nw the reported positions of every window
+  after the first contig were wrong, and with any --dist-type the windows within
+  --max-extend of a boundary took neighbouring-contig windows into the
+  likelihood. Anyone who concatenated spectra files by hand should rerun.
+  Stage 1 still writes one contig per file; producing multi-contig spectra
+  directly is the next piece of work.
+
   Genetic map handling. On the --dist-type cm path, getMapInfo could
   interpolate between two uninitialised indices when its forward scan found no
   bracketing pair, and it dereferenced a null pointer -- a segfault -- when the
