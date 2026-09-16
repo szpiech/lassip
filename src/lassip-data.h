@@ -27,6 +27,7 @@
 #include <deque>
 #include "gzstream.h"
 #include <map>
+#include <set>
 #include <cstdio>
 
 using namespace std;
@@ -313,7 +314,30 @@ void releaseHapDataByPop(map< string, HaplotypeData* > *hapDataByPop);
 
 //reads haplotype data from a VCF, splitting samples into the populations named
 //in the pop file; throws on malformed input
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *data, bool PHASED, bool SHARED_MAP);
+//A VCF read in one pass, handed back one contig at a time. Header-derived
+//state lives here so it is computed once per file; `pending` holds the record
+//that ended the previous contig, which is the first record of the next.
+struct VCFReader
+{
+    igzstream fin;
+    string filename;
+    int nfields;
+    string *inds;
+    int *row1;
+    int *row2;
+    int nrows;
+    vector<string> rowPop;
+    vector<int> rowIndexInPop;
+    map<string,int> pop2nhaps;
+    set<string> seenContigs;
+    string pending;
+    bool exhausted;
+    int ncontigs;
+};
+
+VCFReader *openVCF(string filename, PopData *popData, bool PHASED);
+map< string, HaplotypeData* > *readContigVCF(VCFReader *r, PopData *popData, bool PHASED, bool SHARED_MAP);
+void closeVCF(VCFReader *r);
 void accumulateLocusCounts(HaplotypeData *hapData, int *count, int *count2, int *nmissing);
 map< string, HaplotypeData* > *compactLoci(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, const char *keep, int keepLoci, bool perPopMap);
 map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int FILTER_LEVEL, double FILTER_LMISS, bool KEEP_MONOMORPHIC, bool PHASED);

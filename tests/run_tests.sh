@@ -162,6 +162,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
        multicontig_equiv multicontig_header multicontig_malformed
        multicontig_stage1 multicontig_stage1_twopop multicontig_dup
+       multicontig_onefile multicontig_interleaved
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -517,6 +518,11 @@ SPECU="$WORK/spu.POP1.lassip.mlg.spectra.gz"
 # same coordinate range -- the case where a flanking scan that crosses the
 # boundary has near neighbours waiting on the other side.
 gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} /^#/{print; next} {$1="2"; print}' | gzip > "$WORK/small.c2.vcf.gz"
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} /^#/{print; next} {$1="3"; print}' | gzip > "$WORK/small.c3.vcf.gz"
+# both contigs in one file, grouped; and the same records interleaved
+{ gzip -dc "$SMALL"; gzip -dc "$WORK/small.c2.vcf.gz" | grep -v "^#"; } | gzip > "$WORK/small.multi.vcf.gz"
+{ gzip -dc "$SMALL" | grep "^#"
+  paste -d'\n' <(gzip -dc "$SMALL" | grep -v "^#") <(gzip -dc "$WORK/small.c2.vcf.gz" | grep -v "^#"); } | gzip > "$WORK/small.inter.vcf.gz"
 run_lassip "$WORK/mc1.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec \
     --k 5 --winsize 50 --winstep 10 --out "$WORK/mc1" >/dev/null 2>&1
 run_lassip "$WORK/mc2.log" --vcf "$WORK/small.c2.vcf.gz" --pop "$WORK/small.pop1.txt" --calc-spec \
@@ -827,9 +833,45 @@ if selected multicontig_dup; then
     "$BIN" --vcf "$SMALL" "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec --k 5 \
         --winsize 50 --winstep 10 --out "$WORK/mcdup" >"$WORK/mcdup.log" 2>&1
     rc=$?
-    if [ "$rc" = 65 ] && grep -q "more than one of the --vcf files" "$WORK/mcdup.log"; then
+    if [ "$rc" = 65 ] && grep -q "appears more than once in the input" "$WORK/mcdup.log"; then
         pass "multicontig_dup (repeated contig rejected)"
     else fail multicontig_dup "a repeated contig was not rejected (exit $rc)"; fi
+fi
+
+if selected multicontig_onefile && [ -f "$WORK/small.multi.vcf.gz" ]; then
+    # One VCF holding several contigs must give exactly what the same records
+    # give as one file per contig. The reader hands contigs back one at a time
+    # from a single pass, so this also checks that its per-file state (column to
+    # row mapping, population counts) survives a contig boundary correctly.
+    if run_lassip "$WORK/mcof.log" --vcf "$WORK/small.multi.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/mcof" &&
+       run_lassip "$WORK/mcof2.log" --vcf "$SMALL" "$WORK/small.c2.vcf.gz" --pop "$WORK/small.pop1.txt" \
+        --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/mcof2"; then
+        if [ "$(hash_gz "$WORK/mcof.POP1.lassip.hap.spectra.gz")" = \
+             "$(hash_gz "$WORK/mcof2.POP1.lassip.hap.spectra.gz")" ]; then
+            pass "multicontig_onefile (one multi-contig VCF == two single-contig VCFs)"
+        else fail multicontig_onefile "one multi-contig VCF differs from the same data as two files"; fi
+    else fail multicontig_onefile "run failed"; fi
+    # and the two input forms mix: a multi-contig file alongside a single-contig one
+    if run_lassip "$WORK/mcmix.log" --vcf "$WORK/small.multi.vcf.gz" "$WORK/small.c3.vcf.gz" \
+        --pop "$WORK/small.pop1.txt" --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/mcmix"; then
+        hdr=$(gzip -dc "$WORK/mcmix.POP1.lassip.hap.spectra.gz" | sed -n 1p)
+        seen=$(gzip -dc "$WORK/mcmix.POP1.lassip.hap.spectra.gz" | tail -n +3 | cut -f1 | uniq | tr '\n' ' ')
+        if echo "$hdr" | grep -q "contigs 3 1 " && [ "$seen" = "1 2 3 " ]; then
+            pass "multicontig_onefile (multi-contig and single-contig files together)"
+        else fail multicontig_onefile "mixed input gave contigs [$seen], header: $hdr"; fi
+    else fail multicontig_onefile "mixed run failed"; fi
+fi
+
+if selected multicontig_interleaved && [ -f "$WORK/small.inter.vcf.gz" ]; then
+    # Contigs whose records are not grouped would have to be buffered to be
+    # assembled, which is what reading in one pass is meant to avoid. Refuse.
+    "$BIN" --vcf "$WORK/small.inter.vcf.gz" --pop "$WORK/small.pop1.txt" --calc-spec --k 5 \
+        --winsize 50 --winstep 10 --out "$WORK/mcint" >"$WORK/mcint.log" 2>&1
+    rc=$?
+    if [ "$rc" = 65 ] && grep -q "not all together" "$WORK/mcint.log"; then
+        pass "multicontig_interleaved (ungrouped records rejected)"
+    else fail multicontig_interleaved "ungrouped contig records were not rejected (exit $rc)"; fi
 fi
 
 # ---------------------------------------------------------------- summary

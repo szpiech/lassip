@@ -451,49 +451,56 @@ int runSpectra(const Config &cfg)
     set<string> contigsSeen;
 
     for (unsigned int f = 0; f < vcfFiles.size(); f++){
-      map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFiles[f], popData, PHASED, (FILTER_LEVEL < 2));
+      //A file may hold several contigs; the reader hands them back one at a
+      //time from a single pass, so the loop below is over contigs, not files.
+      VCFReader *vcf = openVCF(vcfFiles[f], popData, PHASED);
+      map< string, HaplotypeData* > *hapDataByPop;
 
-      if(FILTER_LEVEL > 0){
-        hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, KEEP_MONO, PHASED);
+      while ((hapDataByPop = readContigVCF(vcf, popData, PHASED, (FILTER_LEVEL < 2))) != NULL){
+
+        if(FILTER_LEVEL > 0){
+          hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, KEEP_MONO, PHASED);
+        }
+
+        string chr = hapDataByPop->begin()->second->map->chr;
+        if(contigsSeen.count(chr) > 0){
+          cerr << "ERROR: contig " << chr << " appears more than once in the input.\n";
+          throw 0;
+        }
+        contigsSeen.insert(chr);
+
+        LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
+        //One work cursor per population; threads claim chunks of windows from it.
+        WorkCursor cursor;
+        cursor.nunits = popData->npops;
+        cursor.next = new std::atomic<unsigned int>[cursor.nunits];
+        for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
+
+        vector<LASSI_work_order_t> orders(numThreads);
+        vector<std::thread> peer;
+        for (int i = 0; i < numThreads; i++){
+          orders[i].id = i;
+          orders[i].cursor = &cursor;
+          orders[i].nullWins.assign(popData->npops, 0);
+          orders[i].hapDataByPop = hapDataByPop;
+          orders[i].popData = popData;
+          orders[i].params = &params;
+          orders[i].results = results;
+          peer.push_back(std::thread(calc_LASSI_stats, &orders[i]));
+        }
+        for (int i = 0; i < numThreads; i++) peer[i].join();
+        for (int i = 0; i < numThreads; i++)
+          for (int pop = 0; pop < popData->npops; pop++)
+            results->pops[pop].nullWins += orders[i].nullWins[pop];
+        delete [] cursor.next;
+
+        resultsByContig.push_back(results);
+
+        //initResults copied out every value the writer needs, so the genotypes
+        //and the map can go now.
+        releaseHapDataByPop(hapDataByPop);
       }
-
-      string chr = hapDataByPop->begin()->second->map->chr;
-      if(contigsSeen.count(chr) > 0){
-        cerr << "ERROR: contig " << chr << " appears in more than one of the --vcf files.\n";
-        throw 0;
-      }
-      contigsSeen.insert(chr);
-
-      LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
-      //One work cursor per population; threads claim chunks of windows from it.
-      WorkCursor cursor;
-      cursor.nunits = popData->npops;
-      cursor.next = new std::atomic<unsigned int>[cursor.nunits];
-      for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
-
-      vector<LASSI_work_order_t> orders(numThreads);
-      vector<std::thread> peer;
-      for (int i = 0; i < numThreads; i++){
-        orders[i].id = i;
-        orders[i].cursor = &cursor;
-        orders[i].nullWins.assign(popData->npops, 0);
-        orders[i].hapDataByPop = hapDataByPop;
-        orders[i].popData = popData;
-        orders[i].params = &params;
-        orders[i].results = results;
-        peer.push_back(std::thread(calc_LASSI_stats, &orders[i]));
-      }
-      for (int i = 0; i < numThreads; i++) peer[i].join();
-      for (int i = 0; i < numThreads; i++)
-        for (int pop = 0; pop < popData->npops; pop++)
-          results->pops[pop].nullWins += orders[i].nullWins[pop];
-      delete [] cursor.next;
-
-      resultsByContig.push_back(results);
-
-      //initResults copied out every value the writer needs, so the genotypes
-      //and the map can go now.
-      releaseHapDataByPop(hapDataByPop);
+      closeVCF(vcf);
     }
 
     cerr << "Done.\n";

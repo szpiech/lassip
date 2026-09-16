@@ -1196,38 +1196,38 @@ static inline unsigned char *cellPtr(vector<unsigned char*> &blocks, int locus){
     return &blocks[idx / 16384][idx % 16384];
 }
 
-map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *popData, bool PHASED, bool SHARED_MAP){
-    igzstream fin;
-    cerr << "Opening " << filename << "...\n";
-    fin.open(filename.c_str());
+//A VCF is read in a single pass and handed back one contig at a time, so a
+//file holding several contigs costs no more memory than one holding a single
+//contig. Everything derived from the header -- the column to row mapping and
+//the per-population haplotype counts -- lives in the handle and is computed
+//once; only the genotype blocks and the locus names are per contig.
+VCFReader *openVCF(string filename, PopData *popData, bool PHASED){
+    VCFReader *r = new VCFReader;
+    r->filename = filename;
+    r->exhausted = false;
+    r->ncontigs = 0;
 
-    if (fin.fail()){
+    cerr << "Opening " << filename << "...\n";
+    r->fin.open(filename.c_str());
+    if (r->fin.fail()){
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
         throw 0;
     }
 
-    //Bytes per storage block while reading; a power of two so cellPtr divides
-    //with shifts. 16 KB holds 65,536 loci, so slack is at most 16 KB per row.
-    const int GT_BLOCK = 16384;
-
-    //The file is read once. Genotypes are appended to growable packed rows and
-    //the locus count is whatever the file turns out to hold; lassip used to
-    //decompress and scan the whole VCF a first time just to count records.
-    int numMapCols = 9;
-    string line;
+    const int numMapCols = 9;
     string junk;
     map<string,bool> checkInd;
-    
-    while(getline(fin, junk)) if(junk[0] == '#' && junk[1] == 'C') break;
-    
-    int nfields = (countFields(junk) - numMapCols);
-    string *inds = new string[nfields];
+
+    while(getline(r->fin, junk)) if(junk[0] == '#' && junk[1] == 'C') break;
+
+    r->nfields = (countFields(junk) - numMapCols);
+    r->inds = new string[r->nfields];
     stringstream ss;
     ss.str(junk);
     for (int i = 0; i < numMapCols; i++) ss >> junk;
-    for (int i = 0; i < nfields; i++){
-        ss >> inds[i];
-        checkInd[inds[i]] = true;
+    for (int i = 0; i < r->nfields; i++){
+        ss >> r->inds[i];
+        checkInd[r->inds[i]] = true;
     }
 
     for (unsigned int i = 0; i < popData->indOrder.size(); i++){
@@ -1237,11 +1237,9 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         }
     }
 
-
-
-    int nhaps = nfields;
+    int nhaps = r->nfields;
     if(PHASED) nhaps *= 2;
-    
+
     int nload = 0;
     for (int i = 0; i < popData->npops; i++) nload += (popData->pop2inds[popData->popOrder[i]].size());
     if(PHASED) nload *= 2;
@@ -1250,47 +1248,63 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     else if (!PHASED) cerr << "unphased";
     cerr << " haplotypes across " << popData->npops << " pops.\n";
 
-    
-    //Per-haplotype packed rows that grow as records are read. Row pointers
-    //would go stale on reallocation, so columns are resolved to row indices
-    //and the population each belongs to.
     map<string,int> pop2indIndex;
-    map<string,int> pop2nhaps;
     for (int i = 0; i < popData->npops; i++){
         string popName = popData->popOrder[i];
-        pop2nhaps[popName] = (popData->pop2inds[popName].size()) * (PHASED ? 2 : 1);
+        r->pop2nhaps[popName] = (popData->pop2inds[popName].size()) * (PHASED ? 2 : 1);
         pop2indIndex[popName] = 0;
     }
+
+    //Resolve each VCF sample column to the rows it writes, once. The genotype
+    //loop used to look up ind2pop (twice), pop2indIndex and dataByPop for every
+    //genotype of every locus -- five red-black-tree lookups keyed on a string,
+    //all of them determined by the column index alone.
+    r->row1 = new int[r->nfields];
+    r->row2 = new int[r->nfields];
+    r->nrows = 0;
+    for (int field = 0; field < r->nfields; field++){
+        r->row1[field] = -1;
+        r->row2[field] = -1;
+        if (popData->ind2pop.count(r->inds[field]) == 0) continue;
+        string p = popData->ind2pop[r->inds[field]];
+        int f = pop2indIndex[p]++;
+        r->row1[field] = r->nrows++;
+        r->rowPop.push_back(p);
+        r->rowIndexInPop.push_back(PHASED ? 2*f : f);
+        if (PHASED){
+            r->row2[field] = r->nrows++;
+            r->rowPop.push_back(p);
+            r->rowIndexInPop.push_back(2*f + 1);
+        }
+    }
+
+    return r;
+}
+
+void closeVCF(VCFReader *r){
+    if (r == NULL) return;
+    r->fin.close();
+    delete [] r->inds;
+    delete [] r->row1;
+    delete [] r->row2;
+    delete r;
+    return;
+}
+
+//Read the next contig's records, or return NULL when the file is spent. The
+//record that ends a contig is the first record of the next one, so it is held
+//in the handle rather than re-read.
+map< string, HaplotypeData* > *readContigVCF(VCFReader *r, PopData *popData, bool PHASED, bool SHARED_MAP){
+    if (r->exhausted) return NULL;
+
+    //Bytes per storage block while reading; a power of two so cellPtr divides
+    //with shifts. 16 KB holds 65,536 loci, so slack is at most 16 KB per row.
+    const int GT_BLOCK = 16384;
 
     //Rows grow as fixed blocks rather than as std::vector: a vector doubling to
     //hold n bytes peaks at 2n, and with one row per haplotype that overshoot is
     //the whole genotype matrix again. Blocks are never copied or reallocated.
-    vector< vector<unsigned char*> > rows;
-    vector<string> rowPop;
-    vector<int> rowIndexInPop;
-    //Resolve each VCF sample column to the rows it writes, once. The loop below
-    //used to look up ind2pop (twice), pop2indIndex and dataByPop for every
-    //genotype of every locus -- five red-black-tree lookups keyed on a string,
-    //all of them determined by the column index alone.
-    int *row1 = new int[nfields];
-    int *row2 = new int[nfields];
-    for (int field = 0; field < nfields; field++){
-        row1[field] = -1;
-        row2[field] = -1;
-        if (popData->ind2pop.count(inds[field]) == 0) continue;
-        string p = popData->ind2pop[inds[field]];
-        int f = pop2indIndex[p]++;
-        row1[field] = rows.size();
-        rows.push_back(vector<unsigned char*>());
-        rowPop.push_back(p);
-        rowIndexInPop.push_back(PHASED ? 2*f : f);
-        if (PHASED){
-            row2[field] = rows.size();
-            rows.push_back(vector<unsigned char*>());
-            rowPop.push_back(p);
-            rowIndexInPop.push_back(2*f + 1);
-        }
-    }
+    vector< vector<unsigned char*> > rows(r->nrows);
 
     //deque, not vector: a vector doubling to hold one entry per locus copies
     //and briefly holds two arrays of every locus name
@@ -1298,21 +1312,23 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     deque<unsigned int> physicalPos;
     string contig;
 
-    string chr, name;
+    string line, chr, name;
     unsigned int pos;
-
     int nloci = 0;
-    for (; getline(fin, line); nloci++)
+
+    while (true)
     {
-        if (line.size() == 0 || line[0] == '#'){ nloci--; continue; }
-        int locus = nloci;
-        //every fourth locus opens a new byte, and every GT_BLOCK bytes a new block
-        if ((locus & 3) == 0 && (((locus >> 2) & (GT_BLOCK - 1)) == 0)){
-            for (unsigned int r = 0; r < rows.size(); r++){
-                rows[r].push_back(new unsigned char[GT_BLOCK]);
-                memset(rows[r].back(), 0xFF, GT_BLOCK);
-            }
+        if (!r->pending.empty()){
+            line.swap(r->pending);
+            r->pending.clear();
         }
+        else if (!getline(r->fin, line)){
+            r->exhausted = true;
+            break;
+        }
+
+        if (line.size() == 0 || line[0] == '#') continue;
+
         const char *c = line.c_str();
         const char *lineEnd = c + line.size();
 
@@ -1330,8 +1346,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         while (c < lineEnd && *c != '\t' && *c != ' ') c++;
         chr.assign(tok, c - tok);
         if (chr.empty()){
-            cerr << "ERROR: " << filename << " has a record with no CHROM field ("
-                 << (locus + 1) << " records in).\n";
+            cerr << "ERROR: " << r->filename << " has a record with no CHROM field.\n";
             throw 0;
         }
         while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
@@ -1349,28 +1364,51 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
             while (c < lineEnd && *c != '\t' && *c != ' ') c++;
         }
 
-        if (locus == 0) contig = chr;
-        else if (chr != contig){
-            cerr << "ERROR: " << filename << " contains more than one chromosome ("
-                 << contig << " and " << chr << " at " << name
-                 << "). lassip expects one contig per file.\n";
-            throw 0;
+        if (nloci == 0){
+            //Contigs are returned one at a time in the order they appear, so a
+            //contig whose records are split into separate runs would have to be
+            //buffered to be assembled. Refuse instead: sorting the file is the
+            //user's one-line fix, and silently treating the runs as separate
+            //contigs would put two blocks under one name in the spectra.
+            if (r->seenContigs.count(chr) > 0){
+                cerr << "ERROR: the records for contig " << chr << " in " << r->filename
+                     << " are not all together. lassip reads a VCF in one pass, so its\n"
+                     << "\trecords must be grouped by contig (sorting by position does this).\n";
+                throw 0;
+            }
+            r->seenContigs.insert(chr);
+            contig = chr;
         }
+        else if (chr != contig){
+            //first record of the next contig: keep it for the next call
+            r->pending = line;
+            break;
+        }
+
+        int locus = nloci;
+        //every fourth locus opens a new byte, and every GT_BLOCK bytes a new block
+        if ((locus & 3) == 0 && (((locus >> 2) & (GT_BLOCK - 1)) == 0)){
+            for (int rw = 0; rw < r->nrows; rw++){
+                rows[rw].push_back(new unsigned char[GT_BLOCK]);
+                memset(rows[rw].back(), 0xFF, GT_BLOCK);
+            }
+        }
+
         locusNames.push_back(name);
         physicalPos.push_back(pos);
 
-        for (int field = 0; field < nfields; field++)
+        for (int field = 0; field < r->nfields; field++)
         {
             while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
             const char *gt = c;
             while (c < lineEnd && *c != '\t' && *c != ' ') c++;
             size_t gtlen = c - gt;
             if (gtlen == 0){
-                cerr << "ERROR: " << filename << " has fewer genotype fields than samples at "
+                cerr << "ERROR: " << r->filename << " has fewer genotype fields than samples at "
                      << chr << ":" << pos << ".\n";
                 throw 0;
             }
-            if (row1[field] < 0) continue;
+            if (r->row1[field] < 0) continue;
 
             char allele1, allele2;
             if (gtlen == 1 && gt[0] == VCF_MISSING){
@@ -1390,14 +1428,14 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                 //columns, this error is where it surfaces, and the bare message
                 //gave nothing to look at
                 cerr << "ERROR: Alleles must be coded 0/1/. only. Read \""
-                     << string(gt, gtlen) << "\" for sample " << inds[field]
-                     << " at " << chr << ":" << pos << " in " << filename << ".\n";
+                     << string(gt, gtlen) << "\" for sample " << r->inds[field]
+                     << " at " << chr << ":" << pos << " in " << r->filename << ".\n";
                 throw 0;
             }
 
             if(PHASED){
-                setGTInByte(cellPtr(rows[row1[field]], locus), locus, (allele1 == VCF_MISSING) ? GT_MISS : gtCode(allele1));
-                setGTInByte(cellPtr(rows[row2[field]], locus), locus, (allele2 == VCF_MISSING) ? GT_MISS : gtCode(allele2));
+                setGTInByte(cellPtr(rows[r->row1[field]], locus), locus, (allele1 == VCF_MISSING) ? GT_MISS : gtCode(allele1));
+                setGTInByte(cellPtr(rows[r->row2[field]], locus), locus, (allele2 == VCF_MISSING) ? GT_MISS : gtCode(allele2));
             }
             else{
                 unsigned char code;
@@ -1405,19 +1443,21 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
                 else if (allele1 == '1' && allele2 == '1') code = GT_2;
                 else if (allele1 == '0' && allele2 == '0') code = GT_0;
                 else code = GT_1;
-                setGTInByte(cellPtr(rows[row1[field]], locus), locus, code);
+                setGTInByte(cellPtr(rows[r->row1[field]], locus), locus, code);
             }
         }
-    }
 
-    delete [] row1;
-    delete [] row2;
-    fin.close();
+        nloci++;
+    }
 
     if (nloci < 1){
-        cerr << "ERROR: " << filename << " contains no variant records.\n";
-        throw 0;
+        if (r->ncontigs == 0){
+            cerr << "ERROR: " << r->filename << " contains no variant records.\n";
+            throw 0;
+        }
+        return NULL;
     }
+    r->ncontigs++;
     cerr << "Read " << nloci << " loci from " << contig << ".\n";
 
     MapData *mapData = NULL;
@@ -1426,7 +1466,7 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     map<string, HaplotypeData* > *dataByPop = new map<string, HaplotypeData* >;
     for (int i = 0; i < popData->npops; i++){
         string popName = popData->popOrder[i];
-        HaplotypeData *hd = initHaplotypeData(pop2nhaps[popName], nloci, !SHARED_MAP, false);
+        HaplotypeData *hd = initHaplotypeData(r->pop2nhaps[popName], nloci, !SHARED_MAP, false);
         if(SHARED_MAP) hd->map = mapData;
         dataByPop->operator[](popName) = hd;
     }
@@ -1434,19 +1474,19 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
     //Hand each grown row to its population and free it immediately, so the
     //growable copy and the final matrix never both hold the whole dataset.
     int stride = gtStride(nloci);
-    for (unsigned int r = 0; r < rows.size(); r++){
-        HaplotypeData *hd = dataByPop->at(rowPop[r]);
+    for (int rw = 0; rw < r->nrows; rw++){
+        HaplotypeData *hd = dataByPop->at(r->rowPop[rw]);
         unsigned char *dst = new unsigned char[stride + 1];
         memset(dst, 0xFF, stride + 1);
-        hd->data[rowIndexInPop[r]] = dst;
-        for (unsigned int b = 0; b < rows[r].size(); b++){
+        hd->data[r->rowIndexInPop[rw]] = dst;
+        for (unsigned int b = 0; b < rows[rw].size(); b++){
             int off = b * GT_BLOCK;
             int n = (stride - off < GT_BLOCK) ? stride - off : GT_BLOCK;
-            if (n > 0) memcpy(dst + off, rows[r][b], n);
-            delete [] rows[r][b];
+            if (n > 0) memcpy(dst + off, rows[rw][b], n);
+            delete [] rows[rw][b];
         }
         dst[stride] = 0xFF;
-        vector<unsigned char*>().swap(rows[r]);
+        vector<unsigned char*>().swap(rows[rw]);
     }
 
     for (int i = 0; i < popData->npops; i++){
@@ -1461,11 +1501,10 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         }
         if (SHARED_MAP) break;
     }
-    deque<string>().swap(locusNames);
-    deque<unsigned int>().swap(physicalPos);
 
     return dataByPop;
 }
+
 
 /*
 */
