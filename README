@@ -342,7 +342,18 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   or truncated) was read past its end. A VCF containing more than one
   chromosome was silently labelled with the first record's contig; it is now
   rejected. An error raised while reading input escaped main and aborted the
-  process instead of exiting with a code.
+  process instead of exiting with a code. A record beginning with whitespace
+  was misread: the rewritten reader took the CHROM token from the first
+  character of the line, so a leading space or tab gave an empty contig name
+  and shifted every remaining field by one, putting the FORMAT column where
+  the first sample's genotype belonged and failing with "Alleles must be coded
+  0/1/. only" -- an error naming the genotypes, which were fine. Leading
+  whitespace is now skipped, a record with no CHROM field is reported as such,
+  and the allele-coding error names the genotype, sample and position it read.
+  lassip <= 1.2.2 took the fixed columns by stream extraction, which skips
+  whitespace, so the fields were not shifted there; that concerns field
+  extraction only, and whether any particular file completed a run depended on
+  the usual filtering.
 
   CLI. --help goes to stdout and exits 0 (-h also works), --version prints the
   version, a bare lassip prints a usage synopsis, and the help is grouped by

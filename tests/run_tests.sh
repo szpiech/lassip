@@ -154,7 +154,7 @@ selected() {
 
 # ---------------------------------------------------------------- fixtures
 
-CASES="spec_phased stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
+CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_filter1 spec_filter0
        spec_missing spec_missing_tol missing_determinism nullwin_threads
        cluster_bestcomp cluster_softem cluster_conserved
        spec_unphased_missing cluster_unphased cluster_twopop cluster_unphased_twopop
@@ -191,6 +191,10 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
     /^#/ {print; next}
     { r++; if (r%3==0) for(i=10;i<=NF;i++) if ((i-9)%7==0) $i="./."; print }' | gzip > "$WORK/small.missing.vcf.gz"
 
+# the same records with a leading space on every data line: the reader used to
+# end the CHROM token at line[0] and shift every later field by one
+gzip -dc "$SMALL" | awk '/^#/ {print; next} {print " "$0}' | gzip > "$WORK/small.leadspace.vcf.gz"
+
 # genetic map for the --dist-type cm path: 1 cM per Mb over the small fixture
 gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print $1, ($3=="."?"locus"NR:$3), $2/1000000.0, $2}' > "$WORK/small.map"
 
@@ -221,6 +225,18 @@ if selected spec_phased; then
         --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --out "$WORK/sp"; then
         compare_hash spec_phased "$WORK/sp.POP1.lassip.hap.spectra.gz" spec_phased
     else fail spec_phased "run failed"; fi
+fi
+
+if selected vcf_leading_space; then
+    # leading whitespace in a record must not change what is read: the same
+    # records with a space prepended have to reproduce the spec_phased golden
+    # exactly. Before the fix this run died with "Alleles must be coded 0/1/.
+    # only", because the shifted fields put FORMAT where a genotype belonged.
+    if run_lassip "$WORK/vcf_leading_space.log" --vcf "$WORK/small.leadspace.vcf.gz" \
+        --pop "$WORK/small.pop1.txt" \
+        --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --out "$WORK/spws"; then
+        compare_hash vcf_leading_space "$WORK/spws.POP1.lassip.hap.spectra.gz" spec_phased
+    else fail vcf_leading_space "run failed"; fi
 fi
 
 if selected stats_only; then

@@ -1131,10 +1131,24 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
         const char *c = line.c_str();
         const char *lineEnd = c + line.size();
 
-        //CHROM
+        //CHROM. Leading whitespace is skipped before the first token, not only
+        //between tokens. Reading the token straight from line[0] ended it
+        //immediately on a record beginning with a space or tab, giving an empty
+        //contig name and shifting every later field by one: the FORMAT column
+        //was then read as the first sample's genotype and the run died on
+        //"Alleles must be coded 0/1/. only". lassip <= 1.2.2 took the fixed
+        //columns by stream extraction (fin >> chr >> pos >> ...), which skips
+        //whitespace, so the fields were not shifted there; that is about field
+        //extraction alone and not a claim that such a file completed a run.
+        while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
         const char *tok = c;
         while (c < lineEnd && *c != '\t' && *c != ' ') c++;
         chr.assign(tok, c - tok);
+        if (chr.empty()){
+            cerr << "ERROR: " << filename << " has a record with no CHROM field ("
+                 << (locus + 1) << " records in).\n";
+            throw 0;
+        }
         while (c < lineEnd && (*c == '\t' || *c == ' ')) c++;
         //POS
         pos = 0;
@@ -1187,7 +1201,12 @@ map< string, HaplotypeData* > *readHaplotypeDataVCF(string filename, PopData *po
 
             if((allele1 != '1' && allele1 != '0' && allele1 != VCF_MISSING) ||
                (allele2 != '1' && allele2 != '0' && allele2 != VCF_MISSING)){
-                cerr << "ERROR: Alleles must be coded 0/1/. only.\n";
+                //name the offending field: when a malformed record shifts the
+                //columns, this error is where it surfaces, and the bare message
+                //gave nothing to look at
+                cerr << "ERROR: Alleles must be coded 0/1/. only. Read \""
+                     << string(gt, gtlen) << "\" for sample " << inds[field]
+                     << " at " << chr << ":" << pos << " in " << filename << ".\n";
                 throw 0;
             }
 
