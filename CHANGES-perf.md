@@ -82,6 +82,9 @@ revised this file.
 | `d6f8942` | tests: cover --unphased with missing genotypes, and stage 2 from .mlg spectra |
 | `9d7d080` | docs: record the unphased coverage work |
 | `8355dd8` | tests: make the phased/unphased coverage matrix symmetric |
+| `d9d8090` | docs: record the symmetric coverage matrix |
+| `2953ca4` | macos-arm binary |
+| `b31494f` | readHaplotypeDataVCF: skip leading whitespace before the CHROM token |
 
 ## Behavioural differences
 
@@ -141,6 +144,11 @@ changed.
 12. **`--match-tol` groups at `<=` the given number of differences**, as its
    help text says, instead of `<`. The new `--match-tol t` reproduces the old
    `t+1`; `--match-tol 0` on data without missing genotypes is unchanged.
+13. **Two reader errors say more.** The allele-coding error now names the
+   genotype it read, the sample and the position, because that is where a
+   malformed or shifted record surfaces and the bare message gave nothing to
+   look at; a record with no CHROM field is reported instead of being parsed
+   onward. Both exit 65 like the other input-data errors.
 
 ## Test coverage
 
@@ -175,7 +183,7 @@ that the phased row never had.
 | 2 pop, clean, stage 1, filter 2 | yes | yes |
 | 2 pop, missing, stage 1, filter 2 | yes | yes |
 
-33 cases, 39 checks; 22 phased, 11 unphased. The useful result: all nine
+34 cases, 40 checks; 23 phased, 11 unphased. The useful result: all nine
 checks of the clean unphased cases pass against the v1.2.2 binary, so
 `--unphased` output is byte-identical to 1.2.2 at every filter level, for one
 and two populations, and through `--lassi`, `--avg-spec`, `--null-spec` and
@@ -190,6 +198,22 @@ genuinely new behaviour. Every clean case passes against it, including
 `lassi_nullspec_unphased`: they use only flags v1.2.2 has, and their input
 spectra are byte-identical between the two builds. Those close coverage gaps
 rather than pinning changes.
+
+`b31494f` fixes a regression the suite could not have caught, and adds the
+case that would have. Every VCF in `example/` and `testing/` is tab-delimited
+with no leading whitespace, so no fixture exercised the one assumption the
+rewritten reader in `03cda7c` added: that a record's first character begins
+the CHROM field. Given a record written as `" 1<TAB>417<TAB>..."`, the reader
+took the empty string before the space as the contig name and shifted every
+later field by one, so the FORMAT column was read as the first sample's
+genotype and the run died on "Alleles must be coded 0/1/. only" -- an error
+naming the genotypes, which were fine. `vcf_leading_space` is
+`testing/small.vcf.gz` with a space prepended to every data line, run with the
+`spec_phased` flags and compared against the `spec_phased` golden, so it
+asserts that leading whitespace changes nothing rather than only that the run
+survives. Suite is 34 cases, 40 checks. The general lesson is that fixtures
+derived from repository data share the repository's formatting, so a reader
+rewrite wants at least one fixture that is deliberately formatted differently.
 
 The exercise also produced a result worth knowing: the `--hap-cluster` choice
 matters much less for unphased data. Same VCF, same window, `--match-tol 0` --
