@@ -161,6 +161,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        spec_unphased_twopop spec_unphased_filter1 spec_unphased_filter0
        salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
        multicontig_equiv multicontig_header multicontig_malformed
+       multicontig_stage1 multicontig_stage1_twopop multicontig_dup
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -753,6 +754,82 @@ if selected multicontig_malformed && [ -f "$WORK/merged.interleaved.spectra.gz" 
     [ $? = 65 ] && grep -q "more than once" "$WORK/mcm_d.log" && n=$((n+1))
     if [ "$n" = 3 ]; then pass "multicontig_malformed (interleaved, bad count, duplicate contig)"
     else fail multicontig_malformed "only $n of 3 malformed inputs were rejected"; fi
+fi
+
+if selected multicontig_stage1 && [ -f "$WORK/small.c2.vcf.gz" ]; then
+    # Stage 1 given two --vcf files must produce exactly what two separate runs
+    # produce, concatenated: same rows in the same order, plus a contigs field
+    # in the header. MC1/MC2 above are those separate runs.
+    for arm in "hap ''" "mlg --unphased"; do
+        set -- $arm
+        kind=$1; flag=$2
+        [ "$flag" = "''" ] && flag=""
+        if run_lassip "$WORK/mcs1_$kind.log" --vcf "$SMALL" "$WORK/small.c2.vcf.gz" \
+            --pop "$WORK/small.pop1.txt" $flag --calc-spec --k 5 --winsize 50 --winstep 10 \
+            --out "$WORK/mcs1_$kind"; then
+            if [ "$kind" = hap ]; then
+                a=$WORK/mc1.POP1.lassip.hap.spectra.gz; b=$WORK/mc2.POP1.lassip.hap.spectra.gz
+            else
+                run_lassip "$WORK/mcu1.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --unphased \
+                    --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/mcu1" >/dev/null 2>&1
+                run_lassip "$WORK/mcu2.log" --vcf "$WORK/small.c2.vcf.gz" --pop "$WORK/small.pop1.txt" --unphased \
+                    --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/mcu2" >/dev/null 2>&1
+                a=$WORK/mcu1.POP1.lassip.mlg.spectra.gz; b=$WORK/mcu2.POP1.lassip.mlg.spectra.gz
+            fi
+            got="$WORK/mcs1_$kind.POP1.lassip.$kind.spectra.gz"
+            if cmp -s <(gzip -dc "$got" | tail -n +3) \
+                      <(cat <(gzip -dc "$a" | tail -n +3) <(gzip -dc "$b" | tail -n +3)); then
+                pass "multicontig_stage1 $kind rows == two separate runs"
+            else fail multicontig_stage1 "$kind: rows differ from the two separate runs"; fi
+            n1=$(gzip -dc "$a" | tail -n +3 | wc -l | tr -d ' ')
+            n2=$(gzip -dc "$b" | tail -n +3 | wc -l | tr -d ' ')
+            if gzip -dc "$got" | sed -n 1p | grep -q "contigs 2 1 $n1 2 $n2"; then
+                pass "multicontig_stage1 $kind header declares the contig layout"
+            else fail multicontig_stage1 "$kind: header lacks the expected contigs field: $(gzip -dc "$got" | sed -n 1p)"; fi
+        else fail multicontig_stage1 "$kind run failed"; fi
+    done
+    # and the file stage 1 just wrote must analyse identically to the two files
+    "$BIN" --spectra "$WORK/mcs1_hap.POP1.lassip.hap.spectra.gz" --salti --dist-type nw \
+        --max-extend-nw 5 --threads "$THREADS" --out "$WORK/mcs1_st2" >/dev/null 2>&1
+    "$BIN" --spectra "$MC1" "$MC2" --salti --dist-type nw --max-extend-nw 5 \
+        --threads "$THREADS" --out "$WORK/mcs1_st2ref" >/dev/null 2>&1
+    if [ "$(hash_gz "$WORK/mcs1_st2.lassip.hap.out.gz")" = "$(hash_gz "$WORK/mcs1_st2ref.lassip.hap.out.gz")" ]; then
+        pass "multicontig_stage1 round trip through stage 2"
+    else fail multicontig_stage1 "stage 2 on the multi-contig file differs from the two-file run"; fi
+fi
+
+if selected multicontig_stage1_twopop && [ -f "$WORK/small.c2.vcf.gz" ]; then
+    # At --filter-level 2 each population is filtered separately, so the two
+    # populations have different window counts per contig. Each per-population
+    # file must declare its own layout, and stage 2 validates it on read.
+    if run_lassip "$WORK/mcs1tp.log" --vcf "$SMALL" "$WORK/small.c2.vcf.gz" \
+        --pop "$WORK/small.pop2.txt" --calc-spec --k 5 --winsize 50 --winstep 10 \
+        --out "$WORK/mcs1tp"; then
+        ok=1
+        for pop in POPA POPB; do
+            f="$WORK/mcs1tp.$pop.lassip.hap.spectra.gz"
+            hdr=$(gzip -dc "$f" | sed -n 1p)
+            rows=$(gzip -dc "$f" | tail -n +3 | wc -l | tr -d ' ')
+            declared=$(echo "$hdr" | awk '{for(i=1;i<=NF;i++) if($i=="wins") print $(i+1)}')
+            c1=$(gzip -dc "$f" | tail -n +3 | awk '$1=="1"' | wc -l | tr -d ' ')
+            c2=$(gzip -dc "$f" | tail -n +3 | awk '$1=="2"' | wc -l | tr -d ' ')
+            [ "$declared" = "$rows" ] || { ok=0; echo "      $pop: header says $declared, file has $rows rows" >&2; }
+            echo "$hdr" | grep -q "contigs 2 1 $c1 2 $c2" || { ok=0; echo "      $pop: contigs field wrong: $hdr" >&2; }
+            "$BIN" --spectra "$f" --salti --dist-type nw --max-extend-nw 5 --out "$WORK/mcs1tp_$pop" >/dev/null 2>&1 || ok=0
+        done
+        if [ "$ok" = 1 ]; then pass "multicontig_stage1_twopop (per-population layouts, both readable)"
+        else fail multicontig_stage1_twopop "a per-population header or read failed"; fi
+    else fail multicontig_stage1_twopop "run failed"; fi
+fi
+
+if selected multicontig_dup; then
+    # the same contig twice is a mistake, not a merge
+    "$BIN" --vcf "$SMALL" "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec --k 5 \
+        --winsize 50 --winstep 10 --out "$WORK/mcdup" >"$WORK/mcdup.log" 2>&1
+    rc=$?
+    if [ "$rc" = 65 ] && grep -q "more than one of the --vcf files" "$WORK/mcdup.log"; then
+        pass "multicontig_dup (repeated contig rejected)"
+    else fail multicontig_dup "a repeated contig was not rejected (exit $rc)"; fi
 fi
 
 # ---------------------------------------------------------------- summary

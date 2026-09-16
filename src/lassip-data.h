@@ -234,6 +234,14 @@ struct LASSIResults {
 //one struct, held in popOrder order so a population is an index.
 struct PopResults{
   string name;
+  //The contig these windows came from, and each window's resolved row header.
+  //Held here rather than read back from MapData at write time so that a
+  //contig's genotypes and map can be released as soon as it is computed --
+  //stage 1 keeps one contig resident however many it is given.
+  string chr;
+  unsigned int *startPos;
+  unsigned int *endPos;
+  int *nsnps;
   vector< pair_t* > *windows;
   double **data;        //per window: K frequencies, then nhaps and uhaps
   double *h12;          //NULL unless --hapstats
@@ -256,7 +264,7 @@ void releaseAllWindows(vector< pair_t* > *windows);
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, 
                                 int WINSIZE, int WINSTEP, int K, bool HAPSTATS, string DIST_TYPE);
-void writeLASSIInitialResults(string outfile, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop,
+void writeLASSIInitialResults(string outfile, const vector<LASSIInitialResults *> &resultsByContig,
                               PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE);
 
 void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* > *resultsByPopByChr,
@@ -298,6 +306,10 @@ void releaseMapData(MapData *data);
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap = true);
 HaplotypeData *initHaplotypeData(unsigned int nhaps, unsigned int nloci, bool domap, bool allocRows);
 void releaseHapData(HaplotypeData *data);
+
+//Release a whole population map, freeing each distinct MapData exactly once --
+//at --filter-level 0 and 1 every population shares one.
+void releaseHapDataByPop(map< string, HaplotypeData* > *hapDataByPop);
 
 //reads haplotype data from a VCF, splitting samples into the populations named
 //in the pop file; throws on malformed input

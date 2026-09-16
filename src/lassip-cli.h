@@ -60,8 +60,10 @@ const string HELP_FILENAME_MAP = "A map file formatted <chr#> <locusID> <genetic
 
 const string ARG_FILENAME_POP1_VCF = "--vcf";
 const string DEFAULT_FILENAME_POP1_VCF = "";
-const string HELP_FILENAME_POP1_VCF = "A VCF file containing haplotype data.\n\
-\tVariants should be coded 0/1.";
+const string HELP_FILENAME_POP1_VCF = "One or more VCF files containing haplotype data.\n\
+\tVariants should be coded 0/1. Each file must hold a single contig and all of\n\
+\tthe samples named by --pop; give several to analyse several contigs in one\n\
+\trun, which writes a single spectra file per population covering all of them.";
 
 const string ARG_FILENAME_POPFILE = "--pop";
 const string DEFAULT_FILENAME_POPFILE = "";

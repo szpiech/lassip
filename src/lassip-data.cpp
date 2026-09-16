@@ -227,6 +227,8 @@ map< string, HaplotypeData* > *filterHaplotypeData(map< string, HaplotypeData* >
         delete [] count2;
         delete [] nmissing;
         delete [] keep;
+        //No release here: compactLoci already frees the input it compacts,
+        //including the MapData every population shares at this filter level.
         return out;
     }
     else{//FILTER_LEVEL == 2: evaluate, and report, each population separately
@@ -395,7 +397,46 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     return;
 }
 
-void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE){
+namespace {
+
+//Rows this contig will actually contribute: the windows that survive the same
+//test the row loop applies. The header count has to be exact, because a spectra
+//file whose declared window count disagrees with its rows is refused on read.
+unsigned int writtenRows(const LASSIInitialResults *r, int K, int onlyPop){
+    //At --filter-level 2 each population has its own window list, so the count
+    //must be taken over that population's windows, not population 0's.
+    const vector< pair_t* > *windows = r->pops[onlyPop >= 0 ? onlyPop : 0].windows;
+    unsigned int n = 0;
+    for (unsigned int w = 0; w < windows->size(); w++){
+        bool skip = false;
+        if(onlyPop >= 0){
+            if(r->pops[onlyPop].data[w][K] == 0) skip = true;
+        }
+        else{
+            for (unsigned int p = 0; p < r->pops.size(); p++)
+                if(r->pops[p].data[w][K] == 0) skip = true;
+        }
+        if(!skip) n++;
+    }
+    return n;
+}
+
+//'contigs <n> <name> <rows> ...', appended after the population names so that
+//the positional header parse in earlier versions simply stops before it. Only
+//written when there is more than one contig, which keeps single-contig output
+//byte-identical to what lassip has always produced.
+string contigField(const vector<LASSIInitialResults *> &byContig, int K, int onlyPop){
+    if(byContig.size() < 2) return "";
+    stringstream ss;
+    ss << " contigs " << byContig.size();
+    for (unsigned int c = 0; c < byContig.size(); c++)
+        ss << " " << byContig[c]->pops[0].chr << " " << writtenRows(byContig[c], K, onlyPop);
+    return ss.str();
+}
+
+} //namespace
+
+void writeLASSIInitialResults(string outfileBase, const vector<LASSIInitialResults *> &resultsByContig, PopData *popData, int K, bool SPECFILE, bool HAPSTATS, bool PHASED, int FILTER_LEVEL, string DIST_TYPE){
     string ending, outfile;
     ogzstream fout;
     if(PHASED) ending = ".lassip.hap.";
@@ -416,8 +457,6 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
     if(DIST_TYPE.compare("nw") == 0) distStr = "winNum";
     else distStr = "ppos";
 
-    //bool SPECFILE = LASSI || SALTI;
-
     if(FILTER_LEVEL < 2){
         if(SPECFILE) outfile = outfileBase + ending + "spectra.gz";
         if(!SPECFILE && HAPSTATS) outfile = outfileBase + ending + "stats.gz";
@@ -427,74 +466,64 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
             throw 1;
         }
-        
-        //below filter level 2 every population shares one map and one set of
-        //windows, so the first population's are the file's
-        vector< pair_t* > *windows = results->pops[0].windows;
-        MapData *mapData = hapDataByPop->begin()->second->map;
-
-        //get max missing windows across pops
-        int maxNullWins = results->pops[0].nullWins;
-        for(unsigned int p = 0; p < results->pops.size(); p++){
-            if(results->pops[p].nullWins > maxNullWins) maxNullWins = results->pops[p].nullWins;
-        }
 
         if (SPECFILE){
-            fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size()-maxNullWins << " K " << K << " npop " << popData->popOrder.size();
+            unsigned int total = 0;
+            for (unsigned int c = 0; c < resultsByContig.size(); c++)
+                total += writtenRows(resultsByContig[c], K, -1);
+            fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << total << " K " << K << " npop " << popData->popOrder.size();
             for(unsigned int p = 0; p < popData->popOrder.size(); p++) fout << " " << popData->popOrder[p];
+            fout << contigField(resultsByContig, K, -1);
             fout << endl;
         }
         fout << "chr\tstart\tend\tnSNPs\t" << distStr;
         for(unsigned int p = 0; p < popData->popOrder.size(); p++){
             fout << "\t" << popData->popOrder[p] << "_nhaps\t" << popData->popOrder[p] << "_uhaps\t";
             if(HAPSTATS) fout << popData->popOrder[p] << "_" << h12 << "\t" << popData->popOrder[p] << "_" << h2h1 << "\t";
-            if(SPECFILE) fout << results->pops[p].header;
+            if(SPECFILE) fout << resultsByContig[0]->pops[p].header;
         }
         fout << endl;
-    
-        double *dist = results->pops[0].dist;
-        
-        for (unsigned int w = 0; w < windows->size(); w++) {
-            bool skip = false;
-            for(unsigned int p = 0; p < results->pops.size(); p++){
-                if(results->pops[p].data[w][K] == 0) skip = true;
-            }
 
-            if(skip) continue;
-
-            int st = windows->at(w)->start;
-            int en = windows->at(w)->end;
-            fout << mapData->chr << "\t" 
-                << mapData->physicalPos[st] << "\t" 
-                << mapData->physicalPos[en] << "\t"
-                << windows->at(w)->end - windows->at(w)->start + 1 << "\t"
-                << setprecision(10) 
-                << dist[w]
-                << setprecision(6);
-            for(unsigned int p = 0; p < results->pops.size(); p++){
-                double **x = results->pops[p].data;
-                double *h12 = results->pops[p].h12;
-                double *h2h1 = results->pops[p].h2h1;
-                fout << "\t" << x[w][K];
-                fout << "\t" << x[w][K+1];
-                if(HAPSTATS){
-                    fout << "\t" << h12[w];
-                    fout << "\t" << h2h1[w];
+        for (unsigned int c = 0; c < resultsByContig.size(); c++){
+            const LASSIInitialResults *results = resultsByContig[c];
+            const PopResults &ref = results->pops[0];
+            for (unsigned int w = 0; w < ref.windows->size(); w++) {
+                bool skip = false;
+                for(unsigned int p = 0; p < results->pops.size(); p++){
+                    if(results->pops[p].data[w][K] == 0) skip = true;
                 }
-                if(SPECFILE){
-                    for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
-                }       
+
+                if(skip) continue;
+
+                fout << ref.chr << "\t" 
+                    << ref.startPos[w] << "\t" 
+                    << ref.endPos[w] << "\t"
+                    << ref.nsnps[w] << "\t"
+                    << setprecision(10) 
+                    << ref.dist[w]
+                    << setprecision(6);
+                for(unsigned int p = 0; p < results->pops.size(); p++){
+                    double **x = results->pops[p].data;
+                    double *h12v = results->pops[p].h12;
+                    double *h2h1v = results->pops[p].h2h1;
+                    fout << "\t" << x[w][K];
+                    fout << "\t" << x[w][K+1];
+                    if(HAPSTATS){
+                        fout << "\t" << h12v[w];
+                        fout << "\t" << h2h1v[w];
+                    }
+                    if(SPECFILE){
+                        for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
+                    }       
+                }
+                fout << endl;
             }
-            fout << endl;
         }
         fout.close();
     }
     else{
         for(unsigned int p = 0; p < popData->popOrder.size(); p++){
-            string popName = results->pops[p].name;
-            MapData *mapData = hapDataByPop->at(popName)->map;
-            vector< pair_t* > *windows = results->pops[p].windows;
-            int nullWins = results->pops[p].nullWins;
+            string popName = resultsByContig[0]->pops[p].name;
 
             if(SPECFILE) outfile = outfileBase + "." + popName + ending + "spectra.gz";
             if(!SPECFILE && HAPSTATS) outfile = outfileBase + "." + popName  + ending + "stats.gz";
@@ -506,44 +535,49 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
             }
 
             if (SPECFILE){
-                fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << windows->size()-nullWins << " K " << K << " npop " << 1;
+                unsigned int total = 0;
+                for (unsigned int c = 0; c < resultsByContig.size(); c++)
+                    total += writtenRows(resultsByContig[c], K, p);
+                fout << "#phased " << PHASED << " hapstats " << HAPSTATS << " wins " << total << " K " << K << " npop " << 1;
                 fout << " " << popName;
+                fout << contigField(resultsByContig, K, p);
                 fout << endl;
             }
         
             fout << "chr\tstart\tend\tnSNPs\t" << distStr;
             fout << "\t" << popName << "_nhaps\t" << popName << "_uhaps\t";
             if(HAPSTATS) fout << popName << "_" << h12 << "\t" << popName << "_" << h2h1 << "\t";
-            if(SPECFILE) fout << results->pops[p].header;
+            if(SPECFILE) fout << resultsByContig[0]->pops[p].header;
             fout << endl;
-            
-            double *dist = results->pops[p].dist;
-            double *h12 = results->pops[p].h12;
-            double *h2h1 = results->pops[p].h2h1;
-            double **x = results->pops[p].data;
 
-            for (unsigned int w = 0; w < windows->size(); w++) {
-                if(x[w][K] == 0) continue;
+            for (unsigned int c = 0; c < resultsByContig.size(); c++){
+                const PopResults &pr = resultsByContig[c]->pops[p];
+                double *dist = pr.dist;
+                double *h12v = pr.h12;
+                double *h2h1v = pr.h2h1;
+                double **x = pr.data;
 
-                int st = windows->at(w)->start;
-                int en = windows->at(w)->end; 
-                fout << mapData->chr << "\t" 
-                    << mapData->physicalPos[st] << "\t" 
-                    << mapData->physicalPos[en] << "\t"
-                    << windows->at(w)->end - windows->at(w)->start + 1 << "\t"
-                    << setprecision(10) 
-                    << dist[w]
-                    << setprecision(6)
-                    << "\t" << x[w][K]
-                    << "\t" << x[w][K+1];
-                if(HAPSTATS){
-                    fout << "\t" << h12[w];
-                    fout << "\t" << h2h1[w];
+                for (unsigned int w = 0; w < pr.windows->size(); w++) {
+                    if(x[w][K] == 0) continue;
+
+                    fout << pr.chr << "\t" 
+                        << pr.startPos[w] << "\t" 
+                        << pr.endPos[w] << "\t"
+                        << pr.nsnps[w] << "\t"
+                        << setprecision(10) 
+                        << dist[w]
+                        << setprecision(6)
+                        << "\t" << x[w][K]
+                        << "\t" << x[w][K+1];
+                    if(HAPSTATS){
+                        fout << "\t" << h12v[w];
+                        fout << "\t" << h2h1v[w];
+                    }
+                    if(SPECFILE){
+                        for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
+                    }       
+                    fout << endl;
                 }
-                if(SPECFILE){
-                    for (int s = 0; s < K; s++) fout << "\t" << x[w][s];
-                }       
-                fout << endl;
             }
             fout.close();
             fout.clear();
@@ -551,6 +585,7 @@ void writeLASSIInitialResults(string outfileBase, LASSIInitialResults *results, 
     }
     return;
 }
+
 
 
 LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, PopData *popData, int WINSIZE, int WINSTEP, int K, bool HAPSTATS, string DIST_TYPE){
@@ -575,11 +610,19 @@ LASSIInitialResults *initResults(map< string, HaplotypeData* > *hapDataByPop, Po
         pr.header = "";
         pr.nullWins = 0;
 
+        pr.chr = mapData->chr;
+        pr.startPos = new unsigned int[nwin];
+        pr.endPos = new unsigned int[nwin];
+        pr.nsnps = new int[nwin];
+
         for (unsigned int i = 0; i < nwin; i++){
             pr.data[i] = new double[K+2];
             int st = pr.windows->at(i)->start;
             int en = pr.windows->at(i)->end;
             pr.dist[i] = (mapData->physicalPos[en]-mapData->physicalPos[st]+1)*0.5+mapData->physicalPos[st];
+            pr.startPos[i] = mapData->physicalPos[st];
+            pr.endPos[i] = mapData->physicalPos[en];
+            pr.nsnps[i] = en - st + 1;
         }
     }
 
@@ -1104,6 +1147,22 @@ MapData *initMapData(int nloci)
     }
 
     return data;
+}
+
+void releaseHapDataByPop(map< string, HaplotypeData* > *hapDataByPop)
+{
+    if (hapDataByPop == NULL) return;
+    set<MapData *> maps;
+    map< string, HaplotypeData* >::iterator it;
+    for(it = hapDataByPop->begin(); it != hapDataByPop->end(); it++){
+        if(it->second == NULL) continue;
+        //Every population may point at the same MapData; free it once.
+        if(it->second->map != NULL && maps.count(it->second->map) > 0) it->second->map = NULL;
+        else if(it->second->map != NULL) maps.insert(it->second->map);
+        releaseHapData(it->second);
+    }
+    delete hapDataByPop;
+    return;
 }
 
 void releaseMapData(MapData *data)

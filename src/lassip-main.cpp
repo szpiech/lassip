@@ -23,6 +23,7 @@
 #include "lassip-winstats.h"
 #include "lassip-data.h"
 #include "lassip-cli.h"
+#include <set>
 
 using namespace std;
 
@@ -36,7 +37,7 @@ struct Config
     int numThreads;
     string mapFilename;
     bool MAP;
-    string vcfFilename;
+    vector<string> vcfFiles;
     bool VCF;
     string outfileBase;
     string popFilename;
@@ -77,7 +78,7 @@ void registerFlags(param_t &params)
   // I/O flags
   params.addFlag(ARG_OUTFILE, DEFAULT_OUTFILE, "Input and output", HELP_OUTFILE);
   params.addFlag(ARG_FILENAME_MAP, DEFAULT_FILENAME_MAP, "Input and output", HELP_FILENAME_MAP);
-  params.addFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "Input and output", HELP_FILENAME_POP1_VCF);
+  params.addListFlag(ARG_FILENAME_POP1_VCF, DEFAULT_FILENAME_POP1_VCF, "Input and output", HELP_FILENAME_POP1_VCF);
   params.addFlag(ARG_FILENAME_POPFILE, DEFAULT_FILENAME_POPFILE, "Input and output", HELP_FILENAME_POPFILE);
   params.addListFlag(ARG_FILENAME_SPECFILES, DEFAULT_FILENAME_SPECFILES, "Input and output", HELP_FILENAME_SPECFILES);
   
@@ -118,7 +119,7 @@ Config readConfig(param_t &params)
   // I/O
   string mapFilename = params.getStringFlag(ARG_FILENAME_MAP);
   bool MAP = params.isFlagSet(ARG_FILENAME_MAP);
-  string vcfFilename = params.getStringFlag(ARG_FILENAME_POP1_VCF);
+  vector<string> vcfFiles = params.getStringListFlag(ARG_FILENAME_POP1_VCF);
   bool VCF = params.isFlagSet(ARG_FILENAME_POP1_VCF);
   string outfileBase = params.getStringFlag(ARG_OUTFILE);
   string popFilename = params.getStringFlag(ARG_FILENAME_POPFILE);
@@ -158,7 +159,7 @@ Config readConfig(param_t &params)
   cfg.numThreads = numThreads;
   cfg.mapFilename = mapFilename;
   cfg.MAP = MAP;
-  cfg.vcfFilename = vcfFilename;
+  cfg.vcfFiles = vcfFiles;
   cfg.VCF = VCF;
   cfg.outfileBase = outfileBase;
   cfg.popFilename = popFilename;
@@ -422,7 +423,7 @@ bool validate(const Config &cfg)
 int runSpectra(const Config &cfg)
 {
   const int numThreads = cfg.numThreads;
-  const string &vcfFilename = cfg.vcfFilename;
+  const vector<string> &vcfFiles = cfg.vcfFiles;
   const string &outfileBase = cfg.outfileBase;
   const string &popFilename = cfg.popFilename;
   const int WINSIZE = cfg.WINSIZE;
@@ -442,38 +443,61 @@ int runSpectra(const Config &cfg)
     if(PHASED) checkK(popData,double(K)/2.0);
     else if(!PHASED) checkK(popData,double(K));
 
-    map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFilename, popData, PHASED, (FILTER_LEVEL < 2));
+    //Contigs are processed one at a time and each one's genotypes and map are
+    //released before the next is read, so peak memory is set by the largest
+    //contig however many are given. What accumulates is the results, which are
+    //nwins x (K+2) doubles per population.
+    vector<LASSIInitialResults *> resultsByContig;
+    set<string> contigsSeen;
 
-    if(FILTER_LEVEL > 0){
-      hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, KEEP_MONO, PHASED);
-    } 
+    for (unsigned int f = 0; f < vcfFiles.size(); f++){
+      map< string, HaplotypeData* > *hapDataByPop = readHaplotypeDataVCF(vcfFiles[f], popData, PHASED, (FILTER_LEVEL < 2));
 
-    LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
-    //One work cursor per population; threads claim chunks of windows from it.
-    WorkCursor cursor;
-    cursor.nunits = popData->npops;
-    cursor.next = new std::atomic<unsigned int>[cursor.nunits];
-    for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
+      if(FILTER_LEVEL > 0){
+        hapDataByPop = filterHaplotypeData(hapDataByPop, popData, FILTER_LEVEL, FILTER_LMISS, KEEP_MONO, PHASED);
+      }
 
-    vector<LASSI_work_order_t> orders(numThreads);
-    vector<std::thread> peer;
-    for (int i = 0; i < numThreads; i++){
-      orders[i].id = i;
-      orders[i].cursor = &cursor;
-      orders[i].nullWins.assign(popData->npops, 0);
-      orders[i].hapDataByPop = hapDataByPop;
-      orders[i].popData = popData;
-      orders[i].params = &params;
-      orders[i].results = results;
-      peer.push_back(std::thread(calc_LASSI_stats, &orders[i]));
+      string chr = hapDataByPop->begin()->second->map->chr;
+      if(contigsSeen.count(chr) > 0){
+        cerr << "ERROR: contig " << chr << " appears in more than one of the --vcf files.\n";
+        throw 0;
+      }
+      contigsSeen.insert(chr);
+
+      LASSIInitialResults *results = initResults(hapDataByPop, popData, WINSIZE, WINSTEP, K, HAPSTATS, DIST_TYPE);
+      //One work cursor per population; threads claim chunks of windows from it.
+      WorkCursor cursor;
+      cursor.nunits = popData->npops;
+      cursor.next = new std::atomic<unsigned int>[cursor.nunits];
+      for (unsigned int u = 0; u < cursor.nunits; u++) cursor.next[u] = 0;
+
+      vector<LASSI_work_order_t> orders(numThreads);
+      vector<std::thread> peer;
+      for (int i = 0; i < numThreads; i++){
+        orders[i].id = i;
+        orders[i].cursor = &cursor;
+        orders[i].nullWins.assign(popData->npops, 0);
+        orders[i].hapDataByPop = hapDataByPop;
+        orders[i].popData = popData;
+        orders[i].params = &params;
+        orders[i].results = results;
+        peer.push_back(std::thread(calc_LASSI_stats, &orders[i]));
+      }
+      for (int i = 0; i < numThreads; i++) peer[i].join();
+      for (int i = 0; i < numThreads; i++)
+        for (int pop = 0; pop < popData->npops; pop++)
+          results->pops[pop].nullWins += orders[i].nullWins[pop];
+      delete [] cursor.next;
+
+      resultsByContig.push_back(results);
+
+      //initResults copied out every value the writer needs, so the genotypes
+      //and the map can go now.
+      releaseHapDataByPop(hapDataByPop);
     }
-    for (int i = 0; i < numThreads; i++) peer[i].join();
-    for (int i = 0; i < numThreads; i++)
-      for (int pop = 0; pop < popData->npops; pop++)
-        results->pops[pop].nullWins += orders[i].nullWins[pop];
-    delete [] cursor.next;
+
     cerr << "Done.\n";
-    writeLASSIInitialResults(outfileBase, results, hapDataByPop, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);
+    writeLASSIInitialResults(outfileBase, resultsByContig, popData, K, CALC_SPEC, HAPSTATS, PHASED, FILTER_LEVEL, DIST_TYPE);
 
   return 0;
 }
