@@ -115,8 +115,10 @@ reproduces the non-reproducible behaviour of lassip <= 1.2.2.
 	Sites in VCF not in map file will be interpolated.
 	Default: 
 
---vcf <string>: A VCF file containing haplotype data.
-	Variants should be coded 0/1.
+--vcf <string1> ... <stringN>: One or more VCF files containing haplotype data.
+	Variants should be coded 0/1. Each file must hold a single contig and all of
+	the samples named by --pop; give several to analyse several contigs in one
+	run, which writes a single spectra file per population covering all of them.
 	Default: 
 
 --pop <string>: A file containing <ind ID> <pop ID>.
@@ -330,6 +332,19 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   interleaves contigs, repeats one, or disagrees with its own window count is
   refused. The header may carry an optional 'contigs <n> <name> <nwins> ...'
   field after the population names, validated against the rows when present.
+
+  Stage 1 takes several contigs in one run. --vcf is a list flag, so
+
+      lassip --vcf chr1.vcf.gz chr2.vcf.gz --pop pops.txt --calc-spec \\
+             --winsize 117 --winstep 12 --out scan
+
+  writes scan.<pop>.lassip.hap.spectra.gz covering both contigs, which stage 2
+  reads as one file. Each --vcf file must still hold a single contig, and the
+  same contig may not be given twice. Contigs are processed one at a time and
+  each one's genotypes are released before the next is read, so peak memory
+  grows sub-linearly: 86, 146, 192, 227, 255 MB for one to five copies of the
+  chr22 example. The rows are identical to what separate per-contig runs
+  produce, concatenated.
 
   This is also a bug fix. Previously a file holding more than one contig was
   analysed as a single block, and saltiLASSI's flanking-window scan crossed the

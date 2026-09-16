@@ -87,6 +87,8 @@ revised this file.
 | `b31494f` | readHaplotypeDataVCF: skip leading whitespace before the CHROM token |
 | `962ed12` | docs: record the leading-whitespace fix |
 | `add1534` | stage 2: delimit contigs by the chr column, not by the input file |
+| `631d94c` | docs: record Phase 0 of multi-contig support |
+| `c55cff3` | stage 1: accept several --vcf files and write one spectra file per population |
 
 ## Behavioural differences
 
@@ -184,7 +186,39 @@ contig another file supplied. The header may carry
 when present and appended rather than inserted so the file stays readable by
 1.2.x. Nothing writes it yet -- stage 1 gains that in Phase 1.
 
-Three cases added; suite is 48 checks. Against the pre-fix binary all three
+**Phase 1** (`c55cff3`) makes `--vcf` a list flag, so stage 1 analyses several
+contigs in one run and writes one spectra file per population covering all of
+them -- which stage 2 then reads as a single file. Each `--vcf` file must still
+hold one contig; accepting a multi-contig VCF is Phase 2. Rows are
+byte-identical to what separate per-contig runs produce, concatenated.
+
+For the genotypes and map of each contig to be released before the next is
+read, the writer had to stop reading `MapData`: `initResults` now copies each
+window's resolved row header into `PopResults`, and
+`writeLASSIInitialResults` takes a vector of per-contig results and no
+`HaplotypeData`. Peak memory on 1-5 copies of the chr22 example (23,208
+windows each, 4 threads, fresh process per run):
+
+| contigs | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|
+| peak RSS | 86 MB | 146 MB | 192 MB | 227 MB | 255 MB |
+
+Sub-linear with shrinking increments (+60/+46/+36/+28), but not flat -- the
+proposal's "peak set by the largest contig" was too optimistic. Only ~4.2 MB
+per contig is genuinely retained (the results); the rest is the allocator
+holding freed per-contig memory without reusing it. Runs with two windows per
+contig, where results are nil, go 74/146/150 MB for 1/2/3 contigs -- a step
+then a plateau, which is the same signature and not a leak.
+
+The header carries `contigs <n> <name> <rows> ...` when there is more than one
+contig and nothing when there is one, so single-contig output stays
+byte-identical. The counts are the rows each contig actually contributes,
+computed with the row loop's own skip test rather than by subtracting the
+largest per-population null-window count -- the old arithmetic can over-count
+when populations have null windows in different places, though no fixture
+exercises that.
+
+Six cases added across the two phases; suite is 55 checks. Against the pre-fix binary all three
 `--salti` arms fail, as do both validation cases. The `--lassi` and
 `--avg-spec` arms pass pre-fix and are coverage rather than bug-pinning:
 LASSI uses no flanking windows, and the averaging is order-independent.
