@@ -116,9 +116,11 @@ reproduces the non-reproducible behaviour of lassip <= 1.2.2.
 	Default: 
 
 --vcf <string1> ... <stringN>: One or more VCF files containing haplotype data.
-	Variants should be coded 0/1. Each file must hold a single contig and all of
-	the samples named by --pop; give several to analyse several contigs in one
-	run, which writes a single spectra file per population covering all of them.
+	Variants should be coded 0/1 and every file must contain all of the samples
+	named by --pop. Several contigs may be analysed in one run, given either as
+	one file per contig or as files holding several; the run then writes a single
+	spectra file per population covering all of them. A contig may not appear
+	twice, and a file's records must be grouped by contig.
 	Default: 
 
 --pop <string>: A file containing <ind ID> <pop ID>.
@@ -335,15 +337,19 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
   Stage 1 takes several contigs in one run. --vcf is a list flag, so
 
-      lassip --vcf chr1.vcf.gz chr2.vcf.gz --pop pops.txt --calc-spec \\
+      lassip --vcf chr1.vcf.gz chr2.vcf.gz --pop pops.txt --calc-spec \
              --winsize 117 --winstep 12 --out scan
 
   writes scan.<pop>.lassip.hap.spectra.gz covering both contigs, which stage 2
-  reads as one file. Each --vcf file must still hold a single contig, and the
-  same contig may not be given twice. Contigs are processed one at a time and
-  each one's genotypes are released before the next is read, so peak memory
-  grows sub-linearly: 86, 146, 192, 227, 255 MB for one to five copies of the
-  chr22 example. The rows are identical to what separate per-contig runs
+  reads as one file. A single VCF holding several contigs works too, and the
+  two forms mix; what is not allowed is the same contig twice, or a contig
+  whose records are not all together in one file -- lassip reads a VCF in one
+  pass and will not buffer contigs to reassemble them, so sort by position
+  first. Contigs are processed one at a time and each one's genotypes are
+  released before the next is read, so peak memory depends on how many contigs
+  there are and not on how they are packaged: about 170 MB for three copies of
+  the chr22 example whether they arrive as one file or three, against about
+  80 MB for one. The rows are identical to what separate per-contig runs
   produce, concatenated.
 
   This is also a bug fix. Previously a file holding more than one contig was

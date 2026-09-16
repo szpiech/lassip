@@ -89,6 +89,8 @@ revised this file.
 | `add1534` | stage 2: delimit contigs by the chr column, not by the input file |
 | `631d94c` | docs: record Phase 0 of multi-contig support |
 | `c55cff3` | stage 1: accept several --vcf files and write one spectra file per population |
+| `ce68e41` | docs: record Phase 1 of multi-contig support |
+| `6576b26` | stage 1: accept a VCF holding more than one contig |
 
 ## Behavioural differences
 
@@ -218,7 +220,28 @@ largest per-population null-window count -- the old arithmetic can over-count
 when populations have null windows in different places, though no fixture
 exercises that.
 
-Six cases added across the two phases; suite is 55 checks. Against the pre-fix binary all three
+**Phase 2** (`6576b26`) accepts a VCF holding more than one contig. The reader
+is now resumable -- `openVCF` parses the header and resolves the
+column-to-row mapping once per file, `readContigVCF` consumes records until
+`CHROM` changes and keeps the record that ended the contig as the first record
+of the next, `closeVCF` releases the per-file state -- so only the genotype
+blocks and locus names are per contig and a multi-contig file costs no more
+memory than a single-contig one. Output is byte-identical to the same data
+split into per-contig files, checked on the small fixture and on three copies
+of the chr22 example (69,624 windows). The two input forms mix.
+
+Peak RSS turns out to be set by the number of contigs rather than by how they
+are packaged: three contigs come to ~170 MB as one file or as three, against
+~80 MB for one contig, with ~±20 MB variation between repeats of the same
+configuration.
+
+The one-contig-per-file guard is replaced by a narrower rule: a contig may not
+reappear once another has started. Reassembling scattered runs would mean
+buffering an unbounded number of contigs, and treating the runs as separate
+contigs would put two blocks under one name in the spectra.
+
+Eight cases added across the three phases; suite is 58 checks. Remaining:
+Phase 3, which is documentation and error-message polish. Against the pre-fix binary all three
 `--salti` arms fail, as do both validation cases. The `--lassi` and
 `--avg-spec` arms pass pre-fix and are coverage rather than bug-pinning:
 LASSI uses no flanking windows, and the averaging is order-independent.
