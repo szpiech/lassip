@@ -73,7 +73,11 @@ const string HELP_FILENAME_POPFILE = "A file containing <ind ID> <pop ID>.";
 
 const string ARG_FILENAME_SPECFILES = "--spectra";
 const string DEFAULT_FILENAME_SPECFILES = "";
-const string HELP_FILENAME_SPECFILES = "A list of spectra files for finalization.";
+const string HELP_FILENAME_SPECFILES = "A list of spectra files for finalization.\n\
+\tContigs are delimited by the chr column rather than by the file, so a file may\n\
+\thold any number of them and the results are the same either way. A file's rows\n\
+\tmust be grouped by contig and ascending within one, and no contig may appear\n\
+\ttwice across the files given here.";
 
 const string ARG_OUTFILE = "--out";
 const string DEFAULT_OUTFILE = "outfile";

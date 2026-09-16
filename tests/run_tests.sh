@@ -789,9 +789,14 @@ if selected multicontig_stage1 && [ -f "$WORK/small.c2.vcf.gz" ]; then
             else fail multicontig_stage1 "$kind: rows differ from the two separate runs"; fi
             n1=$(gzip -dc "$a" | tail -n +3 | wc -l | tr -d ' ')
             n2=$(gzip -dc "$b" | tail -n +3 | wc -l | tr -d ' ')
-            if gzip -dc "$got" | sed -n 1p | grep -q "contigs 2 1 $n1 2 $n2"; then
-                pass "multicontig_stage1 $kind header declares the contig layout"
-            else fail multicontig_stage1 "$kind: header lacks the expected contigs field: $(gzip -dc "$got" | sed -n 1p)"; fi
+            hdr=$(gzip -dc "$got" | sed -n 1p)
+            # the field must sit AFTER the population names: a reader that takes
+            # the header positionally, as lassip <= 1.2.2 does, then stops before
+            # it rather than misreading it
+            after_pops=$(echo "$hdr" | awk '{for(i=1;i<=NF;i++) if($i=="npop"){n=$(i+1); print $(i+1+n+1)}}')
+            if echo "$hdr" | grep -q "contigs 2 1 $n1 2 $n2" && [ "$after_pops" = "contigs" ]; then
+                pass "multicontig_stage1 $kind header declares the contig layout after the pops"
+            else fail multicontig_stage1 "$kind: contigs field missing or misplaced: $hdr"; fi
         else fail multicontig_stage1 "$kind run failed"; fi
     done
     # and the file stage 1 just wrote must analyse identically to the two files
