@@ -88,9 +88,11 @@ revised this file.
 | `962ed12` | docs: record the leading-whitespace fix |
 | `add1534` | stage 2: delimit contigs by the chr column, not by the input file |
 | `631d94c` | docs: record Phase 0 of multi-contig support |
-| `c55cff3` | stage 1: accept several --vcf files and write one spectra file per population |
-| `ce68e41` | docs: record Phase 1 of multi-contig support |
-| `6576b26` | stage 1: accept a VCF holding more than one contig |
+| `d452025` | stage 1: accept several --vcf files and write one spectra file per population |
+| `c726650` | docs: record Phase 1 of multi-contig support |
+| `152c5eb` | stage 1: accept a VCF holding more than one contig |
+| `47d93bc` | docs: record Phase 2 of multi-contig support |
+| `5e5a8d5` | docs: finish the multi-contig documentation and correct the memory figures |
 
 ## Behavioural differences
 
@@ -188,7 +190,7 @@ contig another file supplied. The header may carry
 when present and appended rather than inserted so the file stays readable by
 1.2.x. Nothing writes it yet -- stage 1 gains that in Phase 1.
 
-**Phase 1** (`c55cff3`) makes `--vcf` a list flag, so stage 1 analyses several
+**Phase 1** (`d452025`) makes `--vcf` a list flag, so stage 1 analyses several
 contigs in one run and writes one spectra file per population covering all of
 them -- which stage 2 then reads as a single file. Each `--vcf` file must still
 hold one contig; accepting a multi-contig VCF is Phase 2. Rows are
@@ -203,14 +205,21 @@ windows each, 4 threads, fresh process per run):
 
 | contigs | 1 | 2 | 3 | 4 | 5 |
 |---|---|---|---|---|---|
-| peak RSS | 86 MB | 146 MB | 192 MB | 227 MB | 255 MB |
+| peak RSS, median of 3 | 86 MB | 141 MB | 186 MB | 211 MB | 211 MB |
+| range over the 3 runs | 79-88 | 137-155 | 171-192 | 210-229 | 183-228 |
 
-Sub-linear with shrinking increments (+60/+46/+36/+28), but not flat -- the
-proposal's "peak set by the largest contig" was too optimistic. Only ~4.2 MB
-per contig is genuinely retained (the results); the rest is the allocator
-holding freed per-contig memory without reusing it. Runs with two windows per
-contig, where results are nil, go 74/146/150 MB for 1/2/3 contigs -- a step
-then a plateau, which is the same signature and not a leak.
+Sub-linear, and flat by four contigs -- but not the "peak set by the largest
+contig" the proposal predicted. Only ~4.2 MB per contig is genuinely retained
+(the results); the rest is the allocator holding freed per-contig memory
+without immediately reusing it, and the spread between repeats of one
+configuration (9-45 MB) is comparable to the step between adjacent contig
+counts at the top end, so read the medians and not the increments.
+
+These figures replace an earlier set (86/146/192/227/255 MB) taken with
+several runs inside one process: `ru_maxrss` on `RUSAGE_CHILDREN` is a
+cumulative high-water mark over every child a process has reaped, so such a
+sequence is monotone by construction. Every figure here is one child per
+process.
 
 The header carries `contigs <n> <name> <rows> ...` when there is more than one
 contig and nothing when there is one, so single-contig output stays
@@ -220,7 +229,7 @@ largest per-population null-window count -- the old arithmetic can over-count
 when populations have null windows in different places, though no fixture
 exercises that.
 
-**Phase 2** (`6576b26`) accepts a VCF holding more than one contig. The reader
+**Phase 2** (`152c5eb`) accepts a VCF holding more than one contig. The reader
 is now resumable -- `openVCF` parses the header and resolves the
 column-to-row mapping once per file, `readContigVCF` consumes records until
 `CHROM` changes and keeps the record that ended the contig as the first record
@@ -230,18 +239,34 @@ memory than a single-contig one. Output is byte-identical to the same data
 split into per-contig files, checked on the small fixture and on three copies
 of the chr22 example (69,624 windows). The two input forms mix.
 
-Peak RSS turns out to be set by the number of contigs rather than by how they
-are packaged: three contigs come to ~170 MB as one file or as three, against
-~80 MB for one contig, with ~±20 MB variation between repeats of the same
-configuration.
+Peak RSS is set by the number of contigs rather than by how they are packaged:
+three contigs give a median of 156 MB as three files (147-186 over three runs)
+and 172 MB as one file (157-203), a difference smaller than the spread between
+repeats of either, against 86 MB for a single contig (79-88). That is not a
+demonstration that the two are equal -- only that any difference is below what
+these measurements resolve.
 
 The one-contig-per-file guard is replaced by a narrower rule: a contig may not
 reappear once another has started. Reassembling scattered runs would mean
 buffering an unbounded number of contigs, and treating the runs as separate
 contigs would put two blocks under one name in the spectra.
 
-Eight cases added across the three phases; suite is 58 checks. Remaining:
-Phase 3, which is documentation and error-message polish. Against the pre-fix binary all three
+Eight cases added across the three phases; suite is 58 checks.
+
+**Phase 3** (`5e5a8d5`) is the documentation. Two README statements the new
+capability had made false are corrected (the overview said one vcf per contig
+provided one at a time; the multi-contig note said stage 1 could not yet write
+multi-contig spectra), the spectra header line is documented for the first time
+including the contigs field, and `--spectra`'s one-line help now says how
+contigs are delimited. The cross-version note the plan called for is in: a
+spectra file written by this version is *not* refused by lassip <= 1.2.2,
+because the contigs field sits past the population names where the older
+positional parse stops, so an older binary reads it and analyses every contig
+as one block -- checked against a v1.2.2 build, which exits 0 reporting "Done
+with contig 1" and gets 94 of 188 position values and 10 likelihoods wrong. A
+test now asserts the field's placement, since the note depends on it. The
+example script shows the multi-contig form as a comment, the example data being
+one contig. Against the pre-fix binary all three
 `--salti` arms fail, as do both validation cases. The `--lassi` and
 `--avg-spec` arms pass pre-fix and are coverage rather than bug-pinning:
 LASSI uses no flanking windows, and the averaging is order-independent.
