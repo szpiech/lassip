@@ -160,6 +160,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        spec_unphased_missing cluster_unphased cluster_twopop cluster_unphased_twopop
        spec_unphased_twopop spec_unphased_filter1 spec_unphased_filter0
        salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
+       multicontig_equiv multicontig_header multicontig_malformed
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -509,6 +510,44 @@ SPEC="$WORK/sp.POP1.lassip.hap.spectra.gz"
 run_lassip "$WORK/spu.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --unphased \
     --calc-spec --k 5 --winsize 50 --winstep 10 --out "$WORK/spu" >/dev/null 2>&1
 SPECU="$WORK/spu.POP1.lassip.mlg.spectra.gz"
+
+# ---- multi-contig spectra fixtures -----------------------------------------
+# A second contig, identical data relabelled "2", so the two contigs occupy the
+# same coordinate range -- the case where a flanking scan that crosses the
+# boundary has near neighbours waiting on the other side.
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} /^#/{print; next} {$1="2"; print}' | gzip > "$WORK/small.c2.vcf.gz"
+run_lassip "$WORK/mc1.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec \
+    --k 5 --winsize 50 --winstep 10 --out "$WORK/mc1" >/dev/null 2>&1
+run_lassip "$WORK/mc2.log" --vcf "$WORK/small.c2.vcf.gz" --pop "$WORK/small.pop1.txt" --calc-spec \
+    --k 5 --winsize 50 --winstep 10 --out "$WORK/mc2" >/dev/null 2>&1
+MC1="$WORK/mc1.POP1.lassip.hap.spectra.gz"
+MC2="$WORK/mc2.POP1.lassip.hap.spectra.gz"
+
+# a genetic map covering both contigs, for the --dist-type cm arm
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print $1, ($3=="."?"locus"NR:$3), $2/1000000.0, $2}' > "$WORK/mc.map"
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print "2", ($3=="."?"locus"NR:$3), $2/1000000.0, $2}' >> "$WORK/mc.map"
+
+# merge them into one file: contig 1's header with the total window count, then
+# both row blocks. This is exactly what a user gets by concatenating by hand.
+if [ -f "$MC1" ] && [ -f "$MC2" ]; then
+    N1=$(gzip -dc "$MC1" | tail -n +3 | wc -l | tr -d ' ')
+    N2=$(gzip -dc "$MC2" | tail -n +3 | wc -l | tr -d ' ')
+    merge_spectra() {   # $1 = total wins to declare, $2 = extra header text, $3 = out
+        { gzip -dc "$MC1" | sed -n 1p | awk -v n="$1" -v x="$2" \
+              '{for(i=1;i<=NF;i++){if(i>1&&$(i-1)=="wins"){printf "%s", n}else{printf "%s", $i}; printf (i<NF?" ":"")}; if(x!="")printf " %s", x; print ""}'
+          gzip -dc "$MC1" | sed -n 2p
+          gzip -dc "$MC1" | tail -n +3
+          gzip -dc "$MC2" | tail -n +3 ; } | gzip > "$3"
+    }
+    merge_spectra $((N1+N2)) ""                                    "$WORK/merged.spectra.gz"
+    merge_spectra $((N1+N2)) "contigs 2 1 $N1 2 $N2"               "$WORK/merged.hdr.spectra.gz"
+    merge_spectra $((N1+N2)) "contigs 2 1 $((N1-1)) 2 $((N2+1))"   "$WORK/merged.badhdr.spectra.gz"
+    merge_spectra $((N1+N2-1)) ""                                  "$WORK/merged.badwins.spectra.gz"
+    # contigs interleaved rather than grouped
+    { gzip -dc "$WORK/merged.spectra.gz" | sed -n '1,2p'
+      gzip -dc "$WORK/merged.spectra.gz" | tail -n +3 | sort -k1,1 -k2,2n -s | awk 'NR%2==1{print} NR%2==0{print}' \
+        | awk -v n1=$N1 '{a[NR]=$0} END{for(i=1;i<=n1;i++){print a[i]; print a[n1+i]}}' ; } | gzip > "$WORK/merged.interleaved.spectra.gz"
+fi
 if [ ! -f "$SPEC" ]; then
     run_lassip "$WORK/spec_for_stage2.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" \
         --calc-spec --hapstats --k 10 --winsize 50 --winstep 10 --out "$WORK/sp" || true
@@ -646,6 +685,74 @@ if selected lassi_nullspec_unphased && [ -f "$SPECU" ]; then
         --null-spec "$WORK/nsrcu.lassip.null.spectra.gz" --threads "$THREADS" --out "$WORK/lnu"; then
         compare_table lassi_nullspec_unphased "$WORK/lnu.lassip.mlg.out.gz" lassi_nullspec_unphased 1e-6
     else fail lassi_nullspec_unphased "run failed"; fi
+fi
+
+if selected multicontig_equiv && [ -f "$WORK/merged.spectra.gz" ]; then
+    # The central equivalence of Phase 0: analysing one file that holds two
+    # contigs must give exactly what analysing the two files gives, because
+    # contigs are delimited by the chr column rather than by the file. Run for
+    # every --dist-type, since each derives the flanking distance differently
+    # (nw from the window index within the block, bp from the file, cm from the
+    # map), and for both stage-2 methods.
+    ok=1
+    for arm in "salti nw --max-extend-nw 5" \
+               "salti bp --max-extend-bp 5000" \
+               "salti cm --max-extend-cm 0.5 --map $WORK/mc.map" \
+               "lassi nw" ; do
+        set -- $arm
+        method=$1; dt=$2; shift 2
+        if [ "$method" = lassi ]; then extra=""; else extra="--dist-type $dt $*"; fi
+        "$BIN" --spectra "$MC1" "$MC2" --$method $extra --threads "$THREADS" \
+            --out "$WORK/mce_sep_${method}_$dt" >"$WORK/mce_sep_${method}_$dt.log" 2>&1 || ok=0
+        "$BIN" --spectra "$WORK/merged.spectra.gz" --$method $extra --threads "$THREADS" \
+            --out "$WORK/mce_mrg_${method}_$dt" >"$WORK/mce_mrg_${method}_$dt.log" 2>&1 || ok=0
+        a=$(hash_gz "$WORK/mce_sep_${method}_$dt.lassip.hap.out.gz")
+        b=$(hash_gz "$WORK/mce_mrg_${method}_$dt.lassip.hap.out.gz")
+        if [ -n "$a" ] && [ "$a" = "$b" ]; then pass "multicontig_equiv --$method --dist-type $dt"
+        else fail multicontig_equiv "--$method --dist-type $dt: merged file differs from the two files"; fi
+    done
+    "$BIN" --spectra "$MC1" "$MC2" --avg-spec --out "$WORK/mce_sep_avg" >/dev/null 2>&1
+    "$BIN" --spectra "$WORK/merged.spectra.gz" --avg-spec --out "$WORK/mce_mrg_avg" >/dev/null 2>&1
+    if [ "$(hash_gz "$WORK/mce_sep_avg.lassip.null.spectra.gz")" = \
+         "$(hash_gz "$WORK/mce_mrg_avg.lassip.null.spectra.gz")" ]; then
+        pass "multicontig_equiv --avg-spec"
+    else fail multicontig_equiv "--avg-spec: merged file differs from the two files"; fi
+    [ "$ok" = 1 ] || fail multicontig_equiv "a run failed"
+fi
+
+if selected multicontig_header && [ -f "$WORK/merged.hdr.spectra.gz" ]; then
+    # the optional 'contigs <n> <name> <nwins> ...' field: honoured when it
+    # matches the rows, an error when it does not
+    "$BIN" --spectra "$WORK/merged.hdr.spectra.gz" --salti --dist-type nw --max-extend-nw 5 \
+        --out "$WORK/mch_ok" >"$WORK/mch_ok.log" 2>&1
+    rc=$?
+    if [ "$rc" = 0 ] && [ "$(hash_gz "$WORK/mch_ok.lassip.hap.out.gz")" = \
+                          "$(hash_gz "$WORK/mce_mrg_salti_nw.lassip.hap.out.gz")" ]; then
+        pass "multicontig_header (declared layout accepted)"
+    else fail multicontig_header "a correct contigs field changed the result or failed (exit $rc)"; fi
+    "$BIN" --spectra "$WORK/merged.badhdr.spectra.gz" --salti --dist-type nw --max-extend-nw 5 \
+        --out "$WORK/mch_bad" >"$WORK/mch_bad.log" 2>&1
+    rc=$?
+    if [ "$rc" = 65 ] && grep -q "contig layout" "$WORK/mch_bad.log"; then
+        pass "multicontig_header (wrong layout rejected)"
+    else fail multicontig_header "a contigs field contradicting the rows was not rejected (exit $rc)"; fi
+fi
+
+if selected multicontig_malformed && [ -f "$WORK/merged.interleaved.spectra.gz" ]; then
+    # a file assembled wrongly must be refused rather than analysed as though
+    # the contig boundary were somewhere else
+    n=0
+    "$BIN" --spectra "$WORK/merged.interleaved.spectra.gz" --salti --dist-type nw --max-extend-nw 5 \
+        --out "$WORK/mcm_i" >"$WORK/mcm_i.log" 2>&1
+    [ $? = 65 ] && grep -q "grouped by contig" "$WORK/mcm_i.log" && n=$((n+1))
+    "$BIN" --spectra "$WORK/merged.badwins.spectra.gz" --salti --dist-type nw --max-extend-nw 5 \
+        --out "$WORK/mcm_w" >"$WORK/mcm_w.log" 2>&1
+    [ $? = 65 ] && grep -q "rows" "$WORK/mcm_w.log" && n=$((n+1))
+    "$BIN" --spectra "$MC1" "$MC1" --salti --dist-type nw --max-extend-nw 5 \
+        --out "$WORK/mcm_d" >"$WORK/mcm_d.log" 2>&1
+    [ $? = 65 ] && grep -q "more than once" "$WORK/mcm_d.log" && n=$((n+1))
+    if [ "$n" = 3 ]; then pass "multicontig_malformed (interleaved, bad count, duplicate contig)"
+    else fail multicontig_malformed "only $n of 3 malformed inputs were rejected"; fi
 fi
 
 # ---------------------------------------------------------------- summary

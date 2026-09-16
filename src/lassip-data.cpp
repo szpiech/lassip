@@ -18,6 +18,7 @@
 #include "lassip-data.h"
 #include "lassip-wintools.h"
 #include <cstring>   //memset, memcpy -- libc++ pulls these in transitively, libstdc++ does not
+#include <set>      //contig uniqueness while grouping spectra rows
 
 void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecByPop){
     ogzstream fout;
@@ -679,115 +680,240 @@ SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr){
     return avgSpec;
 }
 
-map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
+namespace {
 
-    map<string, vector<SpectrumData *>* > *specDataByPopByChr = new map<string, vector<SpectrumData *>* >;
-    map<string, SpectrumData *> *specDataByPop = readSpecData(filenames[0]);
-    
-    int K = specDataByPop->begin()->second->K;
-    bool PHASED = specDataByPop->begin()->second->PHASED;
-    bool HAPSTATS = specDataByPop->begin()->second->HAPSTATS;
+//Everything on a spectra file's '#phased ...' line.
+struct SpecHeader {
+    bool PHASED;
+    bool HAPSTATS;
+    unsigned int nwins;
+    int K;
+    int npop;
+    vector<string> popNames;
+    //Optional trailing 'contigs <n> <name> <nwins> ...', written by lassip 1.3+
+    //for a file holding more than one contig. Absent from older files and from
+    //single-contig files, where the layout is taken from the chr column alone.
+    //The field sits after the population names because the parse is positional:
+    //appending to the line leaves it readable by earlier versions.
+    bool haveContigs;
+    vector<string> contigNames;
+    vector<unsigned int> contigWins;
+};
 
-    unsigned int npops = specDataByPop->size();
-    cerr << "Loading " << filenames[0] << " with " << npops << " pops and K = " << K << endl;
-
-    map<string, SpectrumData *>::iterator it;
-    for(it = specDataByPop->begin(); it != specDataByPop->end(); it++){
-        specDataByPopByChr->operator[](it->first) = new vector<SpectrumData *>;
-        specDataByPopByChr->at(it->first)->push_back(it->second);
+SpecHeader parseSpecHeader(const string &line, const string &filename){
+    SpecHeader h;
+    stringstream ss(line);
+    string junk, tag;
+    ss >> tag >> h.PHASED >> junk >> h.HAPSTATS >> junk >> h.nwins >> junk >> h.K >> junk >> h.npop;
+    if(tag.compare("#phased") != 0 || ss.fail()){
+        cerr << "ERROR: " << filename << " is not a valid spectra file.\n";
+        throw 0;
     }
-    
-    for (unsigned int i = 1; i < filenames.size(); i++){
-        specDataByPop = readSpecData(filenames[i]);
-
-        cerr << "Loading " << filenames[i] << " with " << specDataByPop->size() 
-            << " pops and K = " << specDataByPop->begin()->second->K << endl;
-      
-        if (K != specDataByPop->begin()->second->K || 
-            npops != specDataByPop->size() || 
-            PHASED != specDataByPop->begin()->second->PHASED || 
-            HAPSTATS != specDataByPop->begin()->second->HAPSTATS){
-            
-            cerr << "ERROR: Spectra files don't match.\n";
+    for(int i = 0; i < h.npop; i++){
+        string name;
+        if(!(ss >> name)){
+            cerr << "ERROR: " << filename << " header names fewer than " << h.npop << " populations.\n";
             throw 0;
         }
-      
-        K = specDataByPop->begin()->second->K;
-
-        for(it = specDataByPop->begin(); it != specDataByPop->end(); it++){
-            if(specDataByPopByChr->count(it->first) == 0){
-                cerr << "ERROR: Not all files have the same set of populations.\n";
+        h.popNames.push_back(name);
+    }
+    h.haveContigs = false;
+    string next;
+    if(ss >> next && next.compare("contigs") == 0){
+        int ncontig = 0;
+        ss >> ncontig;
+        for(int i = 0; i < ncontig; i++){
+            string name;
+            unsigned int n = 0;
+            if(!(ss >> name >> n)){
+                cerr << "ERROR: " << filename << " header declares " << ncontig
+                     << " contigs but lists " << i << ".\n";
                 throw 0;
             }
-            specDataByPopByChr->at(it->first)->push_back(it->second);
+            h.contigNames.push_back(name);
+            h.contigWins.push_back(n);
         }
+        h.haveContigs = true;
     }
-    return specDataByPopByChr;
+    return h;
 }
 
-map<string, SpectrumData *> *readSpecData(string filename){
+//First pass over the rows, reading the chr and start columns only, to learn the
+//contig layout before anything is allocated. Also where a file that was
+//concatenated wrongly is caught: rows must be grouped by contig and ascending
+//within one, because the flanking scan walks by index and assumes dist is
+//monotone.
+vector< pair<string, unsigned int> > scanContigRuns(const string &filename, unsigned int nwins){
     igzstream fin;
-    stringstream ss;
-    string junk, junk0;
-    unsigned int nwins;
-    int K, npop;
-    bool HAPSTATS;
-    bool PHASED;
-    vector<string> popNames;
-
     fin.open(filename.c_str());
-    if (fin.fail()) {
+    if(fin.fail()){
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
         throw 0;
     }
-    getline(fin,junk);
-    ss.str(junk);
-    ss >> junk0 >> PHASED >> junk >> HAPSTATS >> junk >> nwins >> junk >> K >> junk >> npop;
-    if(junk0.compare("#phased") != 0){
-        cerr << "ERROR: Must provide valid spectra files.\n";
+    string line, chr, prev;
+    getline(fin, line);   //#phased ...
+    getline(fin, line);   //column names
+    vector< pair<string, unsigned int> > runs;
+    set<string> seen;
+    long lastStart = -1;
+    unsigned int nrow = 0;
+    while(getline(fin, line)){
+        if(line.length() == 0) continue;
+        size_t t1 = line.find('\t');
+        if(t1 == string::npos){
+            cerr << "ERROR: " << filename << " row " << nrow + 1 << " is not tab separated.\n";
+            throw 0;
+        }
+        chr = line.substr(0, t1);
+        size_t t2 = line.find('\t', t1 + 1);
+        long start = atol(line.substr(t1 + 1, t2 - t1 - 1).c_str());
+        if(nrow == 0 || chr.compare(prev) != 0){
+            if(seen.count(chr) > 0){
+                cerr << "ERROR: " << filename << " returns to contig " << chr
+                     << " after leaving it. Rows must be grouped by contig.\n";
+                throw 0;
+            }
+            seen.insert(chr);
+            runs.push_back(make_pair(chr, 0u));
+            prev = chr;
+            lastStart = -1;
+        }
+        if(start <= lastStart){
+            cerr << "ERROR: " << filename << " contig " << chr << " has a window starting at "
+                 << start << " after one starting at " << lastStart
+                 << ". Rows must ascend within a contig.\n";
+            throw 0;
+        }
+        lastStart = start;
+        runs.back().second++;
+        nrow++;
+    }
+    fin.close();
+    if(nrow != nwins){
+        cerr << "ERROR: " << filename << " header says " << nwins << " windows but the file has "
+             << nrow << " rows.\n";
         throw 0;
     }
-    for(int i = 0; i < npop; i++){
-        ss >> junk;
-        popNames.push_back(junk);
-    }
-    ss.clear();
+    return runs;
+}
 
-    map<string, SpectrumData *> *specDataByPop = new map<string, SpectrumData *>;
-    SpectrumData *data;
-    string **info = new string*[nwins];
-    double *dist = new double[nwins];
-    for(int p = 0; p < npop; p++){
-        data = initSpecData(nwins,K,false, HAPSTATS);
-        data->info = info;
-        data->dist = dist;
-        data->HAPSTATS = HAPSTATS;
-        data->PHASED = PHASED;
-        specDataByPop->operator[](popNames[p]) = data;
-    }
-    
-    getline(fin,junk);
-    for(unsigned int w = 0; w < nwins; w++){
-        info[w] = new string[4];
-        getline(fin,junk);
-        ss.str(junk);
-        for(int i = 0; i < 4; i++) ss >> info[w][i];
-        ss >> dist[w];
-        for(int p = 0; p < npop; p++){
-            data = specDataByPop->at(popNames[p]);
-            ss >> data->nhaps[w];
-            ss >> data->uhaps[w];
-            if(HAPSTATS){
-                ss >> data->h12[w];
-                ss >> data->h2h1[w];
-            }
-            for(int i = 0; i < K; i++) ss >> data->freq[w][i];
+} //namespace
+
+//Read the spectra files into one block per CONTIG per population.
+//
+//Contigs are delimited by the chr column, not by the file, so one file may hold
+//any number of contigs and N files may hold one each. Grouping this way is what
+//makes the contig boundary structural: calcMTA bounds its flanking scan by
+//SpectrumData::nwins, and for --dist-type nw the distance IS the window's index
+//within the block, so a block spanning two contigs would draw neighbouring
+//contig windows into the likelihood with no coordinate discontinuity to stop it.
+map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
+
+    map<string, vector<SpectrumData *>* > *specDataByPopByChr = new map<string, vector<SpectrumData *>* >;
+    set<string> contigsSeen;
+    int K = 0, npop = 0;
+    bool PHASED = false, HAPSTATS = false;
+    vector<string> popNames;
+
+    for (unsigned int f = 0; f < filenames.size(); f++){
+        igzstream fin;
+        fin.open(filenames[f].c_str());
+        if(fin.fail()){
+            cerr << "ERROR: Failed to open " << filenames[f] << " for reading.\n";
+            throw 0;
         }
-        ss.clear();
-    }
+        string line;
+        getline(fin, line);
+        SpecHeader h = parseSpecHeader(line, filenames[f]);
+        getline(fin, line);   //column names
 
-    fin.close();
-    return specDataByPop;
+        vector< pair<string, unsigned int> > runs = scanContigRuns(filenames[f], h.nwins);
+
+        if(h.haveContigs){
+            bool ok = (h.contigNames.size() == runs.size());
+            for (size_t i = 0; ok && i < runs.size(); i++)
+                ok = (h.contigNames[i].compare(runs[i].first) == 0 && h.contigWins[i] == runs[i].second);
+            if(!ok){
+                cerr << "ERROR: " << filenames[f] << " header lists a contig layout its rows do not match.\n";
+                throw 0;
+            }
+        }
+
+        if(f == 0){
+            K = h.K; npop = h.npop; PHASED = h.PHASED; HAPSTATS = h.HAPSTATS; popNames = h.popNames;
+            for (int p = 0; p < npop; p++)
+                specDataByPopByChr->operator[](popNames[p]) = new vector<SpectrumData *>;
+        }
+        else{
+            if(K != h.K || npop != h.npop || PHASED != h.PHASED || HAPSTATS != h.HAPSTATS){
+                cerr << "ERROR: Spectra files don't match.\n";
+                throw 0;
+            }
+            for (int p = 0; p < h.npop; p++){
+                if(specDataByPopByChr->count(h.popNames[p]) == 0){
+                    cerr << "ERROR: Not all files have the same set of populations.\n";
+                    throw 0;
+                }
+            }
+        }
+
+        cerr << "Loading " << filenames[f] << " with " << npop << " pops, K = " << K << " and "
+             << runs.size() << (runs.size() == 1 ? " contig" : " contigs") << endl;
+
+        for (size_t c = 0; c < runs.size(); c++){
+            if(contigsSeen.count(runs[c].first) > 0){
+                cerr << "ERROR: contig " << runs[c].first << " appears more than once across the spectra files.\n";
+                throw 0;
+            }
+            contigsSeen.insert(runs[c].first);
+
+            unsigned int n = runs[c].second;
+            //info and dist describe the windows, not any one population, so one
+            //copy is shared by every population's block for this contig. Any
+            //cleanup must free them once per contig, NOT once per population.
+            string **info = new string*[n];
+            double *dist = new double[n];
+            vector<SpectrumData *> blocks;
+            for (int p = 0; p < npop; p++){
+                SpectrumData *data = initSpecData(n, K, false, HAPSTATS);
+                data->info = info;
+                data->dist = dist;
+                data->HAPSTATS = HAPSTATS;
+                data->PHASED = PHASED;
+                data->chr = runs[c].first;
+                blocks.push_back(data);
+                specDataByPopByChr->at(popNames[p])->push_back(data);
+            }
+
+            for (unsigned int w = 0; w < n; w++){
+                info[w] = new string[4];
+                if(!getline(fin, line)){
+                    cerr << "ERROR: " << filenames[f] << " ended before its rows were read.\n";
+                    throw 0;
+                }
+                stringstream ss(line);
+                for (int i = 0; i < 4; i++) ss >> info[w][i];
+                ss >> dist[w];
+                for (int p = 0; p < npop; p++){
+                    SpectrumData *data = blocks[p];
+                    ss >> data->nhaps[w];
+                    ss >> data->uhaps[w];
+                    if(HAPSTATS){
+                        ss >> data->h12[w];
+                        ss >> data->h2h1[w];
+                    }
+                    for (int i = 0; i < K; i++) ss >> data->freq[w][i];
+                }
+                if(ss.fail()){
+                    cerr << "ERROR: " << filenames[f] << " has a malformed row at "
+                         << info[w][0] << ":" << info[w][1] << ".\n";
+                    throw 0;
+                }
+            }
+        }
+        fin.close();
+    }
+    return specDataByPopByChr;
 }
 
 SpectrumData *initSpecData(int nwins, int K, bool doinfo, bool HAPSTATS){

@@ -201,9 +201,13 @@ struct pair_t //guess it's a triplet...
 };
 
 struct SpectrumData {
+  //One block per CONTIG. calcMTA bounds its flanking scan by nwins, and with
+  //--dist-type nw the distance is the window's index within this block, so the
+  //contig boundary must be the edge of the block rather than a bounds check.
   double **freq;
   int nwins;
   int K;
+  string chr;
   //unsigned int **info;
   string **info;
   unsigned int *nhaps;
@@ -270,7 +274,6 @@ void releaseResults(LASSIResults *data);
 SpectrumData *initSpecData(int nwins, int K, bool doinfo = true, bool HAPSTATS = true);
 void releaseSpecData(SpectrumData *data);
 
-map<string, SpectrumData *> *readSpecData(string filename);
 map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames);
 
 SpectrumData *averageSpec(vector<SpectrumData *> *specDataByChr);
