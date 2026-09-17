@@ -93,6 +93,9 @@ revised this file.
 | `152c5eb` | stage 1: accept a VCF holding more than one contig |
 | `47d93bc` | docs: record Phase 2 of multi-contig support |
 | `5e5a8d5` | docs: finish the multi-contig documentation and correct the memory figures |
+| `424218a` | docs: record Phase 3 in the branch summary |
+| `e9a750f` | exit 74 rather than 65 when a file cannot be opened |
+| `8ab8f2f` | bump to 1.3.1, replace the v1.1.2 manual, and fix seven wrong format lines |
 
 ## Behavioural differences
 
@@ -387,6 +390,27 @@ latent items were found by GCC's diagnostics. Remaining warnings are
 pre-existing unused parameters (`PHASED` in `filterHaplotypeData`, `DIST_TYPE`
 in `initResults`, `len` in the three clustering routines).
 
+## Version 1.3.1
+
+`IOERR` is wired up: the ten sites that report "Failed to open" throw a typed
+`IOError` and exit 74, leaving 65 for a file that opens and holds the wrong
+thing. The two are now distinguishable at the same flag -- `--map missing.map`
+gives 74, `--map wrong-contig.map` gives 65 -- and `exit_codes` pins the whole
+matrix. One of those ten reported "for writing" for an input stream.
+
+`MANUAL.md` replaces the v1.1.2 PDF, which had no source in the repository and
+had drifted three releases behind. Writing it found that every one of the
+README's seven format lines omits the window position column, in v1.2.2's
+output as much as this branch's, so the documentation was wrong rather than
+the program; `doc_formats` now pins it. It also found a wrong page range in a
+citation carried from the author's own README (Harris et al. 2018 is Genetics
+210:1429-1452), verified against Crossref along with the other three.
+
+One thing to settle before release: the exit-code change is the same kind of
+interface change that argued for 1.3.0 over 1.2.3, so 1.4.0 may be the better
+number if 1.3.0 has not shipped, in which case the two changelog entries could
+be merged.
+
 ## Left for you to decide
 
 - **Whether `soft-em` should stop being experimental.** It is the most accurate
@@ -413,9 +437,10 @@ Resolved since the first version of this file:
 Nothing remains from the original review list. Items noticed along the way and
 not acted on:
 
-- I/O errors are still not distinguished from data errors (both exit 65)
-  because roughly 30 sites in the data layer throw untyped ints. `EXIT_IOERR`
-  is defined for when they are typed.
+- `param_t` throws 18 more untyped ints for bad flag values, which reach the
+  same catch as data errors and so exit 65. Those are usage errors and should
+  be 64, but changing them risks the messages the tests match on, so it is
+  left as a separate change.
 
 Done since the first version of this file: genotypes packed two bits per locus
 (`d004ac4`), the VCF read once rather than twice (`03e8d51`), `hfs_window`
