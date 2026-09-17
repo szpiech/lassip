@@ -1,0 +1,369 @@
+% lassip manual. Build with `make` in this directory; see doc/README-doc.
+%
+% The option reference in section 7 is not written here: options.tex is
+% generated from `lassip --help` by gen-options.py, so it cannot drift from the
+% binary the way the v1.1.2 PDF did.
+\documentclass[11pt]{article}
+
+\usepackage[T1]{fontenc}       % load-bearing: OT1 renders < and > as inverted marks
+\usepackage[utf8]{inputenc}
+
+% Also load-bearing, and not cosmetic: with T1 the typewriter font applies the
+% -- ligature, so \texttt{--seed} comes out as an en dash followed by "seed".
+% In a manual whose job is to say what to type, that is wrong rather than ugly.
+% Disabling the ligature for tt fixes every flag name at once -- in prose, in
+% the generated option labels, and in the generated descriptions -- so nothing
+% downstream has to escape dashes.
+\usepackage{microtype}
+\DisableLigatures[-]{encoding = T1, family = tt*}
+\usepackage{amsmath}
+\usepackage[margin=1in]{geometry}
+\usepackage{enumitem}
+\usepackage{booktabs}
+\usepackage{fancyvrb}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue]{hyperref}
+
+\newcommand{\lassipversion}{1.3.1}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt}
+\newcommand{\opt}[1]{\texttt{#1}}
+\DefineVerbatimEnvironment{shell}{Verbatim}{fontsize=\small,xleftmargin=1em}
+
+\title{LASSI-Plus: haplotype frequency spectrum analysis for selective sweeps}
+\author{Zachary A.\ Szpiech, PhD \and Michael DeGiorgio, PhD}
+\date{v\lassipversion}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+\section{Introduction}
+
+LASSI-Plus implements several haplotype frequency spectrum statistics for
+detecting and classifying hard and soft selective sweeps, together with the H
+and G haplotype statistics they build on. Source code, precompiled binaries,
+and example data are available at
+\url{https://github.com/szpiech/lassip}.
+
+The option reference in section~\ref{sec:options} is generated from the
+program's own \opt{--help} output, so it describes the binary this manual was
+built against rather than a past release.
+
+\section{Installation}
+
+\begin{shell}
+cd src && make
+\end{shell}
+
+The only requirements are a C++11 compiler and zlib. \texttt{make check} runs
+the regression suite in \texttt{tests/}, which compares output against
+recorded files and takes about a minute. \texttt{src/Makefile} builds with
+\texttt{-O3} and no architecture specific flags; set \texttt{ARCHFLAGS} if you
+want to target the build machine.
+
+\section{The two stages}
+
+lassip runs in two stages, and most of the options belong to one or the other.
+
+\textbf{Stage 1} (\opt{--calc-spec}, \opt{--hapstats}, or both) reads genotypes
+and writes one row per window. \opt{--calc-spec} writes the top $K$ haplotype
+frequencies per window, which is the input to stage 2. \opt{--hapstats} writes
+H12 and H2/H1, or G123 and G2/G1 for unphased data. Either can be used alone.
+
+\textbf{Stage 2} (\opt{--lassi}, \opt{--salti}, or \opt{--avg-spec}) reads the
+spectra written by stage 1 and computes a composite likelihood ratio per window
+against a genome-wide null spectrum.
+
+Options belonging to the other stage are accepted and ignored, with a warning
+naming them. Nothing is silently dropped.
+
+\section{Input files}
+
+\subsection{VCF}
+
+One or more VCF files, given to \opt{--vcf}, phased by default or read as
+multilocus genotypes with \opt{--unphased}. Genotypes must be coded 0 and 1;
+missing calls (\texttt{.}) are allowed and are handled as described in
+section~\ref{sec:missing}.
+
+Several contigs may be analysed in one run, given either as one file per
+contig, as a single file holding several, or as a mixture. A run writes one
+spectra file per population covering every contig it was given. Two rules
+apply: no contig may appear twice across the input, and a file's records must
+be grouped by contig --- lassip reads a VCF in one pass and will not buffer
+contigs in order to reassemble them, so sort by position first.
+
+Contigs are processed one at a time and each one's genotypes are released
+before the next is read, so peak memory depends on how many contigs there are
+rather than on how they are packaged.
+
+\subsection{Population file}
+
+\opt{--pop} takes a two column file, \texttt{<individual ID> <population ID>},
+with no header. Only individuals listed there are analysed, and every listed
+individual must be present in every VCF given. When more than one population is
+present, all statistics are computed per population.
+
+\subsection{Genetic map}
+
+\opt{--map} takes \texttt{<chr> <locus ID> <genetic position> <physical
+position>} and is read only by stage 2, and only under \opt{--dist-type cm}.
+Windows whose midpoint falls outside the map, or in a gap wider than
+\opt{--max-gap}, cannot be placed; lassip reports the first such window and
+stops rather than interpolating across the gap.
+
+\section{Statistics}
+
+All of the statistics implemented in LASSI-Plus concern the ranked haplotype
+frequency spectrum. Define it as $\mathbf{h} = (h_1, h_2, \cdots, h_N)$, where
+$h_i$ is the frequency of the $i$th most common haplotype in a region, $N$ is
+the total number of unique haplotypes, and
+$h_1 \geq h_2 \geq \cdots \geq h_N$. H12 (Garud et al.\ 2015) is then
+
+\begin{equation*}
+H_{12} = (h_1 + h_2)^2 + \sum_{i=3}^{N} h_i^2,
+\end{equation*}
+
+and H2/H1 is
+
+\begin{equation*}
+H_{2/1} = \left. \sum_{2}^{N} h_i^2 \middle/ \sum_{1}^{N} h_i^2 \right. .
+\end{equation*}
+
+Harris et al.\ (2018) construct the analogous statistics for unphased data
+from the ranked multilocus genotype frequency spectrum
+$\mathbf{g} = (g_1, g_2, \cdots, g_N)$, with $g_i$ the frequency of the $i$th
+most common multilocus genotype and
+$g_1 \geq g_2 \geq \cdots \geq g_N$:
+
+\begin{equation*}
+G_{123} = (g_1 + g_2 + g_3)^2 + \sum_{i=4}^{N} g_i^2,
+\qquad
+G_{2/1} = \left. \sum_{2}^{N} g_i^2 \middle/ \sum_{1}^{N} g_i^2 \right. .
+\end{equation*}
+
+These are what \opt{--hapstats} computes: H12 and H2/H1 for phased data, and
+G123 and G2/G1 under \opt{--unphased}.
+
+\textbf{LASSI} (\opt{--lassi}; Harris and DeGiorgio 2020) is a composite
+likelihood ratio comparing each window's truncated haplotype frequency spectrum
+against a genome-wide null spectrum, under a model in which a sweep converts the
+frequency of the $m$ most common haplotypes. It reports $m$ and the statistic
+$T$.
+
+\textbf{saltiLASSI} (\opt{--salti}; DeGiorgio and Szpiech 2022) is an extension
+of LASSI that adds a spatial component to the composite likelihood ratio,
+using the decay of the distortion away from a putative sweep centre and taking
+flanking windows within \opt{--max-extend-bp}, \opt{--max-extend-cm} or
+\opt{--max-extend-nw} into the likelihood. It reports the test statistic
+$\Lambda$ --- written \texttt{L} in the output columns --- together with $m$
+and the decay rate $A$. Because it reads flanking windows, contig boundaries
+matter: they are taken from the \texttt{chr} column of the spectra file, so a
+file holding several contigs and one file per contig give identical results.
+
+\opt{--avg-spec} writes the average spectrum across the input, which is what
+\opt{--null-spec} then reads if you want to supply the null explicitly rather
+than letting lassip compute it from the data it is given.
+
+\section{Missing data}
+\label{sec:missing}
+
+A haplotype with a missing call in a window cannot be compared to other
+haplotypes by exact identity, so lassip groups haplotypes that are
+\emph{compatible} --- equal at every site observed in both --- and the choice
+of grouping rule changes the spectrum. \opt{--hap-cluster} selects it.
+
+\begin{description}[leftmargin=1.5em,style=sameline]
+\item[\opt{best-comp}] (default) assigns each incomplete haplotype to the most
+  frequent haplotype compatible with it. Deterministic, and the most accurate
+  of the three at low to moderate missingness.
+\item[\opt{garud-shuffle}] is the rule used by v1.2.2 and earlier: the distinct
+  haplotypes are shuffled, and each in turn seeds a group that absorbs every
+  not yet absorbed haplotype compatible with it. Which group an incomplete
+  haplotype joins therefore depends on the shuffle. Kept for reproducing
+  earlier results.
+\item[\opt{soft-em}] splits each incomplete haplotype fractionally across the
+  haplotypes compatible with it, in proportion to their estimated frequencies.
+  Experimental: class sizes come out fractional rather than as counts.
+\end{description}
+
+\opt{--match-tol t} allows haplotypes differing at up to and including $t$
+observed sites to be grouped; the default 0 requires equality at every site
+observed in both. Note that the semantics changed in v1.3.0: the test was
+previously $< t$, so each setting behaved as the one below it.
+
+\opt{--max-lmiss} drops loci with too high a missing fraction and
+\opt{--max-hmiss} leaves a haplotype out of a window's spectrum when too much
+of that window is missing for it.
+
+\section{Reproducibility}
+
+A run is determined by its inputs, its options and \opt{--seed}. It does not
+depend on \opt{--threads}, on window order, or on when it was run.
+
+\opt{--seed} (default 1) affects \opt{--hap-cluster garud-shuffle} only, which
+is the one rule whose result depends on the order haplotypes are visited; the
+other two are deterministic and lassip warns if you set a seed with them. The
+seed is mixed with each window's SNP boundaries, so a window's clustering is the
+same whichever thread computes it. \opt{--seed 0} restores the clock seeding
+used by v1.2.2 and earlier, which is useful only for examining how much the
+clustering varies between runs.
+
+Note that the seed makes the order reproducible; it does not remove the order
+dependence. Which haplotype an incomplete one joins under \opt{garud-shuffle}
+is still an arbitrary choice among compatible candidates.
+
+\section{Command line options}
+\label{sec:options}
+
+\begin{shell}
+lassip --vcf <file> --pop <file> --calc-spec [--hapstats] \
+       --winsize <int> --winstep <int> --out <prefix>
+
+lassip --spectra <file> [<file> ...] (--lassi | --salti | --avg-spec) \
+       --out <prefix>
+\end{shell}
+
+\input{options}
+
+\section{Output files}
+
+Stage 1 writes \texttt{<out>.lassip.[hap|mlg].spectra.gz} when
+\opt{--calc-spec} is set and \texttt{<out>.lassip.[hap|mlg].stats.gz} when only
+\opt{--hapstats} is. \texttt{hap} is used for phased data and \texttt{mlg} for
+\opt{--unphased}. At the default \opt{--filter-level 2} each population is
+filtered separately and gets its own file, named
+\texttt{<out>.<pop>.lassip.[hap|mlg].spectra.gz}.
+
+Stage 2 writes a single \texttt{<out>.lassip.[hap|mlg].out.gz}.
+
+The stats file has one row per window:
+
+\begin{shell}
+<chr> <start> <end> <nSNPs> <ppos> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1>
+\end{shell}
+
+The spectra file has a header line and then one row per window:
+
+\begin{shell}
+#phased <0|1> hapstats <0|1> wins <N> K <K> npop <P> <pop1> ... <popP> \
+    [contigs <C> <name> <rows> ...]
+
+<chr> <start> <end> <nSNPs> <ppos> <nHaps> <uniqHaps> \
+    [<h12|g123> <h2h1|g2g1>] <hfs_1> ... <hfs_K>
+\end{shell}
+
+\texttt{wins} is the number of window rows. The \texttt{contigs} field is
+written only when a file holds more than one contig, and lists each contig with
+the number of rows it contributes; stage 2 validates it against the rows. It
+sits after the population names, so a reader that parses the header
+positionally stops before it --- which also means lassip 1.2.2 and earlier will
+read a multi-contig file written by this version without complaint and analyse
+every contig in it as one block. Split such files by contig before sharing them
+with an older install. Files written by older versions carry no
+\texttt{contigs} field and are read exactly as before.
+
+Stage 2 writes the same leading columns, naming the position column
+\texttt{pos} rather than \texttt{ppos}, followed by \texttt{<m> <T>} for
+\opt{--lassi} and \texttt{<m> <A> <L>} for \opt{--salti}.
+
+In every case the per-population columns are repeated for each population, with
+the population code prepended to the column name. \texttt{hfs\_N} is the
+frequency of the $N$th most common haplotype in the window, and \texttt{ppos}
+is the window's physical midpoint --- or the window's index within its contig
+when \opt{--dist-type nw} was used, which is why that mode's positions are only
+meaningful contig by contig.
+
+\section{Exit codes}
+
+lassip follows the \texttt{sysexits.h} conventions, so a script can tell the
+kinds of failure apart without parsing stderr.
+
+\begin{center}
+\begin{tabular}{@{}rp{0.78\textwidth}@{}}
+\toprule
+code & meaning \\
+\midrule
+0  & success, and for \opt{--help} and \opt{--version} \\
+64 & the command line is wrong: an unknown option, a missing required option,
+     a value out of range, or an option used at the wrong stage \\
+65 & an input file opened but holds the wrong thing: a malformed record,
+     contigs that are not grouped, a contig given twice, a genetic map that
+     does not cover the data, a spectra file disagreeing with its own header \\
+70 & an internal error \\
+74 & a file could not be opened: a missing input, or an output path that cannot
+     be created \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The distinction between 65 and 74 is about opening, not about the option:
+\opt{--map missing.map} exits 74, while
+\opt{--map a-map-for-another-contig.map} exits 65.
+
+\section{Examples}
+
+A single contig, both stages:
+
+\begin{shell}
+lassip --vcf YRI.chr22.vcf.gz --pop YRI.ids.pop.txt --calc-spec --hapstats \
+       --k 10 --winsize 117 --winstep 12 --out YRI.chr22
+
+lassip --spectra YRI.chr22.YRI.lassip.hap.spectra.gz --salti \
+       --dist-type bp --max-extend-bp 100000 --out YRI.chr22
+\end{shell}
+
+Note the population name in the second command's filename: at the default
+\opt{--filter-level 2} stage 1 writes one file per population.
+
+A whole genome in one run, as one file per chromosome:
+
+\begin{shell}
+lassip --vcf chr1.vcf.gz chr2.vcf.gz ... chr22.vcf.gz --pop pops.txt \
+       --calc-spec --hapstats --k 10 --winsize 117 --winstep 12 \
+       --threads 8 --out scan
+
+lassip --spectra scan.YRI.lassip.hap.spectra.gz --salti \
+       --dist-type bp --max-extend-bp 100000 --threads 8 --out scan
+\end{shell}
+
+The same thing from a single multi-contig VCF is \opt{--vcf genome.vcf.gz}, and
+gives identical results. Passing the per-contig spectra files separately to
+stage 2 also gives identical results; what you must not do is concatenate them
+by hand, because the rows of one contig then sit inside another's block.
+
+Unphased data, where G123 and G2/G1 replace H12 and H2/H1 and the output files
+are named \texttt{mlg} rather than \texttt{hap}:
+
+\begin{shell}
+lassip --vcf genome.vcf.gz --pop pops.txt --unphased --calc-spec --hapstats \
+       --k 10 --winsize 117 --winstep 12 --out scan
+\end{shell}
+
+\texttt{example/do\_lassip\_YRI.bash} runs the first of these against the data
+in \texttt{example/} and reproduces the outputs committed beside it.
+
+\section{References}
+
+\begin{description}[leftmargin=0pt,style=nextline]
+\item[saltiLASSI] DeGiorgio M, Szpiech ZA (2022) A spatially aware likelihood
+  test to detect sweeps from haplotype distributions. \emph{PLoS Genetics}
+  18:e1010134.
+\item[LASSI] Harris AM, DeGiorgio M (2020) A likelihood approach for uncovering
+  selective sweep signatures from haplotype data. \emph{Molecular Biology and
+  Evolution} 37:3023--3046.
+\item[H12 and H2/H1] Garud NR, Messer PW, Buzbas EO, Petrov DA (2015) Recent
+  selective sweeps in North American \emph{Drosophila melanogaster} show
+  signatures of soft sweeps. \emph{PLoS Genetics} 11:e1005004.
+\item[G123 and G2/G1] Harris AM, Garud NR, DeGiorgio M (2018) Detection and
+  classification of hard and soft sweeps from unphased genotypes by multilocus
+  genotype identity. \emph{Genetics} 210:1429--1452.
+\end{description}
+
+\section*{Changes}
+
+The change log is in the README.
+
+\end{document}

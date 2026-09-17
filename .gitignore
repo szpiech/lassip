@@ -6,3 +6,12 @@ sample.*
 .DS_Store
 *.d
 src/lassip
+
+# manual build intermediates (doc/options.tex IS tracked: it is generated but
+# committed, so the manual can be built without running the program first)
+doc/*.aux
+doc/*.toc
+doc/*.out
+doc/MANUAL.pdf
+doc/options.new
+doc/options.tex.tmp

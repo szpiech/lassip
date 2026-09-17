@@ -251,9 +251,20 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
   The manual is rewritten for this version. LASSI-Plus-Manual.pdf described
   v1.1.2 and predated --seed, --hap-cluster, --max-gap, --version, the grouped
-  help, the exit codes, the reproducibility work and multi-contig input; it is
-  replaced by MANUAL.md, which is tracked as text so it can be diffed and kept
-  current.
+  help, the exit codes, the reproducibility work and multi-contig input.
+
+  It now has a source in the repository: doc/MANUAL.tex, built with
+
+      cd doc && make          # writes ../LASSI-Plus-Manual.pdf
+
+  which needs a LaTeX installation and python3. The option reference is not
+  written by hand -- doc/gen-options.py generates doc/options.tex from
+  `lassip --help`, so it describes the binary it was built against, and
+  `make check` in doc/ fails if the two have diverged. The statistic
+  definitions and the structure are carried over from the v1.1.2 manual.
+
+  The old manual was written in Word and the .docx was never tracked here,
+  which is why the PDF drifted three releases behind the program.
 
 15SEP2026 - v1.3.0. Performance, reproducibility and CLI work on top of v1.2.2.
 

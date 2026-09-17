@@ -398,8 +398,14 @@ thing. The two are now distinguishable at the same flag -- `--map missing.map`
 gives 74, `--map wrong-contig.map` gives 65 -- and `exit_codes` pins the whole
 matrix. One of those ten reported "for writing" for an input stream.
 
-`MANUAL.md` replaces the v1.1.2 PDF, which had no source in the repository and
-had drifted three releases behind. Writing it found that every one of the
+`doc/MANUAL.tex` replaces the v1.1.2 PDF, whose source -- an untracked Word
+document in the repository root -- was never version controlled, which is why
+it drifted three releases behind. `cd doc && make` rebuilds
+`LASSI-Plus-Manual.pdf`; the option reference is generated from `lassip
+--help` by `doc/gen-options.py`, and `make check` there fails if it has
+diverged from the binary. The statistic definitions, title and authorship are
+carried over from the Word original, whose equations were recoverable from its
+OMML. Writing it found that every one of the
 README's seven format lines omits the window position column, in v1.2.2's
 output as much as this branch's, so the documentation was wrong rather than
 the program; `doc_formats` now pins it. It also found a wrong page range in a
