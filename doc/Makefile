@@ -25,11 +25,20 @@ PDF      = ../LASSI-Plus-Manual.pdf
 
 all: $(PDF)
 
-# Two passes: the first writes the .aux and .toc, the second resolves the table
-# of contents and the section cross-references against them.
-$(PDF): MANUAL.tex options.tex
+# Run until the cross-references stop moving rather than a fixed number of
+# times. Two passes are not enough here: the second pass inserts the table of
+# contents, which pushes every section onto the following page, so the page
+# numbers the first pass recorded are all off by one until a third pass.
+$(PDF): MANUAL.tex options.tex Makefile
 	$(LATEX) -interaction=nonstopmode -halt-on-error MANUAL.tex
-	$(LATEX) -interaction=nonstopmode -halt-on-error MANUAL.tex
+	@n=0; while grep -q "Rerun to get" MANUAL.log && [ $$n -lt 4 ]; do \
+		echo "  cross-references moved, rerunning $(LATEX)"; \
+		$(LATEX) -interaction=nonstopmode -halt-on-error MANUAL.tex >/dev/null || exit 1; \
+		n=$$((n+1)); \
+	done; \
+	if grep -q "Rerun to get" MANUAL.log; then \
+		echo "$(LATEX): cross-references still moving after $$n reruns" >&2; exit 1; \
+	fi
 	mv MANUAL.pdf $(PDF)
 
 options: options.tex
