@@ -162,7 +162,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
        multicontig_equiv multicontig_header multicontig_malformed
        multicontig_stage1 multicontig_stage1_twopop multicontig_dup
-       multicontig_onefile multicontig_interleaved exit_codes
+       multicontig_onefile multicontig_interleaved exit_codes doc_formats
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -912,6 +912,37 @@ if selected exit_codes; then
     check_ec 0 "--help"             "$BIN" --help
     if [ "$ec_fail" = 0 ]; then pass "exit_codes (64 usage / 65 data / 74 I/O / 0 ok)"
     else fail exit_codes "one or more exit codes were wrong (see above)"; fi
+fi
+
+if selected doc_formats; then
+    # The README's format section described every output file with one column
+    # missing -- the window position, which has been written since at least
+    # v1.2.2 -- and nothing noticed for years. Pin the position of that column
+    # in both the files and the documentation.
+    df_fail=0
+    col5(){ gzip -dc "$1" | sed -n "$2"p | cut -f5; }
+    run_lassip "$WORK/df1.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --hapstats \
+        --winsize 50 --winstep 10 --out "$WORK/df1" >/dev/null 2>&1
+    run_lassip "$WORK/df2.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec --hapstats \
+        --k 3 --winsize 50 --winstep 10 --out "$WORK/df2" >/dev/null 2>&1
+    "$BIN" --spectra "$WORK/df2.POP1.lassip.hap.spectra.gz" --salti --dist-type nw \
+        --max-extend-nw 3 --out "$WORK/df3" >/dev/null 2>&1
+    for spec in "$WORK/df1.POP1.lassip.hap.stats.gz:1:ppos" \
+                "$WORK/df2.POP1.lassip.hap.spectra.gz:2:ppos" \
+                "$WORK/df3.lassip.hap.out.gz:1:pos"; do
+        f=${spec%%:*}; rest=${spec#*:}; ln=${rest%%:*}; want=${rest##*:}
+        got=$(col5 "$f" "$ln")
+        [ "$got" = "$want" ] || { echo "      $(basename $f): column 5 is '$got', expected '$want'" >&2; df_fail=1; }
+    done
+    # and the README's own format lines must name it in the same place
+    for want in ppos pos; do
+        n=$(grep -c "^<chr> <start> <end> <nSNPs> <$want>" "$ROOT_DIR/README")
+        [ "$n" -gt 0 ] || { echo "      README has no format line with <$want> as the fifth column" >&2; df_fail=1; }
+    done
+    bad=$(grep -c "^<chr> <start> <end> <nSNPs> <nHaps>" "$ROOT_DIR/README" | tr -d " \n")
+    [ "$bad" = 0 ] || { echo "      README still has $bad format line(s) missing the position column" >&2; df_fail=1; }
+    if [ "$df_fail" = 0 ]; then pass "doc_formats (position column present and documented)"
+    else fail doc_formats "output format and its documentation disagree"; fi
 fi
 
 # ---------------------------------------------------------------- summary

@@ -19,7 +19,7 @@
 #ifndef __LASSIP_CLI_H__
 #define __LASSIP_CLI_H__
 
-const string VERSION = "1.3.0";
+const string VERSION = "1.3.1";
 
 const string USAGE = "\
 Usage: lassip --vcf <file> --pop <file> --calc-spec [--hapstats] --winsize <int> --winstep <int> --out <prefix>\n\
@@ -45,7 +45,7 @@ Methods: saltiLASSI (DeGiorgio and Szpiech 2022, PLoS Genetics 18:e1010134),\n\
 LASSI (Harris and DeGiorgio 2020, MBE doi.org/10.1093/molbev/msaa115),\n\
 H12 and H2/H1 (Garud et al. 2015, PLoS Genetics 11:e1005004),\n\
 G123 and G2/G1, reported in place of H12 and H2/H1 under --unphased\n\
-(Harris et al. 2018, Genetics 210:1419-1452).";
+(Harris et al. 2018, Genetics 210:1429-1452).";
 
 const string ARG_THREADS = "--threads";
 const int DEFAULT_THREADS = 1;
