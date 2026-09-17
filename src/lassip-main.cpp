@@ -695,14 +695,20 @@ int lassipMain(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-  //Distinct exit codes so that a caller can tell a bad command line from bad
-  //input data. The data layer signals failure by throwing an int; --help and
-  //--version unwind through ParamExit with code 0.
+  //Distinct exit codes so that a caller can tell a bad command line from an
+  //unreadable file from a file whose contents are wrong. A file that cannot be
+  //opened throws IOError (74); anything else the data layer rejects throws an
+  //int (65); --help and --version unwind through ParamExit with code 0.
   try {
     return lassipMain(argc, argv);
   }
   catch (const ParamExit &e){
     return e.code;
+  }
+  catch (const IOError &){
+    //the site has already named the file and what it was doing with it
+    cerr << "lassip: exiting after the error above.\n";
+    return EXIT_IOERR;
   }
   catch (int){
     cerr << "lassip: exiting after the error above.\n";

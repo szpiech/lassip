@@ -26,7 +26,7 @@ void writeAverageSpec(string outfileBase, map<string, SpectrumData* > *avgSpecBy
     fout.open(outfile.c_str());
     if (fout.fail()) {
       cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
-      throw 1;
+      throw IOError(outfile, true);
     }
     fout << "#K " << avgSpecByPop->begin()->second->K << " npop " << avgSpecByPop->size() << endl;
     map<string, SpectrumData* >::iterator it;
@@ -71,8 +71,8 @@ map<string, SpectrumData* > *averageSpec(string nullSpecFile){
     igzstream fin;
     fin.open(nullSpecFile.c_str());
     if (fin.fail()) {
-      cerr << "ERROR: Failed to open " << nullSpecFile << " for writing.\n";
-      throw 1;
+      cerr << "ERROR: Failed to open " << nullSpecFile << " for reading.\n";
+      throw IOError(nullSpecFile, false);
     }
 
     //unsigned int nwins = 0;
@@ -330,7 +330,7 @@ void writeLASSIFinalResults(string outfile, map<string, vector<LASSIResults *>* 
     fout.open(outfile.c_str());
     if (fout.fail()) {
       cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
-      throw 1;
+      throw IOError(outfile, true);
     }
     
     bool HAPSTATS = resultsByPopByChr->begin()->second->at(0)->HAPSTATS;
@@ -464,7 +464,7 @@ void writeLASSIInitialResults(string outfileBase, const vector<LASSIInitialResul
         fout.open(outfile.c_str());
         if (fout.fail()) {
             cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
-            throw 1;
+            throw IOError(outfile, true);
         }
 
         if (SPECFILE){
@@ -531,7 +531,7 @@ void writeLASSIInitialResults(string outfileBase, const vector<LASSIInitialResul
             fout.open(outfile.c_str());
             if (fout.fail()) {
                 cerr << "ERROR: Failed to open " << outfile << " for writing.\n";
-                throw 1;
+                throw IOError(outfile, true);
             }
 
             if (SPECFILE){
@@ -791,7 +791,7 @@ vector< pair<string, unsigned int> > scanContigRuns(const string &filename, unsi
     fin.open(filename.c_str());
     if(fin.fail()){
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
+        throw IOError(filename, false);
     }
     string line, chr, prev;
     getline(fin, line);   //#phased ...
@@ -863,7 +863,7 @@ map<string, vector<SpectrumData *>* > *readSpecData(vector<string> filenames){
         fin.open(filenames[f].c_str());
         if(fin.fail()){
             cerr << "ERROR: Failed to open " << filenames[f] << " for reading.\n";
-            throw 0;
+            throw IOError(filenames[f], false);
         }
         string line;
         getline(fin, line);
@@ -1063,7 +1063,7 @@ PopData *readPopData(string filename){
     if (fin.fail())
     {
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
+        throw IOError(filename, false);
     }
 
     PopData *popData = initPopData();
@@ -1211,7 +1211,7 @@ VCFReader *openVCF(string filename, PopData *popData, bool PHASED){
     r->fin.open(filename.c_str());
     if (r->fin.fail()){
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
+        throw IOError(filename, false);
     }
 
     const int numMapCols = 9;
@@ -1669,7 +1669,7 @@ GMapData::GMapData(string filename, double mGap)
     if (fin.fail())
     {
         cerr << "ERROR: Failed to open " << filename << " for reading.\n";
-        throw 0;
+        throw IOError(filename, false);
     }
 
 

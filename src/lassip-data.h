@@ -314,6 +314,16 @@ void releaseHapDataByPop(map< string, HaplotypeData* > *hapDataByPop);
 
 //reads haplotype data from a VCF, splitting samples into the populations named
 //in the pop file; throws on malformed input
+//Thrown when a file cannot be opened, so that main can exit 74 rather than 65.
+//This covers opening only: a file that opens and then turns out to hold the
+//wrong thing is a data error, not an I/O error, and still exits 65.
+struct IOError
+{
+    string path;
+    bool writing;
+    IOError(string p, bool w) : path(p), writing(w) {}
+};
+
 //A VCF read in one pass, handed back one contig at a time. Header-derived
 //state lives here so it is computed once per file; `pending` holds the record
 //that ended the previous contig, which is the first record of the next.

@@ -162,7 +162,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        salti_unphased lassi_unphased lassi_nullspec_unphased avg_spec_unphased
        multicontig_equiv multicontig_header multicontig_malformed
        multicontig_stage1 multicontig_stage1_twopop multicontig_dup
-       multicontig_onefile multicontig_interleaved
+       multicontig_onefile multicontig_interleaved exit_codes
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -877,6 +877,41 @@ if selected multicontig_interleaved && [ -f "$WORK/small.inter.vcf.gz" ]; then
     if [ "$rc" = 65 ] && grep -q "not all together" "$WORK/mcint.log"; then
         pass "multicontig_interleaved (ungrouped records rejected)"
     else fail multicontig_interleaved "ungrouped contig records were not rejected (exit $rc)"; fi
+fi
+
+if selected exit_codes; then
+    # A caller should be able to tell a bad command line from a file it cannot
+    # open from a file whose contents are wrong, without parsing stderr.
+    # 64 usage, 65 data, 70 internal, 74 I/O (sysexits.h).
+    ec_fail=0
+    check_ec(){
+        want=$1; desc=$2; shift 2
+        "$@" >"$WORK/ec.log" 2>&1
+        got=$?
+        [ "$got" = "$want" ] || { echo "      $desc: want $want, got $got" >&2; ec_fail=1; }
+    }
+    MISSING="$WORK/definitely-not-here.gz"
+    rm -f "$MISSING"
+    # I/O: the file cannot be opened
+    check_ec 74 "missing --vcf"     "$BIN" --vcf "$MISSING" --pop "$WORK/small.pop1.txt" --calc-spec --winsize 50 --winstep 10 --out "$WORK/ec"
+    check_ec 74 "missing --pop"     "$BIN" --vcf "$SMALL" --pop "$MISSING" --calc-spec --winsize 50 --winstep 10 --out "$WORK/ec"
+    check_ec 74 "missing --spectra" "$BIN" --spectra "$MISSING" --salti --out "$WORK/ec"
+    check_ec 74 "missing --null-spec" "$BIN" --spectra "$SPEC" --lassi --null-spec "$MISSING" --out "$WORK/ec"
+    check_ec 74 "missing --map"     "$BIN" --spectra "$SPEC" --salti --dist-type cm --map "$MISSING" --max-extend-cm 1 --out "$WORK/ec"
+    check_ec 74 "output path that cannot be created" "$BIN" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec --winsize 50 --winstep 10 --out /nonexistent-directory/ec
+    # data: the file opens and holds the wrong thing. Same flag and the same
+    # position as the --map case above, so the two differ only in the file.
+    check_ec 65 "map that does not cover the contig" "$BIN" --spectra "$SPEC" --salti --dist-type cm --map "$WORK/small.badchr.map" --max-extend-cm 1 --out "$WORK/ec"
+    check_ec 65 "duplicate contig"  "$BIN" --vcf "$SMALL" "$SMALL" --pop "$WORK/small.pop1.txt" --calc-spec --winsize 50 --winstep 10 --out "$WORK/ec"
+    # usage
+    check_ec 64 "no arguments"      "$BIN"
+    check_ec 64 "unknown flag"      "$BIN" --not-a-flag
+    check_ec 64 "--map at stage 1"  "$BIN" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --map "$WORK/small.map" --calc-spec --winsize 50 --winstep 10 --out "$WORK/ec"
+    # success
+    check_ec 0 "--version"          "$BIN" --version
+    check_ec 0 "--help"             "$BIN" --help
+    if [ "$ec_fail" = 0 ]; then pass "exit_codes (64 usage / 65 data / 74 I/O / 0 ok)"
+    else fail exit_codes "one or more exit codes were wrong (see above)"; fi
 fi
 
 # ---------------------------------------------------------------- summary
