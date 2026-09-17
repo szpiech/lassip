@@ -100,6 +100,9 @@ revised this file.
 | `4ce4433` | docs: record the 1.3.1 work in the branch summary |
 | `0161b40` | doc: LaTeX source for the manual, and build it to a PDF |
 | `8d8d726` | doc: rerun pdflatex until the cross-references settle |
+| `a89b4ff` | docs: record the manual build in the branch summary |
+| `4d42f5a` | v1.3.1 |
+| `c943c3c` | v1.3.1 |
 
 ## Behavioural differences
 
@@ -357,11 +360,23 @@ changelog entry is headed `15SEP2026 - v1.3.0.` following the convention of the
 entries above it -- change the date when you tag, nothing reads it. No output
 file carries a version stamp, so no golden changed.
 
-Two things outside `src/` still refer to older versions and are yours to decide
-on at release: `bin/` holds prebuilt binaries up to `lassip-v1.2.1` (and no
-1.2.2), and the manual PDFs in the repository root are `v1.1.2`-era, so they
-predate `--seed`, `--hap-cluster`, `--max-gap`, `--version` and the grouped
-help.
+Both of the things outside `src/` that lagged the branch have since been
+brought up to date, by you and by me respectively:
+
+- `bin/` now carries `lassip-v1.3.1` for both platforms (`4d42f5a`,
+  `c943c3c`). The committed macOS build was checked against this branch: it
+  reports `v1.3.1`, passes all 60 regression cases, and its `--help` matches
+  `doc/options.tex` exactly, so the manual documents the binary that ships
+  beside it. The Linux build is x86-64 ELF and could not be run here.
+- The manual has a source in the repository and is rebuilt from it; see
+  *Version 1.3.1* below.
+
+One question left on `bin/`: the `lassip-v1.3.0` pair is still tracked, but
+1.3.0 was only ever an intermediate bump on this branch (`d00eb19`, superseded
+by `8516925`) and the repository has no tags, so unlike `v1.1.1`, `v1.2.0` and
+`v1.2.1` it does not correspond to anything released. Those binaries also
+predate the multi-contig work and the I/O exit code. Dropping the pair or
+keeping it as a build artifact is your call.
 
 ## Correction
 
