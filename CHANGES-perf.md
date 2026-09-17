@@ -86,16 +86,20 @@ revised this file.
 | `2953ca4` | macos-arm binary |
 | `b31494f` | readHaplotypeDataVCF: skip leading whitespace before the CHROM token |
 | `962ed12` | docs: record the leading-whitespace fix |
-| `add1534` | stage 2: delimit contigs by the chr column, not by the input file |
-| `631d94c` | docs: record Phase 0 of multi-contig support |
-| `d452025` | stage 1: accept several --vcf files and write one spectra file per population |
-| `c726650` | docs: record Phase 1 of multi-contig support |
-| `152c5eb` | stage 1: accept a VCF holding more than one contig |
-| `47d93bc` | docs: record Phase 2 of multi-contig support |
-| `5e5a8d5` | docs: finish the multi-contig documentation and correct the memory figures |
-| `424218a` | docs: record Phase 3 in the branch summary |
-| `e9a750f` | exit 74 rather than 65 when a file cannot be opened |
-| `8ab8f2f` | bump to 1.3.1, replace the v1.1.2 manual, and fix seven wrong format lines |
+| `3e98e0e` | linux binary |
+| `96838c2` | stage 2: delimit contigs by the chr column, not by the input file |
+| `21a2131` | docs: record Phase 0 of multi-contig support |
+| `eb661da` | stage 1: accept several --vcf files and write one spectra file per population |
+| `99fe04b` | docs: record Phase 1 of multi-contig support |
+| `b382b77` | stage 1: accept a VCF holding more than one contig |
+| `0e1a7a5` | docs: record Phase 2 of multi-contig support |
+| `f5a75a0` | docs: finish the multi-contig documentation and correct the memory figures |
+| `b5c0330` | docs: record Phase 3 in the branch summary |
+| `2b247d9` | exit 74 rather than 65 when a file cannot be opened |
+| `8516925` | bump to 1.3.1, replace the v1.1.2 manual, and fix seven wrong format lines |
+| `4ce4433` | docs: record the 1.3.1 work in the branch summary |
+| `0161b40` | doc: LaTeX source for the manual, and build it to a PDF |
+| `8d8d726` | doc: rerun pdflatex until the cross-references settle |
 
 ## Behavioural differences
 
@@ -163,7 +167,7 @@ changed.
 
 ## Multiple contigs
 
-`add1534` is Phase 0 of multi-contig support (see `multi-contig-proposal.md`):
+`96838c2` is Phase 0 of multi-contig support (see `multi-contig-proposal.md`):
 stage 2 delimits contigs by the **chr column** rather than by the input file, so
 `--spectra` takes one multi-contig file or N single-contig files
 interchangeably, and the two give byte-identical results.
@@ -193,7 +197,7 @@ contig another file supplied. The header may carry
 when present and appended rather than inserted so the file stays readable by
 1.2.x. Nothing writes it yet -- stage 1 gains that in Phase 1.
 
-**Phase 1** (`d452025`) makes `--vcf` a list flag, so stage 1 analyses several
+**Phase 1** (`eb661da`) makes `--vcf` a list flag, so stage 1 analyses several
 contigs in one run and writes one spectra file per population covering all of
 them -- which stage 2 then reads as a single file. Each `--vcf` file must still
 hold one contig; accepting a multi-contig VCF is Phase 2. Rows are
@@ -232,7 +236,7 @@ largest per-population null-window count -- the old arithmetic can over-count
 when populations have null windows in different places, though no fixture
 exercises that.
 
-**Phase 2** (`152c5eb`) accepts a VCF holding more than one contig. The reader
+**Phase 2** (`b382b77`) accepts a VCF holding more than one contig. The reader
 is now resumable -- `openVCF` parses the header and resolves the
 column-to-row mapping once per file, `readContigVCF` consumes records until
 `CHROM` changes and keeps the record that ended the contig as the first record
@@ -256,7 +260,7 @@ contigs would put two blocks under one name in the spectra.
 
 Eight cases added across the three phases; suite is 58 checks.
 
-**Phase 3** (`5e5a8d5`) is the documentation. Two README statements the new
+**Phase 3** (`f5a75a0`) is the documentation. Two README statements the new
 capability had made false are corrected (the overview said one vcf per contig
 provided one at a time; the multi-contig note said stage 1 could not yet write
 multi-contig spectra), the spectra header line is documented for the first time
@@ -276,7 +280,7 @@ LASSI uses no flanking windows, and the averaging is order-independent.
 
 ## Test coverage
 
-`d3b1a61` closes a coverage hole I should have noticed earlier: only 1 of the
+`d6f8942` closes a coverage hole I should have noticed earlier: only 1 of the
 22 cases passed `--unphased`, and it used the fixture with no missing
 genotypes, so the clustering code had never run on multilocus genotype
 strings -- the one path whose alphabet is `{0,1,2,-}` and therefore the only
