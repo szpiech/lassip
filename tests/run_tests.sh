@@ -190,6 +190,10 @@ trap cleanup EXIT
 
 mkdir -p "$EXPECTED"
 
+# (No awk in these fixture pipelines exits early: that kills the upstream gzip
+# with SIGPIPE, which GNU gzip reports as 'gzip: stdout: Broken pipe' and which
+# then looks like a failure in a CI log. Draining the stream costs ~0.2 s.)
+#
 # The small fixture every stage-1 case runs on. It is derived here rather than
 # committed, because the suite has to work from a clean checkout and a fixture
 # is only reproducible if what it is derived from is in the repository. It used
@@ -204,18 +208,18 @@ mkdir -p "$EXPECTED"
 gzip -dc "$YRI" | awk 'BEGIN{OFS="\t"}
     /^#/ { print; next }
     { n++
-      if (n > 990) exit
+      if (n > 990) next
       if (n % 200 == 0) for (i = 10; i <= NF; i++) $i = "0|0"
       $1 = "1"          # contig 1, so the multi-contig cases can add 2 and 3
       print }' | gzip > "$WORK/small.vcf.gz"
 SMALL="$WORK/small.vcf.gz"
 
 # one population containing every sample in the small fixture
-gzip -dc "$SMALL" | awk '/^#CHROM/ {for(i=10;i<=NF;i++) print $i"\tPOP1"; exit}' > "$WORK/small.pop1.txt"
+gzip -dc "$SMALL" | awk '/^#CHROM/ {for(i=10;i<=NF;i++) print $i"\tPOP1"}' > "$WORK/small.pop1.txt"
 # the same samples split into two populations, in header order
-gzip -dc "$SMALL" | awk '/^#CHROM/ {n=NF-9; for(i=10;i<=NF;i++) print $i"\t"((i-9)<=int(n/2)?"POPA":"POPB"); exit}' > "$WORK/small.pop2.txt"
+gzip -dc "$SMALL" | awk '/^#CHROM/ {n=NF-9; for(i=10;i<=NF;i++) print $i"\t"((i-9)<=int(n/2)?"POPA":"POPB")}' > "$WORK/small.pop2.txt"
 # every sample of the YRI example
-gzip -dc "$YRI" | awk '/^#CHROM/ {for(i=10;i<=NF;i++) print $i"\tYRI"; exit}' > "$WORK/yri.pop.txt"
+gzip -dc "$YRI" | awk '/^#CHROM/ {for(i=10;i<=NF;i++) print $i"\tYRI"}' > "$WORK/yri.pop.txt"
 
 # deterministic missing-data fixture: on every 3rd record, blank every 7th sample
 gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
@@ -234,7 +238,7 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} !/^#/ {print $1, ($3=="."?"locus"NR:$3)
 awk 'BEGIN{OFS="\t"} {$1="nosuchchr"; print}' "$WORK/small.map" > "$WORK/small.badchr.map"
 
 # a 20k-SNP slice of the YRI example for a realistic multi-window stage-1 case
-gzip -dc "$YRI" | awk '/^#/{print;next} {n++; if(n<=20000) print; else exit}' | gzip > "$WORK/yri.slice.vcf.gz"
+gzip -dc "$YRI" | awk '/^#/{print;next} {n++; if(n<=20000) print}' | gzip > "$WORK/yri.slice.vcf.gz"
 
 # every fifth record fully missing: with --max-lmiss 1 --keep-monomorphic those
 # loci survive filtering, and at --max-hmiss 0 every haplotype of every window

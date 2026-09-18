@@ -18,7 +18,8 @@
 #include "lassip-winstats.h"
 #include "lassip-cli.h"  //--hap-cluster values
 #include <algorithm> //shuffle
-#include <random>       // std::default_random_engine
+#include <random>       // std::mt19937
+#include <cstdint>      // int64_t, for the rejection bound
 #include <chrono>       // std::chrono::system_clock
 
 double getDMin(vector<SpectrumData *> *specDataByChr){
@@ -456,6 +457,37 @@ unsigned int windowSeed(int seed, int start, int end){
    return (unsigned int)(z ^ (z >> 32));
 }
 
+//std::shuffle with std::default_random_engine is not reproducible across
+//platforms, which matters here because --seed is documented as making a
+//clustering run repeatable. Two separate reasons: default_random_engine is an
+//implementation-defined alias (libstdc++ picks minstd_rand0, libc++ picks
+//minstd_rand), and std::shuffle draws through uniform_int_distribution, whose
+//algorithm the standard leaves unspecified. The same --seed therefore gave
+//different haplotype orders, and so different clusters, on Linux and macOS --
+//caught by running the regression suite on both.
+//
+//mt19937 is fully specified by the standard, and Fisher-Yates over an explicit
+//rejection-sampled bound depends on nothing but the engine's output sequence,
+//so the order below is now a function of the seed alone.
+static unsigned int boundedRand(mt19937 &gen, unsigned int n){
+   //uniform on [0, n) without uniform_int_distribution. The rejection zone is
+   //the first 2^32 mod n values, which are the ones that would be over-counted
+   //by a bare modulo.
+   unsigned int threshold = (unsigned int)(-(int64_t)n % n);
+   for (;;){
+      unsigned int r = (unsigned int) gen();
+      if (r >= threshold) return r % n;
+   }
+}
+
+static void seededShuffle(vector<string> &v, unsigned int seed){
+   mt19937 gen(seed);
+   for (size_t i = v.size(); i > 1; i--){
+      size_t j = (size_t) boundedRand(gen, (unsigned int) i);
+      swap(v[i - 1], v[j]);
+   }
+}
+
 //The haplotype order fed to the clustering below changes which incomplete
 //haplotype gets merged into which complete one, so the shuffle is a real
 //degree of freedom in the result, not just a test harness. The seed is
@@ -478,7 +510,7 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
       hapIDs.push_back(it1->first);
    }
 
-   shuffle(hapIDs.begin(),hapIDs.end(),default_random_engine(seed));
+   seededShuffle(hapIDs, seed);
 
    map<string, int> compared;
    string hap1, hap2, mergedhap;

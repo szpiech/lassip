@@ -109,8 +109,9 @@ G123 and G2/G1, reported in place of H12 and H2/H1 under --unphased
 
 --seed <int>: Seed for the shuffle used when clustering haplotypes that
 carry missing data. Runs with the same seed, inputs and flags are reproducible
-regardless of --threads. Set 0 to seed from the system clock instead, which
-reproduces the non-reproducible behaviour of lassip <= 1.2.2.
+regardless of --threads, operating system or compiler. Set 0 to seed from the
+system clock instead, which reproduces the non-reproducible behaviour of
+lassip <= 1.2.2.
 	Default: 1
 
 ----------Input and output----------
@@ -235,31 +236,6 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
-
-
-Continuous integration
-
-  .github/workflows/ci.yml builds lassip on Linux and macOS and runs the
-  regression suite on both, on every push. It also checks that the generated
-  documentation is current: doc/options.tex and the copy of --help in this
-  README are both derived from the binary, and 'make -C doc check' fails if
-  either has drifted. Run that check locally before committing a change to the
-  command line.
-
-  Running the recorded-output suite on two platforms is sound because of how
-  the comparisons are split. Stage-1 results are compared by hash, and stage 1
-  does no transcendental arithmetic, so IEEE 754 makes them bit-identical on
-  any conforming compiler. Stage 2 calls log() and exp(), whose last digit can
-  differ between one platform's libm and another's, and every stage-2 case is
-  compared column by column with a tolerance. A hash mismatch therefore means
-  a change in behaviour, not a change of machine.
-
-  .github/workflows/manual.yml rebuilds the manual when doc/ changes and
-  attaches the PDF to the run. .github/workflows/binaries.yml builds the
-  distributable binaries for both platforms, runs the suite against each, and
-  names them after the version the binary itself reports; run it from the
-  Actions tab, download the artifacts, and commit them under bin/ when making
-  a release.
 
 
 ***CHANGE LOG***

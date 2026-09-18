@@ -202,8 +202,9 @@ const string ARG_SEED = "--seed";
 const int DEFAULT_SEED = 1;
 const string HELP_SEED = "Seed for the shuffle used when clustering haplotypes that\n\
 carry missing data. Runs with the same seed, inputs and flags are reproducible\n\
-regardless of --threads. Set 0 to seed from the system clock instead, which\n\
-reproduces the non-reproducible behaviour of lassip <= 1.2.2.";
+regardless of --threads, operating system or compiler. Set 0 to seed from the\n\
+system clock instead, which reproduces the non-reproducible behaviour of\n\
+lassip <= 1.2.2.";
 
 const string ARG_UNPHASED = "--unphased";
 const bool DEFAULT_UNPHASED = false;
