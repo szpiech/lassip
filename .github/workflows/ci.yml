@@ -11,8 +11,15 @@
 name: CI
 
 on:
+  # Pushes to the two long-lived branches, and any pull request that targets
+  # them -- so work on a feature branch is still covered once it is proposed for
+  # merge, without spending a run on every intermediate commit. workflow_dispatch
+  # runs it on demand from the Actions tab for any branch, which is the way to
+  # check a feature branch before opening the pull request.
   push:
+    branches: [master, devel]
   pull_request:
+    branches: [master, devel]
   workflow_dispatch:
 
 concurrency:

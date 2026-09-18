@@ -11,12 +11,17 @@
 name: Manual
 
 on:
+  # Same branch policy as ci.yml, and for the same reason with more force: this
+  # job installs a TeX distribution, so it is the most expensive run in the
+  # repository and the least worth spending on an intermediate commit.
   push:
+    branches: [master, devel]
     paths:
       - 'doc/**'
       - 'src/lassip-cli.h'
       - '.github/workflows/manual.yml'
   pull_request:
+    branches: [master, devel]
     paths:
       - 'doc/**'
       - 'src/lassip-cli.h'
