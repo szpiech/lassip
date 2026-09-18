@@ -109,6 +109,8 @@ revised this file.
 | `c3c6b12` | tests: derive the small fixture from tracked data, not the author's scratch |
 | `9d6f941` | docs: record the untracked-fixture fix in the branch summary |
 | `44acbdf` | seed the haplotype shuffle reproducibly across platforms |
+| `6944415` | docs: record what the first CI runs exposed |
+| `41da9f3` | README.md: render as Markdown, and add the CI badge |
 
 ## Behavioural differences
 
@@ -561,6 +563,30 @@ The same run also showed five `gzip: stdout: Broken pipe` lines, from awk
 exiting early on a gzip stream. Harmless, but they read as failures in a log;
 the fixture pipelines now drain their input, which costs 1.4 s of the suite's
 4.6 s.
+
+## README.md and the CI badge
+
+`41da9f3` renames `README` to `README.md` so the build badge renders; GitHub
+serves an extensionless README as plain text, where the markup would have shown
+literally.
+
+The rename alone would have damaged the file. Rendered through cmark-gfm, the
+parser GitHub uses, a bare rename swallows **44 of the 49 distinct
+angle-bracket forms** in the document -- `<int>`, `<chr>`, `<start>`, every
+format specification and option signature -- because Markdown reads them as
+HTML tags. Consecutive literal lines would also have been joined into
+paragraphs: the citation list at the top, the ASCII example in the missing-data
+section, and each pair of format lines.
+
+The literal regions are therefore fenced (the embedded `--help` block, thirteen
+runs of format and option lines, the illustration), inline mentions in prose are
+code spans, and the citation list is a bulleted list. No prose was reworded.
+Verified against the original by rendering: no word token lost, 47/47
+angle-bracket forms surviving, 116/116 non-blank help-block lines verbatim on
+their own lines, 7/7 citations on separate lines.
+
+The badge tracks `ci.yml` on the default branch, so it reads "no status" until
+this branch merges there.
 
 ## Left for you to decide
 
