@@ -103,6 +103,8 @@ revised this file.
 | `a89b4ff` | docs: record the manual build in the branch summary |
 | `4d42f5a` | v1.3.1 |
 | `c943c3c` | v1.3.1 |
+| `bda3faf` | docs: record the v1.3.1 binaries and check them against the branch |
+| `e7fb8f5` | ci: build and test on Linux and macOS, and check the generated docs |
 
 ## Behavioural differences
 
@@ -435,6 +437,40 @@ One thing to settle before release: the exit-code change is the same kind of
 interface change that argued for 1.3.0 over 1.2.3, so 1.4.0 may be the better
 number if 1.3.0 has not shipped, in which case the two changelog entries could
 be merged.
+
+## Continuous integration
+
+`e7fb8f5` adds `.github/workflows/`, which the repository did not have.
+
+- **`ci.yml`** builds on `ubuntu-latest` and `macos-latest` and runs the
+  60-case suite on both, on every push, plus a step asserting the documented
+  exit codes. A second job builds with `-Werror`; it is advisory
+  (`continue-on-error`) because the tree is clean under clang but gcc warns
+  about different things and nobody has run it there. Make it blocking once
+  it is green.
+- **`manual.yml`** rebuilds the PDF when `doc/` changes, checks the file was
+  written by that run rather than left over from a failed pass, and asserts
+  that no flag name rendered as an en dash.
+- **`binaries.yml`** builds the distributables for both platforms on demand,
+  runs the suite against each, and names each after the version the *binary*
+  reports. It uploads artifacts and commits nothing, so `bin/` stays your
+  decision -- but it removes the hand-build step that let `bin/` hold
+  binaries named for one version and built from another.
+
+Why a recorded-output suite can run on two platforms at all: stage-1 results
+are compared by hash and stage 1 does no transcendental arithmetic, so IEEE
+754 makes them bit-identical on any conforming compiler; every stage-2 case,
+where `log` and `exp` make the last printed digit a property of the platform's
+libm, is compared column by column with a tolerance. Locally, output is
+identical at `-O0`, `-O2`, `-O3` and with `-ffp-contract=off`; the only
+perturbation that moves it is `-ffast-math`, which reassociates sums and which
+no conforming build enables.
+
+`doc/Makefile` also gains `check-readme`, so the copy of `--help` embedded in
+the README is now verified rather than maintained by hand.
+
+Not verifiable from here, and so the likely first failures: the apt package
+names, gcc's warning set, and the Linux `-static-libstdc++` link.
 
 ## Left for you to decide
 
