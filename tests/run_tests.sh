@@ -8,8 +8,8 @@
 #   ./tests/run_tests.sh --list          # list case names and exit
 #   ./tests/run_tests.sh <case> [...]    # run only the named cases
 #
-# Fixtures are derived at run time from data already in the repository (example/
-# and testing/), so no new test data is committed. Stage-1 outputs are compared
+# Fixtures are derived at run time from example/YRI.chr22.vcf.gz, the only data
+# input, so no test data is committed and the suite runs from a clean checkout. Stage-1 outputs are compared
 # by hash of the decompressed text; stage-2 outputs are compared column by
 # column, because a hash would hide which statistic moved.
 #
@@ -170,11 +170,19 @@ if [ "$LIST" = 1 ]; then for c in $CASES; do echo "$c"; done; exit 0; fi
 
 if [ ! -x "$BIN" ]; then echo "ERROR: no lassip binary at $BIN (run make first)." >&2; exit 70; fi
 
-SMALL="$ROOT_DIR/testing/small.vcf.gz"
 YRI="$ROOT_DIR/example/YRI.chr22.vcf.gz"
-for f in "$SMALL" "$YRI"; do
-    [ -f "$f" ] || { echo "ERROR: missing repository test input $f" >&2; exit 70; }
-done
+[ -f "$YRI" ] || { echo "ERROR: missing repository test input $YRI" >&2; exit 70; }
+
+# A data input that exists locally but is not committed makes the suite pass
+# here and fail everywhere else, which is how this suite spent its first 69
+# commits reading an untracked file out of the author's scratch directory.
+if command -v git >/dev/null 2>&1 && git -C "$ROOT_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    git -C "$ROOT_DIR" ls-files --error-unmatch "${YRI#$ROOT_DIR/}" >/dev/null 2>&1 || {
+        echo "ERROR: $YRI is not tracked by git, so this suite cannot run from a clean" >&2
+        echo "       checkout. Commit it or derive the fixtures from something that is." >&2
+        exit 70
+    }
+fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/lassip-tests.XXXXXX")"
 cleanup() { if [ "$KEEP" = 1 ]; then echo "scratch kept at $WORK"; else rm -rf "$WORK"; fi; }
@@ -182,7 +190,27 @@ trap cleanup EXIT
 
 mkdir -p "$EXPECTED"
 
-# one population containing every sample in small.vcf.gz
+# The small fixture every stage-1 case runs on. It is derived here rather than
+# committed, because the suite has to work from a clean checkout and a fixture
+# is only reproducible if what it is derived from is in the repository. It used
+# to be read from testing/small.vcf.gz, which is not tracked -- the suite passed
+# on the author's machine and could not run anywhere else.
+#
+# 990 records keeps the suite quick. Every 200th record is forced to all
+# reference so that --filter-level 0, 1 and 2 produce visibly different output:
+# the example file is pre-filtered and contains no monomorphic site of its own,
+# so without this the filter-level cases would all agree and stop testing
+# anything.
+gzip -dc "$YRI" | awk 'BEGIN{OFS="\t"}
+    /^#/ { print; next }
+    { n++
+      if (n > 990) exit
+      if (n % 200 == 0) for (i = 10; i <= NF; i++) $i = "0|0"
+      $1 = "1"          # contig 1, so the multi-contig cases can add 2 and 3
+      print }' | gzip > "$WORK/small.vcf.gz"
+SMALL="$WORK/small.vcf.gz"
+
+# one population containing every sample in the small fixture
 gzip -dc "$SMALL" | awk '/^#CHROM/ {for(i=10;i<=NF;i++) print $i"\tPOP1"; exit}' > "$WORK/small.pop1.txt"
 # the same samples split into two populations, in header order
 gzip -dc "$SMALL" | awk '/^#CHROM/ {n=NF-9; for(i=10;i<=NF;i++) print $i"\t"((i-9)<=int(n/2)?"POPA":"POPB"); exit}' > "$WORK/small.pop2.txt"
@@ -217,7 +245,7 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"} /^#/{print;next} \
 
 echo "lassip regression suite"
 echo "  binary : $BIN"
-echo "  data   : testing/small.vcf.gz, example/YRI.chr22.vcf.gz (+ derived fixtures)"
+echo "  data   : example/YRI.chr22.vcf.gz (+ fixtures derived from it)"
 if [ "$REGEN" = 1 ]; then echo "  mode   : RECORDING goldens into $EXPECTED"; fi
 echo
 

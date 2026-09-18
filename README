@@ -70,8 +70,9 @@ BUILDING AND TESTING
     make check                     # build, then run the regression suite in tests/
 
 tests/run_tests.sh compares the current build against recorded outputs for both
-stages over data already in the repository (testing/small.vcf.gz and
-example/YRI.chr22.vcf.gz, plus fixtures it derives at run time): phased,
+stages. Its only data input is example/YRI.chr22.vcf.gz; every fixture is
+derived from that at run time, so the suite runs from a clean checkout and no
+test data is committed. The cases cover phased,
 unphased, two populations, each --filter-level, missing genotypes, --avg-spec,
 and stage 2 under --lassi and --salti with each --dist-type. Stage-1 outputs are
 compared by hash; stage-2 outputs column by column, so a failure names the

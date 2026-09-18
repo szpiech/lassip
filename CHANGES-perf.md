@@ -292,7 +292,7 @@ strings -- the one path whose alphabet is `{0,1,2,-}` and therefore the only
 one where the packed representation uses all four symbols.
 
 The covered part was verified unchanged first: with no missing data,
-`--unphased` output is byte-identical to v1.2.2 on both `testing/small.vcf.gz`
+`--unphased` output is byte-identical to v1.2.2 on both the small fixture
 and `example/YRI.chr22.vcf.gz` (4750 hom-alt genotypes, so all three symbols
 appear). Three cases added -- `spec_unphased_missing` (legacy rule pinned on
 the `.mlg` path), `cluster_unphased` (default rule, `--seed` invariance, and
@@ -333,7 +333,7 @@ spectra are byte-identical between the two builds. Those close coverage gaps
 rather than pinning changes.
 
 `b31494f` fixes a regression the suite could not have caught, and adds the
-case that would have. Every VCF in `example/` and `testing/` is tab-delimited
+case that would have. Every VCF in `example/` is tab-delimited
 with no leading whitespace, so no fixture exercised the one assumption the
 rewritten reader in `03cda7c` added: that a record's first character begins
 the CHROM field. Given a record written as `" 1<TAB>417<TAB>..."`, the reader
@@ -341,7 +341,7 @@ took the empty string before the space as the contig name and shifted every
 later field by one, so the FORMAT column was read as the first sample's
 genotype and the run died on "Alleles must be coded 0/1/. only" -- an error
 naming the genotypes, which were fine. `vcf_leading_space` is
-`testing/small.vcf.gz` with a space prepended to every data line, run with the
+the small fixture with a space prepended to every data line, run with the
 `spec_phased` flags and compared against the `spec_phased` golden, so it
 asserts that leading whitespace changes nothing rather than only that the run
 survives. Suite is 34 cases, 40 checks. The general lesson is that fixtures
@@ -471,6 +471,50 @@ the README is now verified rather than maintained by hand.
 
 Not verifiable from here, and so the likely first failures: the apt package
 names, gcc's warning set, and the Linux `-static-libstdc++` link.
+
+## The suite could not run anywhere but this laptop
+
+The first CI run failed on both platforms before it reached a single case:
+
+    ERROR: missing repository test input .../testing/small.vcf.gz
+
+`testing/` is not tracked, and never has been. It is a local scratch directory
+of the author's -- 400 MB of it, including a 192 MB 1000 Genomes VCF -- and the
+suite had been reading `testing/small.vcf.gz` out of it since the harness was
+written. Every "60/60" in this document was true only on a machine that
+happened to have that file. `make check` from a clean clone could not run at
+all, which is the opposite of what a regression suite is for, and the harness's
+own header claimed fixtures came from data in the repository.
+
+The file is also not publishable, so committing it was not the fix: it is 81
+samples named `C_rhe_*`, a 990-record subset of the wild Chinese rhesus macaque
+data sitting beside it in that directory. Whether that may be redistributed is
+not mine to decide, and a public repository is not the place to find out.
+
+The small fixture is now derived inside the suite from
+`example/YRI.chr22.vcf.gz`, which is tracked: the first 990 records, contig
+renamed to `1` so the multi-contig cases can add `2` and `3`, and every 200th
+record forced to all-reference. That last part is deliberate -- the example file
+is pre-filtered and has no monomorphic site of its own, so without injecting
+some, `--filter-level 0`, `1` and `2` would agree and those cases would stop
+testing anything.
+
+All 31 golden files were re-recorded, which makes the suite pass by
+construction, so the fixture was then checked for the discrimination the
+goldens depend on:
+
+| property | evidence |
+|---|---|
+| filter levels separate | `--filter-level 0` gives 95 windows, `1` and `2` give 94, different hashes |
+| clustering rules separate | `garud-shuffle`, `best-comp`, `soft-em` give three different spectra |
+| `--match-tol` separates | 0, 1 and 2 give three different spectra |
+| unphased path is real | differs from phased, and the fixture holds 5,078 hom-alt genotypes, so the third allele symbol is exercised |
+| v1.2.2 equivalence holds | a v1.2.2 build reproduces the new fixture's phased spectra byte for byte |
+
+The last row matters most: re-recording goldens would otherwise have quietly
+discarded the property that this branch preserves v1.2.2 behaviour where it
+should, and it is re-established on the new data rather than inherited from the
+old.
 
 ## Left for you to decide
 
