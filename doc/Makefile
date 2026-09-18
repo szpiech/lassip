@@ -66,7 +66,7 @@ check-options:
 check-readme:
 	@$(LASSIP) --help | awk 'NF{p=NR} {l[NR]=$$0} END{for(i=1;i<=p;i++) print l[i]}' > readme.new
 	@n=$$(wc -l < readme.new | tr -d ' '); \
-	awk -v n=$$n '/^Usage: lassip --vcf/{f=1} f{print; if(++c==n) exit}' ../README > readme.cur
+	awk -v n=$$n '/^Usage: lassip --vcf/{f=1} f{print; if(++c==n) exit}' ../README.md > readme.cur
 	@if cmp -s readme.cur readme.new; then \
 		rm -f readme.cur readme.new; \
 		echo "the README's --help block is up to date"; \

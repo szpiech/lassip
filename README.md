@@ -1,14 +1,16 @@
 # LASSI Plus - a program to calculate haplotype frequency spectrum statistics
 
+[![CI](https://github.com/szpiech/lassip/actions/workflows/ci.yml/badge.svg)](https://github.com/szpiech/lassip/actions/workflows/ci.yml)
+
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
-saltiLASSI: DeGriorgio and Szpiech (2022) PLoS Genetics 18: e1010134.
-LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
-H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
-H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
-G123: Harris et al. (2018) Genetics 210:1429-1452.
-G2/G1: Harris et al. (2018) Genetics 210:1429-1452.
-Number of Unique Haplotypes at Locus
+- saltiLASSI: DeGriorgio and Szpiech (2022) PLoS Genetics 18: e1010134.
+- LASSI: Harris and DeGiorgio (2020) MBE doi.org/10.1093/molbev/msaa115.
+- H12: Garud et al. (2015) PLoS Genetics 11:e1005004.
+- H2/H1: Garud et al. (2015) PLoS Genetics 11:e1005004.
+- G123: Harris et al. (2018) Genetics 210:1429-1452.
+- G2/G1: Harris et al. (2018) Genetics 210:1429-1452.
+- Number of Unique Haplotypes at Locus
 
 lassip accepts VCF files, either phased (default, "hap" output files) or unphased (set --unphased, "mlg" output files), with or without missing data. ***SEE CHANGELOG 19JAN2024 for update on how missing data is handeled. lassip reads one or more vcf files, each of which may contain one or more contigs; --vcf takes a list, a file's records must be grouped by contig, and no contig may appear twice across the input. You must provide a population file that specifies population IDs for each individual ID you wish to analyse. Only IDs listed in the population file will be analyzed, and if multiple populations are present, all statistics will be computed on a per-population basis.
 
@@ -16,47 +18,63 @@ Use --hapstats to compute H/G stats in sliding windows along the genome, whether
 
 Use --calc-spec to compute the top K haplotype frequency specra in sliding windows along a contig. Pass multiple spectra files (e.g. from multiple contigs) with --spectra and --lassi to run the CLR computation for detecting sweeps (Harris and DeGiorgio 2020) or with --salti to run CLR computation from (DeGiorgio and Szpiech 2021).
 
-If only --hapstats is given, files are named <basename>.lassip.[hap|mlg].stats.gz with format:
+If only --hapstats is given, files are named `<basename>`.lassip.[hap|mlg].stats.gz with format:
 
+```
 <chr> <start> <end> <nSNPs> <ppos> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1>
+```
 
 The final 4 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label.
 
-If only --calc-spec is given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
+If only --calc-spec is given with --vcf, files are named `<basename>`.lassip.[hap|mlg].spectra.gz with format:
 
+```
 <header line for use with lassip when reading with --spectra>
 <chr> <start> <end> <nSNPs> <ppos> <nHaps> <uniqHaps> <hfs_1> ... <hfs_K>
+```
 
 The final K+2 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. hfs_N gives the frequency of the Nth most common haplotype in the given window. ppos is the window's physical midpoint, or the window index when --dist-type nw was used; stage 2 names the same column pos.
 
-If both --calc-spec and --hapstats are given with --vcf, files are named <basename>.lassip.[hap|mlg].spectra.gz with format:
+If both --calc-spec and --hapstats are given with --vcf, files are named `<basename>`.lassip.[hap|mlg].spectra.gz with format:
 
+```
 <header line for use with lassip when reading with --spectra>
 <chr> <start> <end> <nSNPs> <ppos> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <hfs_1> ... <hfs_K>
+```
 
 The final K+4 columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. hfs_N gives the frequency of the Nth most common haplotype in the given window. ppos is the window's physical midpoint, or the window index when --dist-type nw was used; stage 2 names the same column pos.
 
 The header line referred to above records what the file was written with, and is what lets stage 2 read it:
 
+```
 #phased <0|1> hapstats <0|1> wins <N> K <K> npop <P> <pop1> ... <popP> [contigs <C> <name> <rows> ...]
+```
 
 wins is the number of window rows in the file. The trailing contigs field is written only when a file holds more than one contig; it lists each contig with the number of rows it contributes, and stage 2 checks it against the rows themselves. Contigs are delimited by the chr column rather than by the file, so a file may hold any number of them provided its rows are grouped by contig and ascending within one, and no contig may appear twice across the files passed to --spectra. A file written by an earlier version has no contigs field and is read exactly as before.
 
-Passing *.spectra.gz files to lassip with --spectra <file1> ... <fileN> will compute the LASSI CLR if --lassi is set and the saltiLASSI CLR if --salti is set. Output is a single file concatenating the results from all contigs, named <basename>.lassip.[hap|mlg].out.gz. For LASSI computations, one of two formats is output:
+Passing *.spectra.gz files to lassip with --spectra `<file1>` ... `<fileN>` will compute the LASSI CLR if --lassi is set and the saltiLASSI CLR if --salti is set. Output is a single file concatenating the results from all contigs, named `<basename>`.lassip.[hap|mlg].out.gz. For LASSI computations, one of two formats is output:
 
+```
 <chr> <start> <end> <nSNPs> <pos> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <m> <T>
+```
 
 or
 
+```
 <chr> <start> <end> <nSNPs> <pos> <nHaps> <uniqHaps> <m> <T>
+```
 
 For saltiLASSI computations, one of two formats is output:
 
+```
 <chr> <start> <end> <nSNPs> <pos> <nHaps> <uniqHaps> <h12|g123> <h2h1|g2g1> <m> <A> <L>
+```
 
 or
 
+```
 <chr> <start> <end> <nSNPs> <pos> <nHaps> <uniqHaps> <m> <A> <L>
+```
 
 Depending on whether --hapstats was set when the *.spectra.gz files were generated. The final columns are repeated for each population in the analysis, with the population code prepended on the appropriate header label. m gives the inferred number of sweeping haplotypes, A gives the sweep “width” and T/L gives the CLR test statistic.
 
@@ -79,6 +97,7 @@ compared by hash; stage-2 outputs column by column, so a failure names the
 statistic that moved. Run it after any change to src/.
 
 
+```
 Usage: lassip --vcf <file> --pop <file> --calc-spec [--hapstats] --winsize <int> --winstep <int> --out <prefix>
        lassip --spectra <file> [<file> ...] (--lassi | --salti | --avg-spec) --out <prefix>
 
@@ -236,6 +255,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
+```
 
 
 ***CHANGE LOG***
@@ -328,7 +348,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   165 lines of validation and both pipelines; it is now 23 lines reading
   registerFlags -> parseCommandLine -> readConfig -> validate -> run, with the
   flags unpacked once into a Config struct. Stage-1 results were seven
-  map<string,T*> keyed by population name, looked up by name inside the window
+  map`<string,T*>` keyed by population name, looked up by name inside the window
   loops; they are now fields of one struct per population, held in a vector.
 
   Haplotype clustering is selectable, and the default changed. When a
@@ -372,7 +392,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   several contigs as readily as one file per contig, and the two give identical
   results. Rows must be grouped by contig and ascending within one; a file that
   interleaves contigs, repeats one, or disagrees with its own window count is
-  refused. The header may carry an optional 'contigs <n> <name> <nwins> ...'
+  refused. The header may carry an optional 'contigs `<n>` `<name>` `<nwins>` ...'
   field after the population names, validated against the rows when present.
 
   Stage 1 takes several contigs in one run. --vcf is a list flag, so
@@ -380,7 +400,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
       lassip --vcf chr1.vcf.gz chr2.vcf.gz --pop pops.txt --calc-spec \
              --winsize 117 --winstep 12 --out scan
 
-  writes scan.<pop>.lassip.hap.spectra.gz covering both contigs, which stage 2
+  writes scan.`<pop>`.lassip.hap.spectra.gz covering both contigs, which stage 2
   reads as one file. A single VCF holding several contigs works too, and the
   two forms mix; what is not allowed is the same contig twice, or a contig
   whose records are not all together in one file -- lassip reads a VCF in one
@@ -458,7 +478,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   dated from v1.0.0 and predated the ppos column; it is replaced by
   example/YRI.chr22.YRI.lassip.hap.spectra.gz, which is what the script
   actually writes -- at the default --filter-level 2 each population is
-  filtered separately and gets its own file, <out>.<pop>.lassip.hap.spectra.gz.
+  filtered separately and gets its own file, `<out>`.`<pop>`.lassip.hap.spectra.gz.
   The script had two faults: it passed --lassi to stage 1, where it does
   nothing, and without --calc-spec wrote .stats.gz; and its second command read
   the population-free filename, so it silently consumed the stale 2020 file
@@ -473,22 +493,29 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 18JAN2024 - v1.2.0. Changing the way missing data is handled. Three new command line arguments:
 
+```
 --max-hmiss <double>: Drop haplotypes with > this proportion of missing data when computing the HFS.
+```
 	Default: 0.20
 
 Previous behavior is that as soon as a missing genotype is encountered this haplotype is excluded from HFS calculation. You can now modify this behavior with --max-hmiss. A haplotype will only be dropped if there is more than MAX_HMISS proportion of alleles missing in that haplotype. e.g. 10-00--011 is a 10-snp haplotype with missing data represented by '-'. The default MAX_HMISS is 0.2, and since 3/10 > 0.2 this haplotype would be excluded. 10-0011011 has only 1/10 missing data, so it is kept.
 
+```
 --max-lmiss <double>: Filter loci with > this proportion of missing data.
+```
 	Default: 0.10
 
 Previous behavior did not filter loci based on missing data. Here you can set the proportion of missing data beyond which a locus will be excluded. --filter-level controls how this is calculated, 0 fir no filtering at all, 1 to calculate the denominator from all provided samples, 2 to calculate denominator based on population groups.
 
+```
 --match-tol <int>: Group haplotypes with missing data into
+```
 	the same class as a haplotype with no missing data if they have <= this many pairwise differences.
 	Default: 0
 
 The current implementation now tries to cluster any haplotypes that have missing data (that pass the MAX_HMISS check) with haplotypes in the data that are complete (i.e. no missing data). To do this, I calculate # of pairwise differences, ignoring any locations with missing data, and cluster the missing-data haplotype with the complete haplotype(s) to which it has the fewest differences (enforcing that the number of differences must at least be <= MATCH_TOL). If there are ties, it is counted fractionally with equal contribution to each matching haplotype. Let me illustrate:
 
+```
 Complete haps
 A 101
 B 111
@@ -497,6 +524,7 @@ C 110
 Haps w/missing data
 D 1-1
 E 0-1
+```
 
 Let d(X,Y) be the # pairwise differences and MATCH_TOL == 0, then d(D,A) = 0, d(D,B) = 0, d(D,C) = 1. In this case D would be counted 0.5 as A and 0.5 as B.
 
@@ -513,10 +541,12 @@ Even if MATCH_TOL > 0, complete haplotypes are never merged (this could be chang
 03DEC2021 - Bug fixes relating to genetic map distance interpolation.
 
 02SEPT2021 - v1.1.1 Introduced saltiLASSI options for measuring distance in bp (basepairs), nw (number of windows), or cm (centimorgans). New command line flags:
+```
     --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
     --max-extend-cm <double>: Maximum distance in centimorgans from core window to consider for saltiLASSI.
     --map <string>: A map file formatted <chr#> <locusID> <genetic pos> <physical pos>. Sites in VCF not in map file will be interpolated.
     --dist-type <string>: Distance measure for saltiLASSI: bp, cm, nw.
+```
     These flags are used with --salti and --spectra flags when finalizing the computations.
 
 07MAY2021 - v1.1.0 Introduced saltiLASSI framework. Must specify --lassi or --salti when passing spectra files with --spectra in order to choose a method.

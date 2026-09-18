@@ -968,10 +968,10 @@ if selected doc_formats; then
     done
     # and the README's own format lines must name it in the same place
     for want in ppos pos; do
-        n=$(grep -c "^<chr> <start> <end> <nSNPs> <$want>" "$ROOT_DIR/README")
+        n=$(grep -c "^<chr> <start> <end> <nSNPs> <$want>" "$ROOT_DIR/README.md")
         [ "$n" -gt 0 ] || { echo "      README has no format line with <$want> as the fifth column" >&2; df_fail=1; }
     done
-    bad=$(grep -c "^<chr> <start> <end> <nSNPs> <nHaps>" "$ROOT_DIR/README" | tr -d " \n")
+    bad=$(grep -c "^<chr> <start> <end> <nSNPs> <nHaps>" "$ROOT_DIR/README.md" | tr -d " \n")
     [ "$bad" = 0 ] || { echo "      README still has $bad format line(s) missing the position column" >&2; df_fail=1; }
     if [ "$df_fail" = 0 ]; then pass "doc_formats (position column present and documented)"
     else fail doc_formats "output format and its documentation disagree"; fi
