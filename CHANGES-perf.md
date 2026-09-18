@@ -105,6 +105,8 @@ revised this file.
 | `c943c3c` | v1.3.1 |
 | `bda3faf` | docs: record the v1.3.1 binaries and check them against the branch |
 | `e7fb8f5` | ci: build and test on Linux and macOS, and check the generated docs |
+| `6bf8398` | docs: record the CI workflows in the branch summary |
+| `c3c6b12` | tests: derive the small fixture from tracked data, not the author's scratch |
 
 ## Behavioural differences
 
