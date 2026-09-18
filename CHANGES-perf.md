@@ -107,6 +107,8 @@ revised this file.
 | `e7fb8f5` | ci: build and test on Linux and macOS, and check the generated docs |
 | `6bf8398` | docs: record the CI workflows in the branch summary |
 | `c3c6b12` | tests: derive the small fixture from tracked data, not the author's scratch |
+| `9d6f941` | docs: record the untracked-fixture fix in the branch summary |
+| `44acbdf` | seed the haplotype shuffle reproducibly across platforms |
 
 ## Behavioural differences
 
@@ -517,6 +519,48 @@ The last row matters most: re-recording goldens would otherwise have quietly
 discarded the property that this branch preserves v1.2.2 behaviour where it
 should, and it is re-established on the new data rather than inherited from the
 old.
+
+## What the first CI runs found
+
+Two real defects, neither of which any amount of local testing would have
+shown, because both were invisible on the machine the goldens were recorded on.
+
+**1. The suite could not run anywhere but this laptop** (`c3c6b12`). Covered in
+the section above -- an untracked data input.
+
+**2. `--seed` was only reproducible per platform** (`44acbdf`). With that fixed,
+Linux ran 57 of 60, failing exactly the three cases that hash the output of
+`--hap-cluster garud-shuffle` under a fixed seed. The line responsible:
+
+    shuffle(hapIDs.begin(), hapIDs.end(), default_random_engine(seed));
+
+Both halves are implementation defined. `default_random_engine` is an alias the
+implementation chooses -- libstdc++ picks `minstd_rand0`, libc++ picks
+`minstd_rand` -- and `std::shuffle` draws through `uniform_int_distribution`,
+whose algorithm the standard does not specify. The same seed gave a different
+haplotype order, hence different clusters and different spectra, on Linux than
+on macOS. The flag is documented as making a run reproducible, and it was,
+only on the machine that recorded it.
+
+Now Fisher-Yates over `mt19937`, which the standard specifies exactly (verified
+against the standard's own test vector: the 10000th output for seed 5489 is
+4123659995), with an explicit rejection-sampled bound instead of
+`uniform_int_distribution`.
+
+Scope was measured rather than assumed, against the pre-change binary on the
+same input: `best-comp` and `soft-em` are byte-identical, so the default path
+does not move; only `garud-shuffle` changes, and only in visiting order. Three
+goldens re-recorded. `--seed` remains deterministic (two runs at seed 3 agree)
+and sensitive (seed 9 differs).
+
+This one is worth a release note: anyone who recorded `garud-shuffle` results
+under a given seed will not reproduce them with this version, and could not
+have reproduced them on another machine before it either.
+
+The same run also showed five `gzip: stdout: Broken pipe` lines, from awk
+exiting early on a gzip stream. Harmless, but they read as failures in a log;
+the fixture pipelines now drain their input, which costs 1.4 s of the suite's
+4.6 s.
 
 ## Left for you to decide
 
