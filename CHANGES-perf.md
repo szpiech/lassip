@@ -111,6 +111,8 @@ revised this file.
 | `44acbdf` | seed the haplotype shuffle reproducibly across platforms |
 | `6944415` | docs: record what the first CI runs exposed |
 | `41da9f3` | README.md: render as Markdown, and add the CI badge |
+| `a316628` | docs: record the README.md conversion |
+| `900c863` | ci: run only on master and devel, and on pull requests into them |
 
 ## Behavioural differences
 
@@ -449,12 +451,15 @@ be merged.
 `e7fb8f5` adds `.github/workflows/`, which the repository did not have.
 
 - **`ci.yml`** builds on `ubuntu-latest` and `macos-latest` and runs the
-  60-case suite on both, on every push, plus a step asserting the documented
-  exit codes. A second job builds with `-Werror`; it is advisory
+  60-case suite on both, plus a step asserting the documented exit codes.
+  It triggers on pushes to `master` and `devel`, on pull requests into
+  them, and on demand from the Actions tab (`900c863`); a feature branch is
+  therefore checked when it is proposed for merge, not on every commit. A second job builds with `-Werror`; it is advisory
   (`continue-on-error`) because the tree is clean under clang but gcc warns
   about different things and nobody has run it there. Make it blocking once
   it is green.
-- **`manual.yml`** rebuilds the PDF when `doc/` changes, checks the file was
+- **`manual.yml`** rebuilds the PDF when `doc/` changes on those same two
+  branches, checks the file was
   written by that run rather than left over from a failed pass, and asserts
   that no flag name rendered as an en dash.
 - **`binaries.yml`** builds the distributables for both platforms on demand,
