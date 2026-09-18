@@ -1,0 +1,68 @@
+# Build the distributable binaries that bin/ holds, on clean machines.
+#
+# These have been built by hand on the maintainer's laptops, which is why
+# bin/linux/ and bin/macos-arm/ have at times held binaries named for one
+# version and built from another. This workflow builds both from a given commit,
+# runs the regression suite against the binary it just built, and attaches them
+# to the run; download and commit them when making a release.
+#
+# It does not commit anything itself. Binaries in git are the maintainer's
+# decision and a workflow that pushed them would rewrite bin/ on every run.
+name: Binaries
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux
+            # Static C++ runtime so the binary runs on distributions older than
+            # the runner. libz and libc stay dynamic, as in the builds shipped
+            # so far.
+            link: -static-libstdc++ -static-libgcc
+          - os: macos-latest
+            label: macos-arm
+            link: ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zlib (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Build
+        run: make -C src -j3 LINK_OPTS="${{ matrix.link }}"
+
+      - name: Regression suite against this binary
+        run: ./tests/run_tests.sh --bin "$PWD/src/lassip"
+
+      - name: Name it after the version it reports
+        id: name
+        run: |
+          set -u
+          version=$(src/lassip --version | awk '{print $2}' | tr -d 'v')
+          test -n "$version"
+          # The version the binary prints, not the one in the source, so a stale
+          # object file cannot produce a misnamed binary.
+          out="lassip-v$version"
+          mkdir -p dist/${{ matrix.label }}
+          cp src/lassip "dist/${{ matrix.label }}/$out"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "built dist/${{ matrix.label }}/$out"
+          file "dist/${{ matrix.label }}/$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lassip-${{ matrix.label }}-v${{ steps.name.outputs.version }}
+          path: dist/${{ matrix.label }}/
+          if-no-files-found: error

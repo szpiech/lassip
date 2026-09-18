@@ -1,0 +1,85 @@
+# Build the manual and attach the PDF to the run.
+#
+# Separate from ci.yml because it installs a TeX distribution, which is by far
+# the slowest thing in this repository's CI and is only worth doing when the
+# manual or the option help has actually changed.
+#
+# The PDF committed at the repository root stays the release artifact; this
+# workflow does not commit anything. It exists so that a change to doc/ is known
+# to still build, and so a reviewer can read the rendered result from the run
+# without installing LaTeX.
+name: Manual
+
+on:
+  push:
+    paths:
+      - 'doc/**'
+      - 'src/lassip-cli.h'
+      - '.github/workflows/manual.yml'
+  pull_request:
+    paths:
+      - 'doc/**'
+      - 'src/lassip-cli.h'
+  workflow_dispatch:
+
+jobs:
+  manual:
+    name: build LASSI-Plus-Manual.pdf
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zlib and LaTeX
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev \
+            texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended \
+            cm-super
+          # cm-super is not optional here: the manual loads T1 fontenc, and
+          # without the Type 1 CM fonts pdflatex silently falls back to Type 3
+          # bitmaps, which look wrong on screen and search badly.
+
+      - name: Build lassip
+        # doc/options.tex is generated from the binary's --help, so the manual
+        # cannot be built without building the program first.
+        run: make -C src -j3
+
+      - name: The committed option reference matches this binary
+        run: make -C doc check
+
+      - name: Build the PDF
+        run: make -C doc
+
+      - name: The PDF is not a stale copy
+        # `make` leaves the previous PDF in place if a pdflatex pass fails, so
+        # check that the file was actually written by this run.
+        run: |
+          find LASSI-Plus-Manual.pdf -newer doc/MANUAL.tex -print | grep -q . \
+            || { echo "LASSI-Plus-Manual.pdf was not rebuilt" >&2; exit 1; }
+
+      - name: Flag names must not render as en dashes
+        # With T1 encoding the typewriter font ligates --, which would silently
+        # turn every documented flag into an en dash. Checked here because it is
+        # invisible in the source and only appears in the rendered output.
+        run: |
+          python3 -m pip install --quiet pypdfium2
+          python3 - <<'PY'
+          import re, sys
+          import pypdfium2 as pdfium
+          doc = pdfium.PdfDocument("LASSI-Plus-Manual.pdf")
+          text = "\n".join(p.get_textpage().get_text_range() for p in doc)
+          bad = sorted(set(re.findall(r"\u2013[a-z][a-z0-9-]+", text)))
+          if bad:
+              sys.exit("flag names rendered with an en dash: %s" % bad)
+          n = len(set(re.findall(r"--[a-z][a-z0-9-]+", text)))
+          if n < 20:
+              sys.exit("only %d distinct flags found in the PDF; is it truncated?" % n)
+          print("%d pages, %d distinct flags, no en-dashed flag names" % (len(doc), n))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LASSI-Plus-Manual
+          path: LASSI-Plus-Manual.pdf
+          if-no-files-found: error

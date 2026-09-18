@@ -1,0 +1,83 @@
+# Build lassip and run the regression suite on Linux and macOS.
+#
+# The suite compares against recorded output, so it is worth saying why that is
+# safe to run on two platforms. Stage-1 results are compared by hash, and stage 1
+# does no transcendental arithmetic -- the spectra are ratios and sums of squares
+# of integer counts, which IEEE 754 makes bit-identical on any conforming
+# compiler. Stage 2 calls log() and exp(), whose last digit can differ between
+# one platform's libm and another's, and every stage-2 case is compared column by
+# column with a tolerance rather than by hash. So a hash mismatch here means a
+# real change in behaviour, not a change of machine.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install zlib (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+
+      - name: Build
+        run: make -C src -j3 WARNFLAGS="-Wall -Wextra -Wno-unused-parameter"
+
+      - name: Report version
+        run: src/lassip --version
+
+      - name: Regression suite
+        run: ./tests/run_tests.sh --bin "$PWD/src/lassip"
+
+      - name: Exit codes are what the manual documents
+        run: |
+          set -u
+          ec() { "$@" >/dev/null 2>&1; echo $?; }
+          test "$(ec src/lassip --version)" = 0
+          test "$(ec src/lassip)" = 64
+          test "$(ec src/lassip --not-a-flag)" = 64
+          test "$(ec src/lassip --spectra no-such-file.gz --salti --out /tmp/x)" = 74
+
+  strict-warnings:
+    # Not blocking yet: -Wall -Wextra -Wno-unused-parameter is clean under the
+    # clang this was developed against, but gcc warns about different things and
+    # this job exists to find out which. Drop continue-on-error once it is green.
+    name: warnings as errors (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      - name: Build with -Werror
+        run: make -C src -j3 WARNFLAGS="-Wall -Wextra -Wno-unused-parameter -Werror"
+
+  docs:
+    # The manual's option reference and the copy of --help in the README are both
+    # generated. This job fails if either has drifted from the binary, which is
+    # how the old manual ended up three releases behind the program.
+    name: generated documentation is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      - name: Build
+        run: make -C src -j3
+      - name: doc/options.tex and the README help block match --help
+        run: make -C doc check

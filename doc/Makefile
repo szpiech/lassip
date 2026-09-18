@@ -21,7 +21,7 @@ PYTHON  ?= python3
 LASSIP  ?= ../src/lassip
 PDF      = ../LASSI-Plus-Manual.pdf
 
-.PHONY: all options check clean
+.PHONY: all options check check-options check-readme clean
 
 all: $(PDF)
 
@@ -47,7 +47,9 @@ options.tex: gen-options.py $(LASSIP)
 	$(PYTHON) gen-options.py $(LASSIP) > $@.tmp
 	mv $@.tmp $@
 
-check:
+check: check-options check-readme
+
+check-options:
 	@$(PYTHON) gen-options.py $(LASSIP) > options.new
 	@if cmp -s options.new options.tex; then \
 		rm -f options.new; \
@@ -59,5 +61,21 @@ check:
 		exit 1; \
 	fi
 
+# The README embeds a copy of --help between the usage line and the change log.
+# Nothing regenerates it automatically, so it is the piece most likely to drift.
+check-readme:
+	@$(LASSIP) --help | awk 'NF{p=NR} {l[NR]=$$0} END{for(i=1;i<=p;i++) print l[i]}' > readme.new
+	@n=$$(wc -l < readme.new | tr -d ' '); \
+	awk -v n=$$n '/^Usage: lassip --vcf/{f=1} f{print; if(++c==n) exit}' ../README > readme.cur
+	@if cmp -s readme.cur readme.new; then \
+		rm -f readme.cur readme.new; \
+		echo "the README's --help block is up to date"; \
+	else \
+		echo "the README's --help block is out of date; replace it with the output of '$(LASSIP) --help'" >&2; \
+		diff -u readme.cur readme.new | head -40 >&2; \
+		rm -f readme.cur readme.new; \
+		exit 1; \
+	fi
+
 clean:
-	rm -f MANUAL.aux MANUAL.log MANUAL.out MANUAL.toc MANUAL.pdf options.new options.tex.tmp
+	rm -f MANUAL.aux MANUAL.log MANUAL.out MANUAL.toc MANUAL.pdf options.new options.tex.tmp readme.cur readme.new
