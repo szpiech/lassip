@@ -1,6 +1,6 @@
 # LASSI Plus - a program to calculate haplotype frequency spectrum statistics
 
-[![CI](https://github.com/szpiech/lassip/actions/workflows/ci.yml/badge.svg)](https://github.com/szpiech/lassip/actions/workflows/ci.yml)
+[![CI](https://github.com/szpiech/lassip/actions/workflows/ci.yml/badge.svg?branch=devel)](https://github.com/szpiech/lassip/actions/workflows/ci.yml?query=branch%3Adevel)
 
 This is an implementation of various haplotype frequency spectrum statistics useful for detecting hard and soft selective sweeps in genomes. This program implements the following statistics:
 
