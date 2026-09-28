@@ -113,6 +113,9 @@ revised this file.
 | `41da9f3` | README.md: render as Markdown, and add the CI badge |
 | `a316628` | docs: record the README.md conversion |
 | `900c863` | ci: run only on master and devel, and on pull requests into them |
+| `ab1afe7` | docs: record the CI branch policy |
+| `09982bb` | README.md: point the badge at devel |
+| `9b0a0cf` | ci: attach built binaries to a release |
 
 ## Behavioural differences
 
@@ -462,11 +465,25 @@ be merged.
   branches, checks the file was
   written by that run rather than left over from a failed pass, and asserts
   that no flag name rendered as an en dash.
-- **`binaries.yml`** builds the distributables for both platforms on demand,
-  runs the suite against each, and names each after the version the *binary*
-  reports. It uploads artifacts and commits nothing, so `bin/` stays your
-  decision -- but it removes the hand-build step that let `bin/` hold
-  binaries named for one version and built from another.
+- **`binaries.yml`** builds the distributables for both platforms, runs the
+  suite against each, and names each after the version the *binary* reports.
+  Publishing a release attaches the archives to it (`9b0a0cf`); running the
+  workflow by hand does everything except the upload, which is how to rehearse
+  a release. It commits nothing, so `bin/` stays your decision -- but it
+  removes the hand-build step that let `bin/` hold binaries named for one
+  version and built from another.
+
+  Three things had to change for release assets specifically. Both legs used
+  to produce a file named `lassip-v<version>`, and asset names are unique per
+  release, so one platform would have overwritten the other; assets are now
+  `lassip-v<version>-linux-x86_64.tar.gz` and `-macos-arm64.tar.gz`. They are
+  archives rather than bare binaries because a bare asset downloaded through a
+  browser arrives without its executable bit -- verified by unpacking one and
+  running it. And the job now fails if the tag does not name the version the
+  binary reports, so a download cannot be named for a version it was not built
+  from. Each asset carries a `.sha256`. The upload uses the preinstalled `gh`
+  CLI with the job-scoped token, so no third-party action sits in the release
+  path.
 
 Why a recorded-output suite can run on two platforms at all: stage-1 results
 are compared by hash and stage 1 does no transcendental arithmetic, so IEEE
