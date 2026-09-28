@@ -81,6 +81,28 @@ Depending on whether --hapstats was set when the *.spectra.gz files were generat
 If --filter-level 2 is given (default), loci are filtered on a population basis and all monomorphic snps in a given population are filtered. As a consequence, total number of windows and the window coordinates will not necessarily match between pops, and so each population has results output in a separate file.
 
 
+RELEASES
+
+Publishing a release on GitHub builds the binaries and attaches them to it. The
+Binaries workflow compiles on a clean Linux and a clean macOS runner, runs the
+regression suite against each binary it has just built, refuses to continue if
+the tag does not name the version the binary reports, and uploads one archive
+per platform:
+
+    lassip-v<version>-linux-x86_64.tar.gz
+    lassip-v<version>-macos-arm64.tar.gz
+
+each with a .sha256 beside it, and each containing the binary, this README, the
+LICENSE and the manual. An archive rather than a bare binary because a file
+downloaded through a browser arrives without its executable bit. The Linux
+build links the C++ runtime statically, so it runs on distributions older than
+the runner; libz and libc stay dynamic.
+
+Running the workflow by hand from the Actions tab does everything except the
+upload, leaving the archives as run artifacts -- the way to rehearse a release
+before tagging one. Nothing is committed to bin/ by any workflow.
+
+
 BUILDING AND TESTING
 
     cd src && make                 # portable -O3 build

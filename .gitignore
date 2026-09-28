@@ -15,3 +15,6 @@ doc/*.out
 doc/MANUAL.pdf
 doc/options.new
 doc/options.tex.tmp
+
+# staging directory the Binaries workflow builds release archives in
+dist/

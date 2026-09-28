@@ -1,13 +1,18 @@
-# Build the distributable binaries that bin/ holds, on clean machines.
+# Build the distributable binaries on clean machines, and attach them to a
+# release when one is published.
 #
-# These have been built by hand on the maintainer's laptops, which is why
+# These used to be built by hand on the maintainer's laptops, which is why
 # bin/linux/ and bin/macos-arm/ have at times held binaries named for one
-# version and built from another. This workflow builds both from a given commit,
-# runs the regression suite against the binary it just built, and attaches them
-# to the run; download and commit them when making a release.
+# version and built from another. Here each binary is built from the released
+# commit, checked against the regression suite, and named after the version it
+# itself reports -- not the version in the source, so a stale object file cannot
+# produce a misnamed download.
 #
-# It does not commit anything itself. Binaries in git are the maintainer's
-# decision and a workflow that pushed them would rewrite bin/ on every run.
+# Publishing a release uploads the assets to it. Running the workflow by hand
+# builds and checks everything and leaves the same archives as run artifacts,
+# uploading nothing, which is the way to rehearse a release before tagging.
+#
+# It still commits nothing: what lives in bin/ is the maintainer's decision.
 name: Binaries
 
 on:
@@ -17,21 +22,23 @@ on:
 
 jobs:
   build:
-    name: ${{ matrix.label }}
+    name: ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    permissions:
+      contents: write        # needed only to upload assets to the release
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            label: linux
+            platform: linux-x86_64
             # Static C++ runtime so the binary runs on distributions older than
             # the runner. libz and libc stay dynamic, as in the builds shipped
             # so far.
             link: -static-libstdc++ -static-libgcc
           - os: macos-latest
-            label: macos-arm
+            platform: macos-arm64
             link: ''
     steps:
       - uses: actions/checkout@v4
@@ -46,23 +53,59 @@ jobs:
       - name: Regression suite against this binary
         run: ./tests/run_tests.sh --bin "$PWD/src/lassip"
 
-      - name: Name it after the version it reports
-        id: name
+      - name: Package
+        id: pkg
         run: |
           set -u
           version=$(src/lassip --version | awk '{print $2}' | tr -d 'v')
           test -n "$version"
-          # The version the binary prints, not the one in the source, so a stale
-          # object file cannot produce a misnamed binary.
-          out="lassip-v$version"
-          mkdir -p dist/${{ matrix.label }}
-          cp src/lassip "dist/${{ matrix.label }}/$out"
+          name="lassip-v$version-${{ matrix.platform }}"
+
+          # A directory rather than a bare file, and a tar rather than the
+          # binary itself: a bare asset downloaded through a browser arrives
+          # without its executable bit, and the two platforms would otherwise
+          # produce two assets of the same name, which a release cannot hold.
+          mkdir -p "dist/$name"
+          cp src/lassip "dist/$name/lassip"
+          cp README.md LICENSE LASSI-Plus-Manual.pdf "dist/$name/"
+          tar -C dist -czf "dist/$name.tar.gz" "$name"
+
+          # sha256sum on Linux, shasum on macOS; both write the same format.
+          ( cd dist && { sha256sum "$name.tar.gz" 2>/dev/null \
+                         || shasum -a 256 "$name.tar.gz"; } > "$name.tar.gz.sha256" )
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "built dist/${{ matrix.label }}/$out"
-          file "dist/${{ matrix.label }}/$out"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          file "dist/$name/lassip"
+          cat "dist/$name.tar.gz.sha256"
+
+      - name: The tag must name the version the binary reports
+        if: github.event_name == 'release'
+        run: |
+          set -u
+          tag="${{ github.event.release.tag_name }}"
+          # compare bare version numbers, so v1.3.1 and 1.3.1 both match
+          if [ "${tag#v}" != "${{ steps.pkg.outputs.version }}" ]; then
+            echo "release is tagged $tag but the binary reports v${{ steps.pkg.outputs.version }}." >&2
+            echo "VERSION in src/lassip-cli.h and the tag disagree, so the" >&2
+            echo "download would be named for a version it was not built from." >&2
+            exit 1
+          fi
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "dist/${{ steps.pkg.outputs.name }}.tar.gz" \
+            "dist/${{ steps.pkg.outputs.name }}.tar.gz.sha256" \
+            --clobber
 
       - uses: actions/upload-artifact@v4
         with:
-          name: lassip-${{ matrix.label }}-v${{ steps.name.outputs.version }}
-          path: dist/${{ matrix.label }}/
+          name: ${{ steps.pkg.outputs.name }}
+          path: |
+            dist/${{ steps.pkg.outputs.name }}.tar.gz
+            dist/${{ steps.pkg.outputs.name }}.tar.gz.sha256
           if-no-files-found: error
