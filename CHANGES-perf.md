@@ -116,6 +116,8 @@ revised this file.
 | `ab1afe7` | docs: record the CI branch policy |
 | `09982bb` | README.md: point the badge at devel |
 | `9b0a0cf` | ci: attach built binaries to a release |
+| `ca2723c` | docs: record the release-asset workflow |
+| `147640e` | ci: build binaries on a version tag as well as a release |
 
 ## Behavioural differences
 
@@ -467,9 +469,13 @@ be merged.
   that no flag name rendered as an en dash.
 - **`binaries.yml`** builds the distributables for both platforms, runs the
   suite against each, and names each after the version the *binary* reports.
-  Publishing a release attaches the archives to it (`9b0a0cf`); running the
-  workflow by hand does everything except the upload, which is how to rehearse
-  a release. It commits nothing, so `bin/` stays your decision -- but it
+  It runs on a published release, on a pushed version tag and on demand
+  (`9b0a0cf`, `147640e`). A release gets the archives attached to it; a pushed
+  tag gets them attached if a release for that tag already exists, and
+  otherwise leaves them as run artifacts rather than creating a release the
+  maintainer has not written yet -- publishing it afterwards fires the
+  workflow again, so either order ends in the same place. A manual run always
+  leaves artifacts, which is how to rehearse a release. It commits nothing, so `bin/` stays your decision -- but it
   removes the hand-build step that let `bin/` hold binaries named for one
   version and built from another.
 
