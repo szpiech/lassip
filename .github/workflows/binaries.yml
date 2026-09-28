@@ -19,6 +19,13 @@ on:
   workflow_dispatch:
   release:
     types: [published]
+  push:
+    # Both conventions, since the repository has no tags yet to follow: v1.3.2
+    # and 1.3.2 alike. The leading digit keeps this off tags that are not
+    # versions.
+    tags:
+      - 'v[0-9]*'
+      - '[0-9]*'
 
 jobs:
   build:
@@ -74,33 +81,56 @@ jobs:
           ( cd dist && { sha256sum "$name.tar.gz" 2>/dev/null \
                          || shasum -a 256 "$name.tar.gz"; } > "$name.tar.gz.sha256" )
 
+          # The tag, wherever it came from: the release event carries it, a tag
+          # push puts it in GITHUB_REF_NAME, and a manual run has none.
+          tag="${{ github.event.release.tag_name }}"
+          if [ -z "$tag" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+          fi
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
           file "dist/$name/lassip"
           cat "dist/$name.tar.gz.sha256"
 
       - name: The tag must name the version the binary reports
-        if: github.event_name == 'release'
+        if: steps.pkg.outputs.tag != ''
         run: |
           set -u
-          tag="${{ github.event.release.tag_name }}"
+          tag="${{ steps.pkg.outputs.tag }}"
           # compare bare version numbers, so v1.3.1 and 1.3.1 both match
           if [ "${tag#v}" != "${{ steps.pkg.outputs.version }}" ]; then
-            echo "release is tagged $tag but the binary reports v${{ steps.pkg.outputs.version }}." >&2
+            echo "tagged $tag but the binary reports v${{ steps.pkg.outputs.version }}." >&2
             echo "VERSION in src/lassip-cli.h and the tag disagree, so the" >&2
             echo "download would be named for a version it was not built from." >&2
             exit 1
           fi
 
       - name: Attach to the release
-        if: github.event_name == 'release'
+        if: steps.pkg.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" \
-            "dist/${{ steps.pkg.outputs.name }}.tar.gz" \
-            "dist/${{ steps.pkg.outputs.name }}.tar.gz.sha256" \
-            --clobber
+          set -u
+          tag="${{ steps.pkg.outputs.tag }}"
+          # A tag can arrive before its release exists -- pushing v1.3.2 from a
+          # terminal is not the same as publishing a release. Rather than
+          # create one, which would announce a release the maintainer has not
+          # written yet, upload only when there is something to upload to.
+          # Publishing the release later fires this workflow again and the
+          # assets land then.
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" \
+              "dist/${{ steps.pkg.outputs.name }}.tar.gz" \
+              "dist/${{ steps.pkg.outputs.name }}.tar.gz.sha256" \
+              --clobber
+            echo "attached to release $tag"
+          else
+            echo "No release exists for $tag yet, so nothing was uploaded."
+            echo "The archives are attached to this run; publishing a release"
+            echo "for $tag will build them again and attach them to it."
+          fi
 
       - uses: actions/upload-artifact@v4
         with:

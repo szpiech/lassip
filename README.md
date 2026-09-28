@@ -83,11 +83,11 @@ If --filter-level 2 is given (default), loci are filtered on a population basis 
 
 RELEASES
 
-Publishing a release on GitHub builds the binaries and attaches them to it. The
-Binaries workflow compiles on a clean Linux and a clean macOS runner, runs the
-regression suite against each binary it has just built, refuses to continue if
-the tag does not name the version the binary reports, and uploads one archive
-per platform:
+The Binaries workflow builds the distributable binaries. It runs when a release
+is published, when a version tag is pushed, and on demand from the Actions tab.
+It compiles on a clean Linux and a clean macOS runner, runs the regression suite
+against each binary it has just built, refuses to continue if the tag does not
+name the version the binary reports, and produces one archive per platform:
 
     lassip-v<version>-linux-x86_64.tar.gz
     lassip-v<version>-macos-arm64.tar.gz
@@ -98,9 +98,16 @@ downloaded through a browser arrives without its executable bit. The Linux
 build links the C++ runtime statically, so it runs on distributions older than
 the runner; libz and libc stay dynamic.
 
-Running the workflow by hand from the Actions tab does everything except the
-upload, leaving the archives as run artifacts -- the way to rehearse a release
-before tagging one. Nothing is committed to bin/ by any workflow.
+Where the archives end up depends on how the run started. A published release
+gets them attached to it. A pushed tag gets them attached to the release for
+that tag if one already exists, and otherwise leaves them as run artifacts with
+a note -- pushing a tag from a terminal is not the same as announcing a
+release, so the workflow does not create one. Publishing the release afterwards
+runs the workflow again and attaches them then, so either order works. A manual
+run always leaves them as run artifacts, which is the way to rehearse a release
+before tagging one.
+
+Nothing is committed to bin/ by any workflow.
 
 
 BUILDING AND TESTING
