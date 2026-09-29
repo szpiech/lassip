@@ -118,6 +118,8 @@ revised this file.
 | `9b0a0cf` | ci: attach built binaries to a release |
 | `ca2723c` | docs: record the release-asset workflow |
 | `147640e` | ci: build binaries on a version tag as well as a release |
+| `346e038` | docs: record the tag trigger |
+| `8b2da94` | add --min-overlap: require shared evidence before grouping haplotypes |
 
 ## Behavioural differences
 
@@ -615,6 +617,44 @@ their own lines, 7/7 citations on separate lines.
 
 The badge tracks `ci.yml` on the default branch, so it reads "no status" until
 this branch merges there.
+
+## --min-overlap
+
+`8b2da94` adds `--min-overlap <int>`, default 0.
+
+A missing genotype is a wildcard rather than a mismatch, so two haplotypes are
+compared only at the sites observed in both -- and nothing required there to be
+many of them. Two haplotypes observed on disjoint parts of a window share no
+site, disagree nowhere, and were therefore grouped: agreement on no evidence
+counted as exact agreement. All three `--hap-cluster` rules did this, since all
+three decide through `garud_ndiff_str`.
+
+The flag requires a minimum number of jointly observed sites before a pair may
+be placed in the same class. A pair below it is reported as one difference too
+many -- which every caller already tests for -- so too little evidence and too
+much disagreement both mean "do not merge". The haplotype then forms its own
+class, so the spectrum fragments rather than concentrating, which is the safer
+error: over-grouping concentrates the spectrum and mimics a sweep. The check is
+against the class representative, the more permissive choice, since a
+representative accumulates observed sites as it absorbs members.
+
+**Default 0 changes nothing.** Verified byte-identical to the pre-change binary
+across three rules x four missing rates, and identical again when 0 is passed
+explicitly. Rejected if negative, or above `--winsize`, where no pair could
+qualify and every haplotype would end up alone.
+
+This matters mainly for sparse data. `--max-hmiss` already implies an overlap of
+at least `--winsize * (1 - 2 * --max-hmiss)` sites -- 60 % of the window at its
+default 0.20 -- and that bound only reaches zero at `--max-hmiss 0.5`, the
+regime pseudohaplotype and ancient DNA data force. Asking for much more than the
+expected overlap of `--winsize * (1 - m)^2` fragments everything; the help text
+carries the arithmetic.
+
+New case `min_overlap` pins both directions on a fixture whose truth is known:
+four classes of two, two of them observed on disjoint halves of the window. At
+`--min-overlap 0` all three rules report three classes (0.50, 0.25, 0.25); at 1
+all three report four of 0.25, which is the truth. It fails against the
+pre-change binary while the other 60 cases still pass there.
 
 ## Left for you to decide
 
