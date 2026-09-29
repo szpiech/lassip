@@ -1,8 +1,9 @@
 # Build the lassip manual.
 #
 #   make            build ../LASSI-Plus-Manual.pdf
-#   make options    regenerate the option reference from the binary alone
-#   make check      fail if options.tex is out of date with the binary
+#   make options    regenerate the option reference and the version from the binary
+#   make check      fail if either has drifted from the binary, or the README's
+#                   --help block has
 #   make clean      remove the build intermediates
 #
 # Needs a LaTeX installation (any TeX Live or MacTeX; on macOS pdflatex lives
@@ -21,7 +22,7 @@ PYTHON  ?= python3
 LASSIP  ?= ../src/lassip
 PDF      = ../LASSI-Plus-Manual.pdf
 
-.PHONY: all options check check-options check-readme clean
+.PHONY: all options check check-options check-version check-readme clean
 
 all: $(PDF)
 
@@ -29,7 +30,7 @@ all: $(PDF)
 # times. Two passes are not enough here: the second pass inserts the table of
 # contents, which pushes every section onto the following page, so the page
 # numbers the first pass recorded are all off by one until a third pass.
-$(PDF): MANUAL.tex options.tex Makefile
+$(PDF): MANUAL.tex options.tex version.tex Makefile
 	$(LATEX) -interaction=nonstopmode -halt-on-error MANUAL.tex
 	@n=0; while grep -q "Rerun to get" MANUAL.log && [ $$n -lt 4 ]; do \
 		echo "  cross-references moved, rerunning $(LATEX)"; \
@@ -41,13 +42,22 @@ $(PDF): MANUAL.tex options.tex Makefile
 	fi
 	mv MANUAL.pdf $(PDF)
 
-options: options.tex
+options: options.tex version.tex
 
 options.tex: gen-options.py $(LASSIP)
 	$(PYTHON) gen-options.py $(LASSIP) > $@.tmp
 	mv $@.tmp $@
 
-check: check-options check-readme
+# The version on the title page comes from the binary too. It used to be typed
+# into MANUAL.tex, which is a second place for it to live and drift from
+# src/lassip-cli.h -- the failure this whole arrangement exists to prevent.
+version.tex: $(LASSIP)
+	@printf '%% Generated from `$(LASSIP) --version`. Do not edit.\n' > $@.tmp
+	@printf '\\newcommand{\\lassipversion}{%s}\n' \
+		"$$($(LASSIP) --version | awk '{print $$2}' | tr -d v)" >> $@.tmp
+	mv $@.tmp $@
+
+check: check-options check-version check-readme
 
 check-options:
 	@$(PYTHON) gen-options.py $(LASSIP) > options.new
@@ -59,6 +69,15 @@ check-options:
 		diff -u options.tex options.new | head -40 >&2; \
 		rm -f options.new; \
 		exit 1; \
+	fi
+
+check-version:
+	@$(MAKE) --no-print-directory version.tex >/dev/null
+	@v=$$($(LASSIP) --version | awk '{print $$2}' | tr -d v); \
+	if grep -q "{$$v}" version.tex; then \
+		echo "the manual's version matches the binary ($$v)"; \
+	else \
+		echo "version.tex does not name $$v; run 'make options'" >&2; exit 1; \
 	fi
 
 # The README embeds a copy of --help between the usage line and the change log.
@@ -78,4 +97,4 @@ check-readme:
 	fi
 
 clean:
-	rm -f MANUAL.aux MANUAL.log MANUAL.out MANUAL.toc MANUAL.pdf options.new options.tex.tmp readme.cur readme.new
+	rm -f MANUAL.aux MANUAL.log MANUAL.out MANUAL.toc MANUAL.pdf options.new options.tex.tmp version.tex.tmp readme.cur readme.new

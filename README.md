@@ -310,16 +310,7 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 ***CHANGE LOG***
 
-17SEP2026 - v1.3.1.
-
-  Exit codes now distinguish a file that cannot be opened from a file whose
-  contents are wrong. A missing or unopenable input, and an output path that
-  cannot be created, exit 74; a file that opens and then turns out to hold the
-  wrong thing still exits 65. The two are distinguishable at the same flag:
-  --map with a path that does not exist gives 74, --map with a map that does
-  not cover the contig gives 65. Bad command lines remain 64. One message was
-  wrong as well: a --null-spec file that could not be opened for reading was
-  reported as having failed to open "for writing".
+29SEP2026 - v1.3.2.
 
   --min-overlap requires a minimum number of sites observed in both haplotypes
   before they may be put in the same class. Missing calls are skipped rather
@@ -345,6 +336,46 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   representative that takes on observed alleles as it absorbs members, so what a
   later haplotype is compared against may be more completely observed than every
   member of the class. Case no_complete_anchor pins both.
+
+  --seed now makes a clustering run reproducible across operating systems and
+  compilers, not only across repeated runs on one machine. The haplotype
+  shuffle used std::shuffle with std::default_random_engine; both are
+  implementation-defined -- the engine is an alias each standard library
+  chooses for itself, and std::shuffle draws through a distribution whose
+  algorithm is unspecified -- so the same seed produced a different haplotype
+  order, and therefore different classes, under libstdc++ and libc++. It is now
+  an explicit Fisher-Yates over std::mt19937 with a rejection-sampled bound, so
+  the sequence is fixed by the standard. This changes results for
+  --hap-cluster garud-shuffle on data with missing genotypes; best-comp and
+  soft-em are unaffected, and so is any run without missing data.
+
+  The binaries in bin/ named v1.3.1 predate all of the above, including the
+  --seed fix. Rebuild before distributing.
+
+  README is now README.md, so it renders as Markdown. The format specifications
+  and the embedded --help output are in fenced blocks, since Markdown would
+  otherwise swallow every <int>, <chr> and <start> as an HTML tag.
+
+  tests/run_tests.sh derives every fixture from example/YRI.chr22.vcf.gz. It
+  previously read a file that was never tracked, so `make check` could not run
+  from a clean clone at all.
+
+  Continuous integration on GitHub Actions: build and the full regression suite
+  on Linux and macOS for pushes to master and devel and for pull requests into
+  them, a check that the generated documentation still matches the binary, and
+  a workflow that builds the distributable binaries and attaches them to a
+  release or a pushed version tag.
+
+17SEP2026 - v1.3.1.
+
+  Exit codes now distinguish a file that cannot be opened from a file whose
+  contents are wrong. A missing or unopenable input, and an output path that
+  cannot be created, exit 74; a file that opens and then turns out to hold the
+  wrong thing still exits 65. The two are distinguishable at the same flag:
+  --map with a path that does not exist gives 74, --map with a map that does
+  not cover the contig gives 65. Bad command lines remain 64. One message was
+  wrong as well: a --null-spec file that could not be opened for reading was
+  reported as having failed to open "for writing".
 
   The manual is rewritten for this version. LASSI-Plus-Manual.pdf described
   v1.1.2 and predated --seed, --hap-cluster, --max-gap, --version, the grouped
