@@ -163,6 +163,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        multicontig_equiv multicontig_header multicontig_malformed
        multicontig_stage1 multicontig_stage1_twopop multicontig_dup
        multicontig_onefile multicontig_interleaved exit_codes doc_formats
+       min_overlap
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -539,6 +540,20 @@ fi
 
 # all stage-2 cases read this spectrum
 SPEC="$WORK/sp.POP1.lassip.hap.spectra.gz"
+
+# Two haplotypes observed on disjoint halves of the window, so they have no
+# jointly observed site at all and are therefore "identical" to a comparison
+# that treats missing genotypes as wildcards. Truth is four classes of two.
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
+    /^#CHROM/ {print $1,$2,$3,$4,$5,$6,$7,$8,$9,"d0","d1","d2","d3"; next}
+    /^#/      {print; next}
+    { n++
+      if (n > 20) next
+      first = (n <= 10)
+      print $1,$2,$3,$4,$5,$6,$7,$8,$9, (first ? "0|0" : "./."), (first ? "./." : "1|1"), \
+            (n % 2 == 0 ? "0|0" : "1|1"), (n % 2 == 0 ? "1|1" : "0|0") }' \
+  | gzip > "$WORK/disjoint.vcf.gz"
+printf "d0\tPOP\nd1\tPOP\nd2\tPOP\nd3\tPOP\n" > "$WORK/disjoint.pop.txt"
 
 # an unphased spectra file, so stage 2 is covered on the .mlg path too
 run_lassip "$WORK/spu.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --unphased \
@@ -975,6 +990,50 @@ if selected doc_formats; then
     [ "$bad" = 0 ] || { echo "      README still has $bad format line(s) missing the position column" >&2; df_fail=1; }
     if [ "$df_fail" = 0 ]; then pass "doc_formats (position column present and documented)"
     else fail doc_formats "output format and its documentation disagree"; fi
+fi
+
+if selected min_overlap; then
+    # --min-overlap 0 is the default and must reproduce the behaviour of every
+    # version before it: no requirement on how much evidence a merge rests on.
+    # A single required site is enough to refuse the disjoint pair, which is the
+    # whole point -- agreement on nothing is not agreement.
+    mo_fail=0
+    mo_case(){
+        want_classes=$1; overlap=$2; rule=$3
+        if ! run_lassip "$WORK/mo.log" --vcf "$WORK/disjoint.vcf.gz" \
+            --pop "$WORK/disjoint.pop.txt" --calc-spec --k 6 --winsize 20 --winstep 20 \
+            --keep-monomorphic --max-lmiss 1 --max-hmiss 0.6 --match-tol 0 --seed 1 \
+            --min-overlap "$overlap" --hap-cluster "$rule" --out "$WORK/mo"; then
+            fail min_overlap "run failed at --min-overlap $overlap --hap-cluster $rule"
+            mo_fail=1; return
+        fi
+        got=$(gzip -dc "$WORK/mo.POP.lassip.hap.spectra.gz" | sed -n '3p' | cut -f7)
+        if [ "$got" != "$want_classes" ]; then
+            fail min_overlap "--min-overlap $overlap --hap-cluster $rule: expected $want_classes classes, got $got"
+            mo_fail=1
+        fi
+    }
+    for rule in garud-shuffle best-comp soft-em; do
+        mo_case 3 0 "$rule"      # no requirement: the disjoint pair merges
+        mo_case 4 1 "$rule"      # one shared site required: it cannot
+    done
+
+    # above --winsize no pair could ever qualify, so it is refused rather than
+    # silently putting every haplotype in its own class
+    # called directly, not through run_lassip: failure is the expected outcome
+    # here, and the helper prints the log to stderr when a run fails
+    "$BIN" --vcf "$WORK/disjoint.vcf.gz" --pop "$WORK/disjoint.pop.txt" --calc-spec \
+        --winsize 20 --winstep 20 --min-overlap 21 --out "$WORK/mo2" \
+        >"$WORK/mo2.log" 2>&1
+    if [ $? = 0 ]; then
+        fail min_overlap "--min-overlap 21 with --winsize 20 was accepted"
+        mo_fail=1
+    elif ! grep -q "exceeds --winsize" "$WORK/mo2.log"; then
+        fail min_overlap "--min-overlap 21 rejected, but not for exceeding --winsize"
+        mo_fail=1
+    fi
+
+    [ "$mo_fail" = "0" ] && pass "min_overlap gates merges on shared evidence"
 fi
 
 # ---------------------------------------------------------------- summary

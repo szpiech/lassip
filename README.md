@@ -261,6 +261,21 @@ Without missing genotypes and at --match-tol 0 all three give the same classes.
 the same class as a haplotype with no missing data if they have <= this many pairwise differences.
 	Default: 0
 
+--min-overlap <int>: Require at least this many sites observed in BOTH
+	haplotypes before they may be placed in the same class. Missing genotypes are
+	wildcards, so without this two haplotypes can be called identical on very
+	little shared evidence, and at the limit on none at all. A pair overlapping by
+	less than this is treated as incompatible, so such a haplotype forms its own
+	class rather than joining one; the spectrum fragments rather than concentrates.
+	Counted in sites, so as a fraction of a window it is --min-overlap / --winsize.
+	Two haplotypes overlap by about --winsize * (1 - m)^2 sites when a fraction m of
+	genotypes are missing, and asking for much more than that puts every haplotype
+	in a class of its own. --max-hmiss already guarantees an overlap of at least
+	--winsize * (1 - 2 * --max-hmiss) sites, which at its default of 0.20 is 60% of
+	the window, so this flag matters mainly when --max-hmiss is raised for sparse
+	data. Default 0 imposes no requirement and reproduces earlier versions exactly.
+	Default: 0
+
 --keep-monomorphic <bool>: Set this flag to retain any monomorphic sites in the data.
 	Default: false
 
@@ -284,7 +299,6 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
 
 --max-extend-nw <double>: Maximum distance in number of windows from core window to consider for saltiLASSI.
 	Default: 5.00
-```
 
 
 ***CHANGE LOG***

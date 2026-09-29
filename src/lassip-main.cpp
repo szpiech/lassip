@@ -60,6 +60,7 @@ struct Config
     double FILTER_LMISS;
     double FILTER_HMISS;
     int MATCH_TOL;
+    int MIN_OVERLAP;
     string HAP_CLUSTER;
     double MAX_GAP;
     double MAX_EXTEND_BP;
@@ -103,6 +104,7 @@ void registerFlags(param_t &params)
   params.addFlag(ARG_FILTER_HMISS, DEFAULT_FILTER_HMISS, "Filtering", HELP_FILTER_HMISS);
   params.addFlag(ARG_HAP_CLUSTER, DEFAULT_HAP_CLUSTER, "Filtering", HELP_HAP_CLUSTER);
   params.addFlag(ARG_MATCH_TOL, DEFAULT_MATCH_TOL, "Filtering", HELP_MATCH_TOL);
+  params.addFlag(ARG_MIN_OVERLAP, DEFAULT_MIN_OVERLAP, "Filtering", HELP_MIN_OVERLAP);
   params.addFlag(ARG_SEED, DEFAULT_SEED, "General", HELP_SEED);
   params.addFlag(ARG_DIST_TYPE, DEFAULT_DIST_TYPE, "saltiLASSI", HELP_DIST_TYPE);
   params.addFlag(ARG_MAX_GAP, DEFAULT_MAX_GAP, "saltiLASSI", HELP_MAX_GAP);
@@ -148,6 +150,7 @@ Config readConfig(param_t &params)
   double FILTER_LMISS = params.getDoubleFlag(ARG_FILTER_LMISS);
   double FILTER_HMISS = params.getDoubleFlag(ARG_FILTER_HMISS);
   int MATCH_TOL = params.getIntFlag(ARG_MATCH_TOL);
+  int MIN_OVERLAP = params.getIntFlag(ARG_MIN_OVERLAP);
   string HAP_CLUSTER = params.getStringFlag(ARG_HAP_CLUSTER);
   //string DIST_TYPE = "bp";
   double MAX_GAP = params.getDoubleFlag(ARG_MAX_GAP);
@@ -182,6 +185,7 @@ Config readConfig(param_t &params)
   cfg.FILTER_LMISS = FILTER_LMISS;
   cfg.FILTER_HMISS = FILTER_HMISS;
   cfg.MATCH_TOL = MATCH_TOL;
+  cfg.MIN_OVERLAP = MIN_OVERLAP;
   cfg.HAP_CLUSTER = HAP_CLUSTER;
   cfg.MAX_GAP = MAX_GAP;
   cfg.MAX_EXTEND_BP = MAX_EXTEND_BP;
@@ -214,7 +218,7 @@ void warnCrossStageFlags(const Config &cfg)
     const string stage1Only[] = {ARG_CALC_SPEC, ARG_HAPSTATS, ARG_WINSIZE, ARG_WINSTEP,
                                  ARG_K, ARG_UNPHASED, ARG_FILENAME_POPFILE, ARG_FILTER_LEVEL,
                                  ARG_FILTER_LMISS, ARG_FILTER_HMISS, ARG_KEEP_MONO,
-                                 ARG_MATCH_TOL, ARG_SEED, ARG_HAP_CLUSTER};
+                                 ARG_MATCH_TOL, ARG_MIN_OVERLAP, ARG_SEED, ARG_HAP_CLUSTER};
     for (unsigned int i = 0; i < sizeof(stage1Only)/sizeof(stage1Only[0]); i++){
       if(params.isFlagSet(stage1Only[i])){
         cerr << "WARNING: " << stage1Only[i] << " has no effect with --spectra; it applies to the --vcf stage.\n";
@@ -244,6 +248,7 @@ bool validate(const Config &cfg)
   const double FILTER_LMISS = cfg.FILTER_LMISS;
   const double FILTER_HMISS = cfg.FILTER_HMISS;
   const int MATCH_TOL = cfg.MATCH_TOL;
+  const int MIN_OVERLAP = cfg.MIN_OVERLAP;
   const string &HAP_CLUSTER = cfg.HAP_CLUSTER;
   const double MAX_GAP = cfg.MAX_GAP;
   const double MAX_EXTEND_BP = cfg.MAX_EXTEND_BP;
@@ -329,6 +334,20 @@ bool validate(const Config &cfg)
 
     if(MATCH_TOL < 0){
       cerr << "ERROR: Haplotype match tolerance must be an integer >= 0.\n";
+      ERROR = true;
+    }
+
+    //Two complete haplotypes overlap on exactly --winsize sites, so a larger
+    //requirement than that can never be met by any pair and would put every
+    //haplotype in a class of its own. Equality is allowed: it means only fully
+    //observed pairs may be merged.
+    if(MIN_OVERLAP < 0){
+      cerr << "ERROR: --min-overlap must be an integer >= 0.\n";
+      ERROR = true;
+    }
+    else if(MIN_OVERLAP > WINSIZE){
+      cerr << "ERROR: --min-overlap (" << MIN_OVERLAP << ") exceeds --winsize ("
+           << WINSIZE << "), so no pair of haplotypes could ever meet it.\n";
       ERROR = true;
     }
 

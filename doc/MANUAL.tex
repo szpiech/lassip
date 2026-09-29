@@ -198,6 +198,34 @@ previously $< t$, so each setting behaved as the one below it.
 \opt{--max-hmiss} leaves a haplotype out of a window's spectrum when too much
 of that window is missing for it.
 
+\subsection*{How much evidence a grouping rests on}
+
+Because a missing call is a wildcard rather than a mismatch, two haplotypes are
+compared only at the sites observed in both, and nothing in the rules above
+requires that there be many such sites. At the limit, two haplotypes observed
+on disjoint parts of a window share no site at all, disagree nowhere, and are
+therefore grouped --- agreement on no evidence is treated as exact agreement.
+
+In practice \opt{--max-hmiss} bounds this. Two haplotypes that both survive it
+overlap on at least
+%
+\begin{equation*}
+\texttt{-{}-winsize} \times (1 - 2\,\texttt{-{}-max-hmiss})
+\end{equation*}
+%
+sites, which at the default of $0.20$ is $60\,\%$ of the window, and about
+$\texttt{-{}-winsize} \times (1-m)^2$ sites in expectation when a fraction $m$
+of genotypes are missing. The bound reaches zero at
+$\opt{--max-hmiss} = 0.5$, so it is sparse data --- pseudohaplotypes, ancient
+DNA, low coverage --- that removes the guarantee, and that is where
+\opt{--min-overlap} is for: it requires a minimum number of jointly observed
+sites before two haplotypes may be grouped at all. A pair below it is treated
+as incompatible, so the haplotype forms its own class and the spectrum
+fragments rather than concentrating. That is the safer direction of error,
+since over-grouping concentrates the spectrum and mimics a sweep. Asking for
+much more overlap than $\texttt{-{}-winsize} \times (1-m)^2$ puts every
+haplotype in a class of its own. The default 0 imposes no requirement.
+
 \section{Reproducibility}
 
 A run is determined by its inputs, its options and \opt{--seed}. It does not

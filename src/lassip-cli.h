@@ -174,6 +174,22 @@ const string ARG_MATCH_TOL = "--match-tol";
 const int DEFAULT_MATCH_TOL = 0;
 const string HELP_MATCH_TOL = "Group haplotypes with missing data into\nthe same class as a haplotype with no missing data if they have <= this many pairwise differences.";
 
+const string ARG_MIN_OVERLAP = "--min-overlap";
+const int DEFAULT_MIN_OVERLAP = 0;
+const string HELP_MIN_OVERLAP = "Require at least this many sites observed in BOTH\n\
+\thaplotypes before they may be placed in the same class. Missing genotypes are\n\
+\twildcards, so without this two haplotypes can be called identical on very\n\
+\tlittle shared evidence, and at the limit on none at all. A pair overlapping by\n\
+\tless than this is treated as incompatible, so such a haplotype forms its own\n\
+\tclass rather than joining one; the spectrum fragments rather than concentrates.\n\
+\tCounted in sites, so as a fraction of a window it is --min-overlap / --winsize.\n\
+\tTwo haplotypes overlap by about --winsize * (1 - m)^2 sites when a fraction m of\n\
+\tgenotypes are missing, and asking for much more than that puts every haplotype\n\
+\tin a class of its own. --max-hmiss already guarantees an overlap of at least\n\
+\t--winsize * (1 - 2 * --max-hmiss) sites, which at its default of 0.20 is 60% of\n\
+\tthe window, so this flag matters mainly when --max-hmiss is raised for sparse\n\
+\tdata. Default 0 imposes no requirement and reproduces earlier versions exactly.";
+
 const string ARG_DIST_TYPE = "--dist-type";
 const string DEFAULT_DIST_TYPE = "bp";
 const string HELP_DIST_TYPE = "Distance measure for saltiLASSI: bp, cm, nw.";

@@ -56,11 +56,11 @@ const int CLUSTER_GARUD_SHUFFLE = 0;
 const int CLUSTER_BEST_COMP = 1;
 const int CLUSTER_SOFT_EM = 2;
 int clusterMethodCode(const string &name);
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED, int CLUSTER);
-void match_haps_best_compatible(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL);
-void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL);
-void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed);
-int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL);
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData *hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int MIN_OVERLAP, int SEED, int CLUSTER);
+void match_haps_best_compatible(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL, int MIN_OVERLAP);
+void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_hap2count, int len, int MATCH_TOL, int MIN_OVERLAP);
+void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, int MIN_OVERLAP, unsigned int seed);
+int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL, int MIN_OVERLAP);
 int numSitesInDataWin(pair_t* win);
 
 

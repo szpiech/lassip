@@ -31,6 +31,7 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 
 	double FILTER_HMISS = p->params->getDoubleFlag(ARG_FILTER_HMISS);
 	int MATCH_TOL = p->params->getIntFlag(ARG_MATCH_TOL);
+	int MIN_OVERLAP = p->params->getIntFlag(ARG_MIN_OVERLAP);
 	int SEED = p->params->getIntFlag(ARG_SEED);
 	//resolved once per worker, not per window
 	int CLUSTER = clusterMethodCode(p->params->getStringFlag(ARG_HAP_CLUSTER));
@@ -51,7 +52,7 @@ void calc_LASSI_stats(LASSI_work_order_t *p) {
 		while (claimChunk(p->cursor->next[pop], nwin, chunk, begin, end))
 		for (unsigned int i = begin; i < end; i++) {
 			snps = windows->at(i);		
-			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL, SEED, CLUSTER);
+			hfs = hfs_window(hapDataByPop->at(popName), snps, FILTER_HMISS, MATCH_TOL, MIN_OVERLAP, SEED, CLUSTER);
 			if(hfs == NULL) p->nullWins[pop]++;
 			double **x = pr.data;
 			double tot = 0;

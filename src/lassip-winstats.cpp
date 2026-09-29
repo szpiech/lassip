@@ -413,8 +413,9 @@ double **calcF(int type, int K){
 //This function immediately stops counting differences once MATCH_TOL is exceeded
 //It also combines loci where str1 is missing but str2 is not, stored in str3
 //Intended usage is to use str3 to replace str1 iff ndiff == 0.
-int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL){
+int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MATCH_TOL, int MIN_OVERLAP){
    int ndiff = 0;
+   int nobs = 0;      //sites observed in BOTH, i.e. how much evidence there is
 
    str3 = str1;
 
@@ -424,6 +425,7 @@ int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MA
    }
 
    for (size_t i = 0; i < str1.length(); i++){
+      if (str1[i] != MISSING_ALLELE && str2[i] != MISSING_ALLELE) nobs++;
       if(str1[i] != str2[i]){
          if (str2[i] != MISSING_ALLELE){
             if (str1[i] != MISSING_ALLELE){
@@ -438,6 +440,13 @@ int garud_ndiff_str(const string &str1, const string &str2, string &str3, int MA
          }
       }
    }
+
+   //Agreeing at every jointly observed site means nothing if there were hardly
+   //any. Report such a pair as one difference too many, which is what every
+   //caller tests for, so too little evidence and too much disagreement both
+   //mean "do not merge". At MIN_OVERLAP 0 this can never trigger.
+   if (nobs < MIN_OVERLAP) return MATCH_TOL + 1;
+
    return ndiff;
 }
 
@@ -492,7 +501,7 @@ static void seededShuffle(vector<string> &v, unsigned int seed){
 //haplotype gets merged into which complete one, so the shuffle is a real
 //degree of freedom in the result, not just a test harness. The seed is
 //therefore a user-visible parameter (--seed); see windowSeed above.
-void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, unsigned int seed){
+void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string,double> &miss_hap2count, int len, int MATCH_TOL, int MIN_OVERLAP, unsigned int seed){
 
    map<string, double>::iterator it1;
    map<string, double>::iterator it2;
@@ -528,7 +537,7 @@ void garud_match_haps_w_missing_shuffle(map<string,double> &hap2count,map<string
          hap2 = hapIDs[j];
          count2 = hap2countCombined[hap2];
          if(compared.count(hap2) == 0){
-            int d = garud_ndiff_str(hap1,hap2,mergedhap,MATCH_TOL);
+            int d = garud_ndiff_str(hap1,hap2,mergedhap,MATCH_TOL,MIN_OVERLAP);
             if(d == 0 && mergedhap.compare(hap1) != 0){
                hap2count[mergedhap] = hap2count[hap1];
                hap2count.erase(hap1);
@@ -610,7 +619,7 @@ static void combineCounts(const map<string,double> &hap2count, const map<string,
 //to anchor on, which matters because in a long window at even a few percent
 //missing there may not be one.
 void match_haps_best_compatible(map<string,double> &hap2count, map<string,double> &miss_hap2count,
-                                int len, int MATCH_TOL){
+                                int len, int MATCH_TOL, int MIN_OVERLAP){
    map<string,double> combined;
    combineCounts(hap2count, miss_hap2count, combined);
 
@@ -625,7 +634,7 @@ void match_haps_best_compatible(map<string,double> &hap2count, map<string,double
       const string &hap = order[i];
       int best = -1;
       for (size_t j = 0; j < rep.size(); j++){
-         if (garud_ndiff_str(rep[j], hap, merged, MATCH_TOL) <= MATCH_TOL){
+         if (garud_ndiff_str(rep[j], hap, merged, MATCH_TOL, MIN_OVERLAP) <= MATCH_TOL){
             //ties broken on the representative, so the choice never depends on
             //the order the classes happen to sit in
             if (best < 0 || cnt[j] > cnt[best] ||
@@ -639,7 +648,7 @@ void match_haps_best_compatible(map<string,double> &hap2count, map<string,double
       }
       //when the two agree at every jointly observed site, the class label takes
       //on the sites the newcomer fills in
-      if (garud_ndiff_str(rep[best], hap, merged, MATCH_TOL) == 0) rep[best] = merged;
+      if (garud_ndiff_str(rep[best], hap, merged, MATCH_TOL, MIN_OVERLAP) == 0) rep[best] = merged;
       cnt[best] += combined[hap];
    }
 
@@ -664,12 +673,12 @@ void match_haps_best_compatible(map<string,double> &hap2count, map<string,double
 //Class sizes come out fractional, which is why HaplotypeFrequencySpectrum
 //stores doubles.
 void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_hap2count,
-                        int len, int MATCH_TOL){
+                        int len, int MATCH_TOL, int MIN_OVERLAP){
    map<string,double> combined;
    combineCounts(hap2count, miss_hap2count, combined);
 
    map<string,double> seedHap = hap2count, seedMiss = miss_hap2count;
-   match_haps_best_compatible(seedHap, seedMiss, len, MATCH_TOL);
+   match_haps_best_compatible(seedHap, seedMiss, len, MATCH_TOL, MIN_OVERLAP);
 
    vector<string> types;
    vector<double> weight;
@@ -691,7 +700,7 @@ void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_
    for (size_t i = 0; i < obs.size(); i++){
       total += obsCount[i];
       for (size_t j = 0; j < types.size(); j++){
-         if (garud_ndiff_str(types[j], obs[i], merged, MATCH_TOL) <= MATCH_TOL)
+         if (garud_ndiff_str(types[j], obs[i], merged, MATCH_TOL, MIN_OVERLAP) <= MATCH_TOL)
             compat[i].push_back((int)j);
       }
    }
@@ -731,7 +740,7 @@ void match_haps_soft_em(map<string,double> &hap2count, map<string,double> &miss_
    return;
 }
 
-HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int SEED, int CLUSTER) {
+HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex, double FILTER_HMISS, int MATCH_TOL, int MIN_OVERLAP, int SEED, int CLUSTER) {
    if (numSitesInDataWin(snpIndex) <= 0) return NULL;
 
    HaplotypeFrequencySpectrum *hfs = initHaplotypeFrequencySpectrum();
@@ -796,12 +805,12 @@ HaplotypeFrequencySpectrum *hfs_window(HaplotypeData * hapData, pair_t* snpIndex
    }
 
    if (CLUSTER == CLUSTER_GARUD_SHUFFLE)
-      garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL,
+      garud_match_haps_w_missing_shuffle(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL, MIN_OVERLAP,
                                          windowSeed(SEED, snpIndex->start, snpIndex->end));
    else if (CLUSTER == CLUSTER_SOFT_EM)
-      match_haps_soft_em(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+      match_haps_soft_em(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL, MIN_OVERLAP);
    else
-      match_haps_best_compatible(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL);
+      match_haps_best_compatible(hfs->hap2count, miss_hap2count, haplen, MATCH_TOL, MIN_OVERLAP);
 
    if(hfs->hap2count.size() == 0) return NULL;
 
