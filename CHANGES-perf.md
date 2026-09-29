@@ -120,6 +120,8 @@ revised this file.
 | `147640e` | ci: build binaries on a version tag as well as a release |
 | `346e038` | docs: record the tag trigger |
 | `8b2da94` | add --min-overlap: require shared evidence before grouping haplotypes |
+| `14e3bbe` | docs: record --min-overlap |
+| `1df2ef1` | correct --match-tol's help text: grouping needs no complete haplotype |
 
 ## Behavioural differences
 
@@ -655,6 +657,39 @@ four classes of two, two of them observed on disjoint halves of the window. At
 `--min-overlap 0` all three rules report three classes (0.50, 0.25, 0.25); at 1
 all three report four of 0.25, which is the truth. It fails against the
 pre-change binary while the other 60 cases still pass there.
+
+## A documentation error the flag work exposed
+
+`1df2ef1`. `--match-tol`'s help text said haplotypes with missing data are
+grouped "into the same class as a haplotype with no missing data". That
+describes the intention behind the original implementation rather than the
+implementation; the source comment in `garud_match_haps_w_missing_shuffle` says
+so itself ("Combining them, this is a little hacky, as I originally planned to
+handle them differently"). All three rules pool the complete and incomplete
+haplotypes before clustering, and any haplotype can seed a class.
+
+Shown on a four-site fixture where *every* haplotype carries missing data, so
+nothing could anchor: `P = 1-01` and `Q = 110-` are observed together only at
+sites 1 and 3, agree there, and all three rules return one class. Under the old
+description there would have been two.
+
+The corrected text makes two points. Neither haplotype need be fully observed,
+and a window in which none is complete -- the normal case in a long window at
+even a few percent missing -- clusters like any other. And the class is
+labelled by a representative that takes on observed alleles as it absorbs
+members, so what a later haplotype is compared against may be more completely
+observed than every member of the class. The second point was measured, not
+asserted: `T = -00-` is compatible with `P` as observed but not with `P` once
+`P` has absorbed `Q`'s allele at site 2, and `best-comp`, which handles `T`
+last, returns two classes -- so `T` was compared against the filled-in `1101`,
+which no haplotype in the window equals.
+
+The 18JAN2024 changelog entry quotes the old wording as v1.2.0's help output
+and is left as it stands, since it records what that release printed. The
+correction sits in the v1.3.1 entry, which also gained the `--min-overlap`
+description it was missing.
+
+New case `no_complete_anchor`; suite is 62.
 
 ## Left for you to decide
 
