@@ -122,6 +122,8 @@ revised this file.
 | `8b2da94` | add --min-overlap: require shared evidence before grouping haplotypes |
 | `14e3bbe` | docs: record --min-overlap |
 | `1df2ef1` | correct --match-tol's help text: grouping needs no complete haplotype |
+| `6b0c501` | docs: record the --match-tol correction |
+| `37be772` | bump the version to 1.3.2, and generate it for the manual |
 
 ## Behavioural differences
 
@@ -690,6 +692,32 @@ correction sits in the v1.3.1 entry, which also gained the `--min-overlap`
 description it was missing.
 
 New case `no_complete_anchor`; suite is 62.
+
+## Version 1.3.2
+
+`37be772`. `VERSION` is 1.3.2, with a `29SEP2026` changelog entry -- change the
+date when you tag.
+
+The entry is not just a heading. `--min-overlap` and the `--match-tol`
+correction had been filed under v1.3.1, where they do not belong: 1.3.1 shipped
+as `bin/linux/lassip-v1.3.1` and `bin/macos-arm/lassip-v1.3.1`, and **those
+binaries predate both**, as well as `44acbdf`, which made `--seed` reproducible
+across standard libraries. The entry now says so explicitly, since anyone
+downloading them today gets a build older than the source that names it.
+
+Three other things went into the entry because they had never been written
+anywhere a user reads: `README` became `README.md`; the suite derives its
+fixtures from tracked data, so `make check` works from a clean clone; and CI
+builds and tests on both platforms and attaches binaries to a release.
+
+**The manual no longer carries its own copy of the version.** It was typed into
+`MANUAL.tex` -- a second place to drift from `src/lassip-cli.h`, which is
+exactly what produced a v1.1.2 manual sitting beside a v1.2.2 program.
+`doc/version.tex` is generated from `lassip --version` alongside `options.tex`,
+`MANUAL.tex` inputs it, and `make check` in `doc/` gained `check-version`.
+Negative-tested by pinning `version.tex` to a stale value with a timestamp
+newer than the binary, so `make` could not quietly refresh it: the check fails,
+exit 1.
 
 ## Left for you to decide
 
