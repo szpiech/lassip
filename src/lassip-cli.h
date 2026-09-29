@@ -172,7 +172,15 @@ Without missing genotypes and at --match-tol 0 all three give the same classes."
 
 const string ARG_MATCH_TOL = "--match-tol";
 const int DEFAULT_MATCH_TOL = 0;
-const string HELP_MATCH_TOL = "Group haplotypes with missing data into\nthe same class as a haplotype with no missing data if they have <= this many pairwise differences.";
+const string HELP_MATCH_TOL = "Put two haplotypes in the same class when they\n\
+\tdiffer at <= this many of the sites observed in BOTH of them. Missing calls are\n\
+\tskipped rather than counted as differences, so neither haplotype need be fully\n\
+\tobserved: two haplotypes that both carry missing data are grouped whenever they\n\
+\tagree where they overlap, and the class is labelled by a representative that\n\
+\ttakes on observed alleles as it absorbs members, so a later haplotype may be\n\
+\tcompared against a pattern more completely observed than any single member.\n\
+\tSee --min-overlap to require a minimum amount of shared evidence. Default 0\n\
+\trequires agreement at every site observed in both.";
 
 const string ARG_MIN_OVERLAP = "--min-overlap";
 const int DEFAULT_MIN_OVERLAP = 0;

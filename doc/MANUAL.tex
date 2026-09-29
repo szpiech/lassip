@@ -177,7 +177,7 @@ of grouping rule changes the spectrum. \opt{--hap-cluster} selects it.
 
 \begin{description}[leftmargin=1.5em,style=sameline]
 \item[\opt{best-comp}] (default) assigns each incomplete haplotype to the most
-  frequent haplotype compatible with it. Deterministic, and the most accurate
+  frequent \emph{class} compatible with it. Deterministic, and the most accurate
   of the three at low to moderate missingness.
 \item[\opt{garud-shuffle}] is the rule used by v1.2.2 and earlier: the distinct
   haplotypes are shuffled, and each in turn seeds a group that absorbs every
@@ -193,6 +193,17 @@ of grouping rule changes the spectrum. \opt{--hap-cluster} selects it.
 observed sites to be grouped; the default 0 requires equality at every site
 observed in both. Note that the semantics changed in v1.3.0: the test was
 previously $< t$, so each setting behaved as the one below it.
+
+Two points about this that are easy to get wrong, because earlier
+documentation of \opt{--match-tol} described the intention rather than the
+implementation. First, \emph{neither} haplotype need be fully observed. Nothing
+anchors a class on a complete haplotype: two haplotypes that each carry missing
+data are grouped whenever they agree wherever they overlap, and a window in
+which no haplotype is complete --- the normal case in a long window at even a
+few percent missing --- clusters like any other. Second, the class is labelled
+by a representative that takes on observed alleles as it absorbs members, so
+what a later haplotype is compared against is not any one observed haplotype
+and may be more completely observed than every member of the class.
 
 \opt{--max-lmiss} drops loci with too high a missing fraction and
 \opt{--max-hmiss} leaves a haplotype out of a window's spectrum when too much

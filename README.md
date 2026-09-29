@@ -257,8 +257,15 @@ several distinct haplotypes and something has to choose. One of:
 Without missing genotypes and at --match-tol 0 all three give the same classes.
 	Default: best-comp
 
---match-tol <int>: Group haplotypes with missing data into
-the same class as a haplotype with no missing data if they have <= this many pairwise differences.
+--match-tol <int>: Put two haplotypes in the same class when they
+	differ at <= this many of the sites observed in BOTH of them. Missing calls are
+	skipped rather than counted as differences, so neither haplotype need be fully
+	observed: two haplotypes that both carry missing data are grouped whenever they
+	agree where they overlap, and the class is labelled by a representative that
+	takes on observed alleles as it absorbs members, so a later haplotype may be
+	compared against a pattern more completely observed than any single member.
+	See --min-overlap to require a minimum amount of shared evidence. Default 0
+	requires agreement at every site observed in both.
 	Default: 0
 
 --min-overlap <int>: Require at least this many sites observed in BOTH
@@ -313,6 +320,31 @@ map is sparse where your data are dense. Set 0 to interpolate across any gap.
   not cover the contig gives 65. Bad command lines remain 64. One message was
   wrong as well: a --null-spec file that could not be opened for reading was
   reported as having failed to open "for writing".
+
+  --min-overlap requires a minimum number of sites observed in both haplotypes
+  before they may be put in the same class. Missing calls are skipped rather
+  than counted as differences, so without this two haplotypes can be grouped on
+  very little shared evidence, and at the limit on none at all: two haplotypes
+  observed on disjoint parts of a window share no site, disagree nowhere, and
+  were grouped. A pair below the requirement is treated as incompatible, so the
+  haplotype forms its own class and the spectrum fragments rather than
+  concentrating. Default 0 imposes no requirement and reproduces earlier
+  versions exactly. --max-hmiss already implies an overlap of at least
+  --winsize * (1 - 2 * --max-hmiss) sites, 60% of the window at its default, so
+  this matters mainly for sparse data, where --max-hmiss has to be raised.
+
+  --match-tol's help text was inaccurate and is corrected. It said haplotypes
+  with missing data are grouped "into the same class as a haplotype with no
+  missing data", which describes the intention behind the original
+  implementation rather than the implementation itself -- the text is quoted as
+  it stood in the 18JAN2024 entry below. Grouping has never required a complete
+  haplotype to anchor on: two haplotypes that each carry missing data are
+  grouped whenever they agree wherever they overlap, and a window in which no
+  haplotype is complete, which is the normal case in a long window at even a few
+  percent missing, clusters like any other. The class is also labelled by a
+  representative that takes on observed alleles as it absorbs members, so what a
+  later haplotype is compared against may be more completely observed than every
+  member of the class. Case no_complete_anchor pins both.
 
   The manual is rewritten for this version. LASSI-Plus-Manual.pdf described
   v1.1.2 and predated --seed, --hap-cluster, --max-gap, --version, the grouped

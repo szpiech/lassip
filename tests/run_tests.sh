@@ -163,7 +163,7 @@ CASES="spec_phased vcf_leading_space stats_only spec_unphased spec_twopop spec_f
        multicontig_equiv multicontig_header multicontig_malformed
        multicontig_stage1 multicontig_stage1_twopop multicontig_dup
        multicontig_onefile multicontig_interleaved exit_codes doc_formats
-       min_overlap
+       min_overlap no_complete_anchor
        spec_medium avg_spec lassi lassi_nullspec salti_bp salti_nw salti_cm
        cm_map_mismatch cm_max_gap"
 
@@ -554,6 +554,20 @@ gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
             (n % 2 == 0 ? "0|0" : "1|1"), (n % 2 == 0 ? "1|1" : "0|0") }' \
   | gzip > "$WORK/disjoint.vcf.gz"
 printf "d0\tPOP\nd1\tPOP\nd2\tPOP\nd3\tPOP\n" > "$WORK/disjoint.pop.txt"
+
+# Four sites, and EVERY haplotype carries missing data, so there is no complete
+# haplotype for anything to anchor on. P = 1-01 and Q = 110- are observed
+# together only at sites 1 and 3, where both read 1 and 0.
+gzip -dc "$SMALL" | awk 'BEGIN{OFS="\t"}
+    /^#CHROM/ {print $1,$2,$3,$4,$5,$6,$7,$8,$9,"p","q"; next}
+    /^#/      {print; next}
+    { n++
+      if (n > 4) next
+      split("1|1 ./. 0|0 1|1", P, " ")      # P = 1 - 0 1
+      split("1|1 1|1 0|0 ./.", Q, " ")      # Q = 1 1 0 -
+      print $1,$2,$3,$4,$5,$6,$7,$8,$9, P[n], Q[n] }' \
+  | gzip > "$WORK/noanchor.vcf.gz"
+printf "p\tPOP\nq\tPOP\n" > "$WORK/noanchor.pop.txt"
 
 # an unphased spectra file, so stage 2 is covered on the .mlg path too
 run_lassip "$WORK/spu.log" --vcf "$SMALL" --pop "$WORK/small.pop1.txt" --unphased \
@@ -1034,6 +1048,41 @@ if selected min_overlap; then
     fi
 
     [ "$mo_fail" = "0" ] && pass "min_overlap gates merges on shared evidence"
+fi
+
+if selected no_complete_anchor; then
+    # Grouping does not require a fully observed haplotype to anchor on: two
+    # haplotypes that both carry missing data are grouped when they agree
+    # wherever they overlap. The --match-tol help text used to say otherwise,
+    # which is what this case exists to stop coming back.
+    nca_fail=0
+    for rule in garud-shuffle best-comp soft-em; do
+        if run_lassip "$WORK/nca.log" --vcf "$WORK/noanchor.vcf.gz" \
+            --pop "$WORK/noanchor.pop.txt" --calc-spec --k 4 --winsize 4 --winstep 4 \
+            --keep-monomorphic --max-lmiss 1 --max-hmiss 0.5 --match-tol 0 --seed 1 \
+            --hap-cluster "$rule" --out "$WORK/nca"; then
+            got=$(gzip -dc "$WORK/nca.POP.lassip.hap.spectra.gz" | sed -n '3p' | cut -f7)
+            if [ "$got" != "1" ]; then
+                fail no_complete_anchor "$rule: two incomplete haplotypes gave $got classes, expected 1"
+                nca_fail=1
+            fi
+        else
+            fail no_complete_anchor "run failed for $rule"; nca_fail=1
+        fi
+    done
+
+    # and they are still held apart when the shared evidence is too thin
+    if run_lassip "$WORK/nca2.log" --vcf "$WORK/noanchor.vcf.gz" \
+        --pop "$WORK/noanchor.pop.txt" --calc-spec --k 4 --winsize 4 --winstep 4 \
+        --keep-monomorphic --max-lmiss 1 --max-hmiss 0.5 --match-tol 0 \
+        --min-overlap 3 --hap-cluster best-comp --out "$WORK/nca2"; then
+        got=$(gzip -dc "$WORK/nca2.POP.lassip.hap.spectra.gz" | sed -n '3p' | cut -f7)
+        [ "$got" = "2" ] || { fail no_complete_anchor "--min-overlap 3 gave $got classes, expected 2"; nca_fail=1; }
+    else
+        fail no_complete_anchor "--min-overlap run failed"; nca_fail=1
+    fi
+
+    [ "$nca_fail" = "0" ] && pass "no_complete_anchor (incomplete haplotypes group with each other)"
 fi
 
 # ---------------------------------------------------------------- summary
